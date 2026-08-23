@@ -807,15 +807,17 @@ export default function ShiftEditor() {
                 }}
               >
                 <div className="tiny" style={{ fontWeight: isToday ? 800 : 500 }}>{Number(date.slice(8, 10))}</div>
-                {ds.slice(0, 3).map((s) => {
+                {ds.slice(0, 3).map((s, ci, arr) => {
                   const full = !!s.driver_id && (!!s.loader_id || crewOf(s.car_id) === 1)
                   const chipIcons = iconsOf(markers.get(`${date}|${s.car_id}`))
                   const label = (carFilter
                     ? `${shortName(nameOf[s.driver_id ?? ''])}+${shortName(nameOf[s.loader_id ?? ''])}`
                     : carOf(s.car_id)?.plate ?? '?') + (chipIcons ? ` ${chipIcons}` : '')
+                  const catBreak = ci > 0 && catRank(arr[ci - 1].car_id) !== catRank(s.car_id)
                   return (
+                    <Fragment key={s.id}>
+                    {catBreak && <div style={{ height: 1, background: 'var(--border)', margin: '1px 2px' }} />}
                     <div
-                      key={s.id}
                       style={{
                         fontSize: 8.5, lineHeight: '11px', borderRadius: 4, padding: '1px 2px',
                         background: full ? 'rgba(20,184,166,.22)' : 'rgba(234,179,8,.25)',
@@ -825,6 +827,7 @@ export default function ShiftEditor() {
                     >
                       {label}
                     </div>
+                    </Fragment>
                   )
                 })}
                 {ds.length > 3 && <div style={{ fontSize: 8.5 }} className="muted">+{ds.length - 3}</div>}
@@ -885,8 +888,12 @@ export default function ShiftEditor() {
                 </div>
               )
             })()}
-            {dShifts.map((x) => (
-              <div key={x.id} className="between" style={{ gap: 8 }}>
+            {dShifts.map((x, di) => (
+              <Fragment key={x.id}>
+              {di > 0 && catRank(dShifts[di - 1].car_id) !== catRank(x.car_id) && (
+                <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
+              )}
+              <div className="between" style={{ gap: 8 }}>
                 <span className="small" style={{ fontWeight: 700 }}>
                   <span className="tiny muted" style={{ fontWeight: 400 }}>{catName(x.car_id) ? `${catName(x.car_id)} · ` : ''}</span>
                   🚚 {plate(x.car_id)} {iconsOf(markers.get(`${d}|${x.car_id}`))}
@@ -896,6 +903,7 @@ export default function ShiftEditor() {
                   {crewOf(x.car_id) === 2 || x.loader_id ? ` + ${nameOf[x.loader_id ?? ''] ?? '—'}` : ''}
                 </span>
               </div>
+              </Fragment>
             ))}
             {sw.map((c, idx) => (
               <div key={`s${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
