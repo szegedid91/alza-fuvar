@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -404,7 +404,13 @@ function WeekTable() {
             </thead>
             <tbody>
               {rowCarIds.map((carId, rowIdx) => (
-                <tr key={carId} style={{ height: rowH(carId) }}>
+                <Fragment key={carId}>
+                  {rowIdx > 0 && isGroupStart(rowIdx) && (
+                    <tr style={{ height: 8 }}>
+                      <td colSpan={2} style={{ padding: 0 }}><div style={{ height: 2, background: 'var(--border)', borderRadius: 1 }} /></td>
+                    </tr>
+                  )}
+                <tr style={{ height: rowH(carId) }}>
                   {isGroupStart(rowIdx) && (
                     <td className="wk-catcol" rowSpan={groupSpan(rowIdx)} title={categoryName(rowCars[rowIdx].category_id) ?? 'Nincs kategória'}>
                       {categoryName(rowCars[rowIdx].category_id) ?? '—'}
@@ -429,6 +435,7 @@ function WeekTable() {
                     </button>
                   </td>
                 </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -447,7 +454,13 @@ function WeekTable() {
               </thead>
               <tbody>
                 {rowCarIds.map((carId, rowIdx) => (
-                  <tr key={carId} style={{ height: rowH(carId) }}>
+                  <Fragment key={carId}>
+                    {rowIdx > 0 && isGroupStart(rowIdx) && (
+                      <tr style={{ height: 8 }}>
+                        <td colSpan={7} style={{ padding: 0 }}><div style={{ height: 2, background: 'var(--border)', borderRadius: 1 }} /></td>
+                      </tr>
+                    )}
+                  <tr style={{ height: rowH(carId) }}>
                     {days.map((d) => {
                       const s = shiftAt(carId, d)
                       const busy = busyCell === `${carId}|${d}`
@@ -478,6 +491,7 @@ function WeekTable() {
                       )
                     })}
                   </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -592,6 +606,12 @@ export default function ShiftEditor() {
   const { data: categories } = useCarCategories()
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
   const calMemberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
+  // Autók kategória-sorrendben (a beosztás-tábla sorrendjével egyezően)
+  const editorCars = useMemo(() => {
+    const order = new Map((categories ?? []).map((c, i) => [c.id, i]))
+    const rank = (c: Car) => (c.category_id && order.has(c.category_id) ? order.get(c.category_id)! : 9999)
+    return (cars ?? []).slice().sort((a, b) => rank(a) - rank(b) || a.plate.localeCompare(b.plate))
+  }, [cars, categories])
 
   // A hónap beosztásai + eseményei egy lekérdezés-körben
   const { data: cal } = useQuery<MonthData>({
@@ -639,6 +659,23 @@ export default function ShiftEditor() {
   useEffect(() => { setRows({}) }, [selectedDate, currentWorkspaceId, multiMode])
 
   const cells = useMemo(() => monthGrid(month), [month])
+
+  // Havi összesítő: ki hány napot dolgozott ebben a hónapban (a beosztás alapján).
+  // Minden nem-admin/nem-menedzser tag látszik (0 nappal is); vezető csak ha beosztották.
+  const monthCounts = useMemo(() => {
+    const byUser = new Map<string, Set<string>>()
+    for (const s of cal?.shifts ?? []) {
+      for (const uid of [s.driver_id, s.loader_id]) {
+        if (!uid) continue
+        if (!byUser.has(uid)) byUser.set(uid, new Set())
+        byUser.get(uid)!.add(s.work_date)
+      }
+    }
+    return (members ?? [])
+      .filter((m) => (m.role !== 'admin' && m.role !== 'manager') || (byUser.get(m.id)?.size ?? 0) > 0)
+      .map((m) => ({ id: m.id, name: m.full_name || m.email || '—', count: byUser.get(m.id)?.size ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }, [cal, members])
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, Shift[]>()
@@ -865,6 +902,19 @@ export default function ShiftEditor() {
         </div>
       </div>
 
+      <div className="card stack">
+        <div className="card-title">👥 Napok ebben a hónapban — {monthTitle(month)}</div>
+        {monthCounts.length === 0 && <div className="tiny muted">Nincs munkatárs ezen a munkaterületen.</div>}
+        <div className="grid-2">
+          {monthCounts.map((r) => (
+            <div key={r.id} className="between">
+              <span className="small" style={{ fontWeight: r.count > 0 ? 700 : 400, color: r.count === 0 ? 'var(--text-dim)' : undefined }}>{r.name}</span>
+              <span className={`badge ${r.count > 0 ? 'primary' : ''}`}>{r.count} nap</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ---- Autó havi történet (szűrt nézetben) ---- */}
       {carFilter && (
         <div className="card stack">
@@ -911,11 +961,19 @@ export default function ShiftEditor() {
         {error && <div className="alert error">{error}</div>}
         {(cars?.length ?? 0) === 0 && <div className="empty"><span className="ico">🚗</span>Nincs aktív autó. Előbb adj hozzá autót.</div>}
 
-        {(!multiMode || selectedDays.length > 0) && cars?.filter((c) => !carFilter || c.id === carFilter).map((car) => {
+        {(!multiMode || selectedDays.length > 0) && editorCars.filter((c) => !carFilter || c.id === carFilter).map((car, idx, arr) => {
           const shift = multiMode ? undefined : dayShifts.find((x) => x.car_id === car.id)
           const r = rows[car.id] ?? { driver: shift?.driver_id ?? '', loader: shift?.loader_id ?? '' }
+          const catName = (categories ?? []).find((c) => c.id === car.category_id)?.name ?? 'Kategória nélkül'
+          const showHeader = idx === 0 || (arr[idx - 1].category_id ?? '') !== (car.category_id ?? '')
           return (
             <div key={car.id} className="stack" style={{ gap: 8 }}>
+              {showHeader && (
+                <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: idx > 0 ? 10 : 0 }}>
+                  <span className="badge primary">{catName}</span>
+                  <div style={{ flex: 1, height: 2, background: 'var(--border)', borderRadius: 1 }} />
+                </div>
+              )}
               <div style={{ fontWeight: 800 }}>
                 {car.plate}{car.label ? <span className="muted small"> · {car.label}</span> : ''}
                 <span className="tiny muted"> · {crewOf(car.id) === 1 ? '👤 1 fő' : '👥 2 fő'}</span>
