@@ -185,7 +185,10 @@ export default function MySchedule() {
               <span className="muted small">Társ</span>
               <span className="small">{partner || 'Nincs megadva'}</span>
             </div>
-            {partnerId && (
+            {partnerId && s.work_date !== today && (
+              <span className="tiny muted">🔄 Cserét csak aznap lehet kérni.</span>
+            )}
+            {partnerId && s.work_date === today && (
               swap && swap.status === 'pending' ? (
                 <div className="stack" style={{ gap: 4 }}>
                   <span className="badge warning" style={{ width: 'fit-content' }}>🔄 Csere: {swapStatusLabel[swap.status]}</span>
