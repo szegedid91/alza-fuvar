@@ -668,20 +668,25 @@ export default function ShiftEditor() {
     return map
   }, [cal])
 
-  // Nap-jelzők: esemény / hibabejelentés / takarítás / telephelyen kívül — autó-szűrővel
+  // Nap+autó jelzők: esemény / hibabejelentés / takarítás / telephelyen kívül —
+  // autónként külön (kulcs: "nap|autóId"; autó nélküli eseménynél "nap|")
+  type Marker = { incident: boolean; issue: boolean; clean: boolean; geo: boolean }
   const markers = useMemo(() => {
-    const map = new Map<string, { incident: boolean; issue: boolean; clean: boolean; geo: boolean }>()
-    const get = (d: string) => {
-      if (!map.has(d)) map.set(d, { incident: false, issue: false, clean: false, geo: false })
-      return map.get(d)!
+    const map = new Map<string, Marker>()
+    const get = (d: string, carId: string | null) => {
+      const k = `${d}|${carId ?? ''}`
+      if (!map.has(k)) map.set(k, { incident: false, issue: false, clean: false, geo: false })
+      return map.get(k)!
     }
     const carOk = (carId: string | null) => !carFilter || carId === carFilter
-    for (const i of cal?.incidents ?? []) if (carOk(i.car_id)) get(i.work_date).incident = true
-    for (const i of cal?.issues ?? []) if (carOk(i.car_id)) get(localDateOf(i.created_at)).issue = true
-    for (const c of cal?.cleanings ?? []) if (carOk(c.car_id)) get(c.work_date).clean = true
-    for (const c of cal?.geoCheckins ?? []) if (carOk(c.car_id)) get(c.work_date).geo = true
+    for (const i of cal?.incidents ?? []) if (carOk(i.car_id)) get(i.work_date, i.car_id).incident = true
+    for (const i of cal?.issues ?? []) if (carOk(i.car_id)) get(localDateOf(i.created_at), i.car_id).issue = true
+    for (const c of cal?.cleanings ?? []) if (carOk(c.car_id)) get(c.work_date, c.car_id).clean = true
+    for (const c of cal?.geoCheckins ?? []) if (carOk(c.car_id)) get(c.work_date, c.car_id).geo = true
     return map
   }, [cal, carFilter])
+  const iconsOf = (mk: Marker | undefined) =>
+    mk ? `${mk.incident ? '⚠️' : ''}${mk.issue ? '❗' : ''}${mk.clean ? '🧽' : ''}${mk.geo ? '📍' : ''}` : ''
 
   const nameOf = cal?.names ?? {}
   const carOf = (id: string | null) => (cars ?? []).find((c) => c.id === id)
@@ -754,8 +759,16 @@ export default function ShiftEditor() {
             if (!date) return <div key={`e${i}`} />
             const all = shiftsByDay.get(date) ?? []
             const ds = carFilter ? all.filter((s) => s.car_id === carFilter) : all
-            const mk = markers.get(date)
-            const icons = mk ? `${mk.incident ? '⚠️' : ''}${mk.issue ? '❗' : ''}${mk.clean ? '🧽' : ''}${mk.geo ? '📍' : ''}` : ''
+            // A nap be nem osztott autóihoz / autó nélküli eseményekhez tartozó jelzők alul összegezve
+            const shiftCarIds = new Set(ds.map((s) => s.car_id))
+            const rest: Marker = { incident: false, issue: false, clean: false, geo: false }
+            for (const [k, v] of markers) {
+              if (!k.startsWith(`${date}|`)) continue
+              const cid = k.slice(date.length + 1)
+              if (cid && shiftCarIds.has(cid)) continue
+              rest.incident ||= v.incident; rest.issue ||= v.issue; rest.clean ||= v.clean; rest.geo ||= v.geo
+            }
+            const icons = iconsOf(rest.incident || rest.issue || rest.clean || rest.geo ? rest : undefined)
             const isSel = date === selectedDate
             const isToday = date === today
             return (
@@ -767,14 +780,17 @@ export default function ShiftEditor() {
                   border: isSel ? '2px solid var(--primary)' : '1px solid transparent',
                   background: isToday ? 'rgba(20,184,166,.12)' : 'var(--bg)',
                   color: 'inherit', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch',
+                  transform: isSel ? 'scale(1.14)' : undefined, zIndex: isSel ? 2 : undefined,
+                  boxShadow: isSel ? 'var(--shadow)' : undefined, transition: 'transform .12s ease',
                 }}
               >
                 <div className="tiny" style={{ fontWeight: isToday ? 800 : 500 }}>{Number(date.slice(8, 10))}</div>
                 {ds.slice(0, 3).map((s) => {
                   const full = !!s.driver_id && (!!s.loader_id || crewOf(s.car_id) === 1)
-                  const label = carFilter
+                  const chipIcons = iconsOf(markers.get(`${date}|${s.car_id}`))
+                  const label = (carFilter
                     ? `${shortName(nameOf[s.driver_id ?? ''])}+${shortName(nameOf[s.loader_id ?? ''])}`
-                    : carOf(s.car_id)?.plate ?? '?'
+                    : carOf(s.car_id)?.plate ?? '?') + (chipIcons ? ` ${chipIcons}` : '')
                   return (
                     <div
                       key={s.id}
@@ -801,6 +817,63 @@ export default function ShiftEditor() {
           {' '}· ⚠️ baleset · ❗ hibabejelentés · 🧽 takarítás · 📍 telephelyen kívül
         </div>
       </div>
+
+      {/* ---- Kiválasztott nap részletei ---- */}
+      {cal && (() => {
+        const d = selectedDate
+        const carOk = (cid: string | null) => !carFilter || cid === carFilter
+        const dShifts = (shiftsByDay.get(d) ?? []).filter((x) => carOk(x.car_id))
+        const inc = cal.incidents.filter((i) => i.work_date === d && carOk(i.car_id))
+        const iss = cal.issues.filter((i) => localDateOf(i.created_at) === d && carOk(i.car_id))
+        const cln = cal.cleanings.filter((c) => c.work_date === d && carOk(c.car_id))
+        const geo = cal.geoCheckins.filter((c) => c.work_date === d && carOk(c.car_id))
+        const tt = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+        const plate = (cid: string | null) => carOf(cid)?.plate ?? '?'
+        const empty = dShifts.length + inc.length + iss.length + cln.length + geo.length === 0
+        return (
+          <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
+            <div className="card-title" style={{ margin: 0 }}>📅 {formatDate(d)} — mi történt aznap</div>
+            {empty && <div className="tiny muted">Ezen a napon nincs beosztás és esemény. Koppints egy másik napra a naptárban.</div>}
+            {dShifts.map((x) => (
+              <div key={x.id} className="between" style={{ gap: 8 }}>
+                <span className="small" style={{ fontWeight: 700 }}>
+                  🚚 {plate(x.car_id)} {iconsOf(markers.get(`${d}|${x.car_id}`))}
+                </span>
+                <span className="small muted">
+                  {nameOf[x.driver_id ?? ''] ?? '—'}
+                  {crewOf(x.car_id) === 2 || x.loader_id ? ` + ${nameOf[x.loader_id ?? ''] ?? '—'}` : ''}
+                </span>
+              </div>
+            ))}
+            {inc.map((i, idx) => (
+              <div key={`i${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--danger)', paddingLeft: 10 }}>
+                <span className="tiny" style={{ fontWeight: 700 }}>
+                  ⚠️ Esemény / baleset — {i.car_id ? `${plate(i.car_id)} · ` : ''}{nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)}
+                </span>
+                <span className="small">{i.note || '(nincs leírás)'}</span>
+              </div>
+            ))}
+            {iss.map((i, idx) => (
+              <div key={`h${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--warning)', paddingLeft: 10 }}>
+                <span className="tiny" style={{ fontWeight: 700 }}>
+                  ❗ Hibabejelentés — {plate(i.car_id)} · {nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
+                </span>
+                <span className="small">{i.note || '(nincs leírás)'}</span>
+              </div>
+            ))}
+            {cln.map((c, idx) => (
+              <div key={`c${idx}`} className="tiny" style={{ paddingLeft: 13 }}>
+                🧽 Takarítás — {plate(c.car_id)} · {nameOf[c.user_id] ?? 'munkatárs'} · {tt(c.created_at)}
+              </div>
+            ))}
+            {geo.map((g, idx) => (
+              <div key={`g${idx}`} className="tiny" style={{ paddingLeft: 13 }}>
+                📍 Telephelyen kívüli be-/kijelentkezés — {plate(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       <div className="card stack">
         <div className="card-title">👥 Napok ebben a hónapban — {monthTitle(month)}</div>
