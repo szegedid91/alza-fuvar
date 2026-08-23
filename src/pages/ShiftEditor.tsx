@@ -592,26 +592,12 @@ export default function ShiftEditor() {
 
   const [month, setMonth] = useState(today.slice(0, 7))
   const [selectedDate, setSelectedDate] = useState(today)
-  const [copySource, setCopySource] = useState<string | null>(null)
-  const [multiMode, setMultiMode] = useState(false)
-  const [selectedDays, setSelectedDays] = useState<string[]>([])
   const [carFilter, setCarFilter] = useState('') // '' = összes autó
-  const [rows, setRows] = useState<Record<string, { driver: string; loader: string }>>({})
-  const [savedCar, setSavedCar] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [copyMsg, setCopyMsg] = useState<string | null>(null)
 
   const { data: members } = useMembers()
   const { data: cars } = useCars(true)
   const { data: categories } = useCarCategories()
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
-  const calMemberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
-  // Autók kategória-sorrendben (a beosztás-tábla sorrendjével egyezően)
-  const editorCars = useMemo(() => {
-    const order = new Map((categories ?? []).map((c, i) => [c.id, i]))
-    const rank = (c: Car) => (c.category_id && order.has(c.category_id) ? order.get(c.category_id)! : 9999)
-    return (cars ?? []).slice().sort((a, b) => rank(a) - rank(b) || a.plate.localeCompare(b.plate))
-  }, [cars, categories])
 
   // A hónap beosztásai + eseményei egy lekérdezés-körben
   const { data: cal } = useQuery<MonthData>({
@@ -655,8 +641,6 @@ export default function ShiftEditor() {
       }
     },
   })
-
-  useEffect(() => { setRows({}) }, [selectedDate, currentWorkspaceId, multiMode])
 
   const cells = useMemo(() => monthGrid(month), [month])
 
@@ -703,70 +687,7 @@ export default function ShiftEditor() {
 
   const nameOf = cal?.names ?? {}
   const carOf = (id: string | null) => (cars ?? []).find((c) => c.id === id)
-  const dayShifts = shiftsByDay.get(selectedDate) ?? []
-
-  async function saveOne(car: Car, r: { driver: string; loader: string }) {
-    if (!currentWorkspaceId || !profile) return
-    setError(null)
-    const { error } = await supabase.from('shifts').upsert(
-      {
-        workspace_id: currentWorkspaceId, work_date: selectedDate, car_id: car.id,
-        driver_id: r.driver || null, loader_id: r.loader || null, created_by: profile.id,
-      },
-      { onConflict: 'car_id,work_date' },
-    )
-    if (error) { setError(error.message); return }
-    setSavedCar(car.id)
-    setTimeout(() => setSavedCar(null), 1500)
-    await qc.invalidateQueries({ queryKey: ['shift-cal'] })
-  }
-
-  // Több kijelölt napra ugyanaz a beosztás — EGY upsert-hívással
-  async function saveMulti(car: Car, r: { driver: string; loader: string }) {
-    if (!currentWorkspaceId || !profile || selectedDays.length === 0) return
-    // Üres párost több napra nem mentünk: az upsert a már beosztott napokat is kiürítené
-    if (!r.driver && !r.loader) {
-      setError(`${car.plate}: válassz sofőrt vagy rakodót — üres beosztás több napra mentve a meglévőket törölné. Törléshez használd az 1 napos nézetet.`)
-      return
-    }
-    setError(null)
-    const rowsUp = selectedDays.map((d) => ({
-      workspace_id: currentWorkspaceId, work_date: d, car_id: car.id,
-      driver_id: r.driver || null, loader_id: r.loader || null, created_by: profile.id,
-    }))
-    const { error } = await supabase.from('shifts').upsert(rowsUp, { onConflict: 'car_id,work_date' })
-    if (error) { setError(error.message); return }
-    setSavedCar(car.id)
-    setTimeout(() => setSavedCar(null), 1500)
-    await qc.invalidateQueries({ queryKey: ['shift-cal'] })
-  }
-
-  async function tapDay(date: string) {
-    setCopyMsg(null)
-    // Másolás-mód: a koppintott nap a cél
-    if (copySource) {
-      if (date === copySource) { setCopySource(null); return }
-      const src = shiftsByDay.get(copySource) ?? []
-      if (src.length === 0) { setCopyMsg('A forrásnapon nincs beosztás.'); setCopySource(null); return }
-      if (!currentWorkspaceId || !profile) return
-      const rowsToCopy = src.map((s) => ({
-        workspace_id: currentWorkspaceId, work_date: date, car_id: s.car_id,
-        driver_id: s.driver_id, loader_id: s.loader_id, created_by: profile.id,
-      }))
-      const { error } = await supabase.from('shifts').upsert(rowsToCopy, { onConflict: 'car_id,work_date' })
-      setCopyMsg(error
-        ? 'Hiba a másolásnál: ' + error.message
-        : `${formatDate(copySource)} → ${formatDate(date)}: ${rowsToCopy.length} beosztás átmásolva.`)
-      setCopySource(null)
-      setSelectedDate(date)
-      await qc.invalidateQueries({ queryKey: ['shift-cal'] })
-      return
-    }
-    // Több nap kijelölése
-    if (multiMode) {
-      setSelectedDays((prev) => prev.includes(date) ? prev.filter((d) => d !== date) : [...prev, date].sort())
-      return
-    }
+  function tapDay(date: string) {
     setSelectedDate(date)
   }
 
@@ -819,32 +740,13 @@ export default function ShiftEditor() {
           <button className="btn ghost sm auto" onClick={() => setMonth(shiftMonth(month, 1))}>→</button>
         </div>
 
-        <div className="grid-2">
-          <div className="field">
-            <label>Autó-szűrő</label>
-            <select className="select" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}>
-              <option value="">Összes autó</option>
-              {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Kijelölés</label>
-            <button
-              className={`btn sm ${multiMode ? '' : 'secondary'}`}
-              onClick={() => { setMultiMode((v) => !v); setSelectedDays([]); setCopySource(null); setCopyMsg(null) }}
-            >
-              {multiMode ? `☑️ Több nap (${selectedDays.length})` : '1 nap'}
-            </button>
-          </div>
+        <div className="field">
+          <label>Autó-szűrő</label>
+          <select className="select" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}>
+            <option value="">Összes autó</option>
+            {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+          </select>
         </div>
-
-        {copySource && (
-          <div className="alert info">
-            📋 Másolás: <strong>{formatDate(copySource)}</strong> → koppints a célnapra
-            <button className="btn ghost sm auto" style={{ marginLeft: 8 }} onClick={() => setCopySource(null)}>Mégse</button>
-          </div>
-        )}
-        {copyMsg && <div className={`alert ${copyMsg.startsWith('Hiba') || copyMsg.startsWith('A forrás') ? 'error' : 'success'}`}>{copyMsg}</div>}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
           {dayNames.map((d) => (
@@ -856,16 +758,16 @@ export default function ShiftEditor() {
             const ds = carFilter ? all.filter((s) => s.car_id === carFilter) : all
             const mk = markers.get(date)
             const icons = mk ? `${mk.incident ? '⚠️' : ''}${mk.issue ? '❗' : ''}${mk.clean ? '🧽' : ''}${mk.geo ? '📍' : ''}` : ''
-            const isSel = multiMode ? selectedDays.includes(date) : date === selectedDate
+            const isSel = date === selectedDate
             const isToday = date === today
             return (
               <button
                 key={date}
-                onClick={() => void tapDay(date)}
+                onClick={() => tapDay(date)}
                 style={{
                   minHeight: 64, padding: '3px 2px', borderRadius: 8, cursor: 'pointer',
-                  border: isSel ? '2px solid var(--primary)' : copySource ? '1px dashed var(--warning)' : '1px solid transparent',
-                  background: isSel && multiMode ? 'rgba(20,184,166,.10)' : isToday ? 'rgba(20,184,166,.12)' : 'var(--bg)',
+                  border: isSel ? '2px solid var(--primary)' : '1px solid transparent',
+                  background: isToday ? 'rgba(20,184,166,.12)' : 'var(--bg)',
                   color: 'inherit', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'stretch',
                 }}
               >
@@ -933,76 +835,6 @@ export default function ShiftEditor() {
         </div>
       )}
 
-      {/* ---- Szerkesztő panel: 1 nap vagy több nap ---- */}
-      <div className="card stack">
-        <div className="between">
-          <div className="card-title" style={{ margin: 0 }}>
-            {multiMode
-              ? `☑️ ${selectedDays.length} nap kijelölve`
-              : `📅 ${formatDate(selectedDate)}`}
-          </div>
-          {!multiMode && dayShifts.length > 0 && !copySource && (
-            <button className="btn secondary sm auto" onClick={() => { setCopyMsg(null); setCopySource(selectedDate) }}>
-              📋 Nap másolása
-            </button>
-          )}
-          {multiMode && selectedDays.length > 0 && (
-            <button className="btn ghost sm auto" onClick={() => setSelectedDays([])}>Kijelölés törlése</button>
-          )}
-        </div>
-
-        {multiMode && selectedDays.length === 0 && (
-          <div className="tiny muted">Koppints a naptárban a napokra — mindre ugyanazt a beosztást mentheted el egyszerre.</div>
-        )}
-        {multiMode && selectedDays.length > 0 && (
-          <div className="tiny muted">{selectedDays.map((d) => Number(d.slice(8, 10)) + '.').join(' ')}</div>
-        )}
-
-        {error && <div className="alert error">{error}</div>}
-        {(cars?.length ?? 0) === 0 && <div className="empty"><span className="ico">🚗</span>Nincs aktív autó. Előbb adj hozzá autót.</div>}
-
-        {(!multiMode || selectedDays.length > 0) && editorCars.filter((c) => !carFilter || c.id === carFilter).map((car, idx, arr) => {
-          const shift = multiMode ? undefined : dayShifts.find((x) => x.car_id === car.id)
-          const r = rows[car.id] ?? { driver: shift?.driver_id ?? '', loader: shift?.loader_id ?? '' }
-          const catName = (categories ?? []).find((c) => c.id === car.category_id)?.name ?? 'Kategória nélkül'
-          const showHeader = idx === 0 || (arr[idx - 1].category_id ?? '') !== (car.category_id ?? '')
-          return (
-            <div key={car.id} className="stack" style={{ gap: 8 }}>
-              {showHeader && (
-                <div className="row" style={{ gap: 8, alignItems: 'center', marginTop: idx > 0 ? 10 : 0 }}>
-                  <span className="badge primary">{catName}</span>
-                  <div style={{ flex: 1, height: 2, background: 'var(--border)', borderRadius: 1 }} />
-                </div>
-              )}
-              <div style={{ fontWeight: 800 }}>
-                {car.plate}{car.label ? <span className="muted small"> · {car.label}</span> : ''}
-                <span className="tiny muted"> · {crewOf(car.id) === 1 ? '👤 1 fő' : '👥 2 fő'}</span>
-              </div>
-              <div className="grid-2">
-                <div className="field">
-                  <label>{crewOf(car.id) === 1 ? 'Munkatárs' : 'Sofőr'}</label>
-                  <PersonPicker value={r.driver} options={calMemberOptions} placeholder="Kezdj el gépelni…"
-                    onChange={(id) => setRows((p) => ({ ...p, [car.id]: { ...r, driver: id } }))} />
-                </div>
-                {(crewOf(car.id) === 2 || !!r.loader) && (
-                  <div className="field">
-                    <label>Rakodó</label>
-                    <PersonPicker value={r.loader} options={calMemberOptions} placeholder="Kezdj el gépelni…"
-                      onChange={(id) => setRows((p) => ({ ...p, [car.id]: { ...r, loader: id } }))} />
-                  </div>
-                )}
-              </div>
-              <button
-                className={`btn sm ${savedCar === car.id ? 'secondary' : ''}`}
-                onClick={() => void (multiMode ? saveMulti(car, r) : saveOne(car, r))}
-              >
-                {savedCar === car.id ? '✔ Mentve' : multiMode ? `Mentés mind a ${selectedDays.length} napra` : 'Mentés'}
-              </button>
-              <div className="divider" />
-            </div>
-          )
-        })}
-      </div>
       </>}
     </div>
   )
