@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { resolveNames } from '../lib/names'
@@ -49,6 +49,20 @@ export default function MySchedule() {
 
   const [actionError, setActionError] = useState<string | null>(null)
 
+  // 30 perces cserekérés-korlát: a legutóbbi saját kérésünk óta hátralévő idő.
+  // A szerver (DB-trigger) is kikényszeríti, itt csak a gombot tiltjuk le hozzá.
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [])
+  const myLastRequestAt = (swaps ?? [])
+    .filter((r) => r.requested_by === profile?.id)
+    .reduce<string | null>((m, r) => (!m || r.created_at > m ? r.created_at : m), null)
+  const cooldownLeftMin = myLastRequestAt
+    ? Math.max(0, Math.ceil((new Date(myLastRequestAt).getTime() + 30 * 60 * 1000 - nowTick) / 60_000))
+    : 0
+
   const requestSwap = useMutation({
     mutationFn: async ({ shiftId, partnerId, workspaceId }: { shiftId: string; partnerId: string | null; workspaceId: string }) => {
       const { error } = await supabase.from('swap_requests').insert({
@@ -60,7 +74,7 @@ export default function MySchedule() {
       })
       if (error) throw error
     },
-    onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['my-swaps'] }) },
+    onSuccess: () => { setActionError(null); setNowTick(Date.now()); void qc.invalidateQueries({ queryKey: ['my-swaps'] }) },
     onError: (e) => setActionError(e instanceof Error ? `A cserekérés nem sikerült: ${e.message}` : 'A cserekérés nem sikerült'),
   })
 
@@ -187,10 +201,12 @@ export default function MySchedule() {
                   {swap && <span className="tiny muted">Legutóbbi csere: {swapStatusLabel[swap.status]}</span>}
                   <button
                     className="btn ghost sm"
-                    disabled={requestSwap.isPending}
+                    disabled={requestSwap.isPending || cooldownLeftMin > 0}
                     onClick={() => requestSwap.mutate({ shiftId: s.id, partnerId, workspaceId: s.workspace_id })}
                   >
-                    🔄 Csere kérése (sofőr ↔ rakodó)
+                    {cooldownLeftMin > 0
+                      ? `⏳ Új csere kérése ${cooldownLeftMin} perc múlva lehetséges`
+                      : '🔄 Csere kérése (sofőr ↔ rakodó)'}
                   </button>
                 </>
               )
