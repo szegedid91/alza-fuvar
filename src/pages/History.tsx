@@ -43,7 +43,7 @@ export default function History() {
     queryFn: async () => {
       const ws = currentWorkspaceId!
       const [carsRes, checkins, incidents, issues] = await Promise.all([
-        supabase.from('cars').select('id, plate').eq('workspace_id', ws),
+        supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll<CheckIn>((f, t) => supabase.from('check_ins')
           .select('car_id, prev_car_id, user_id, work_date, checked_in_at, checked_out_at, switch_reason')
           .eq('workspace_id', ws).gte('work_date', from).lte('work_date', to)
@@ -69,6 +69,15 @@ export default function History() {
   })
 
   const plateOf = useMemo(() => new Map((data?.cars ?? []).map((c) => [c.id, c.plate])), [data])
+  const catOf = useMemo(() => new Map((data?.cars ?? []).map((c) => [
+    c.id, (c.category as unknown as { name: string } | null)?.name ?? null,
+  ])), [data])
+  // Kategória-előtaggal ellátott autónév (pl. "XL · ABC-123")
+  const carLabel = (carId: string | null) => {
+    if (!carId) return '?'
+    const cat = catOf.get(carId)
+    return `${cat ? `${cat} · ` : ''}${plateOf.get(carId) ?? '?'}`
+  }
   const nm = (id: string | null) => (id ? data?.names[id] ?? 'munkatárs' : null)
 
   // Szűrők alkalmazása + napi csoportosítás (csökkenő dátum szerint)
@@ -189,7 +198,10 @@ export default function History() {
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterCar} onChange={(e) => setFilterCar(e.target.value)}>
             <option value="">🚚 Minden autó</option>
-            {(data?.cars ?? []).map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+            {(data?.cars ?? []).map((c) => {
+              const cat = (c.category as unknown as { name: string } | null)?.name
+              return <option key={c.id} value={c.id}>{cat ? `${cat} · ` : ''}{c.plate}</option>
+            })}
           </select>
           <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
             <option value="">👤 Minden munkatárs</option>
@@ -249,7 +261,10 @@ export default function History() {
 
             {show('usage') && g.usage.map((u) => (
               <div key={u.carId} className="row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                <span className="small" style={{ fontWeight: 700, minWidth: 76 }}>🚚 {u.plate}</span>
+                <span className="small" style={{ fontWeight: 700, minWidth: 76 }}>
+                  {catOf.get(u.carId) && <span className="tiny muted" style={{ fontWeight: 400 }}>{catOf.get(u.carId)} · </span>}
+                  🚚 {u.plate}
+                </span>
                 <span className="small muted">
                   {u.segments.map((sg, i) => (
                     <span key={i}>{i > 0 && ' · '}{sg.who} ({t(sg.from)}–{sg.to ? t(sg.to) : '…'})</span>
@@ -268,7 +283,7 @@ export default function History() {
             {show('incident') && g.incidents.map((i) => (
               <div key={i.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--danger)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  ⚠️ Esemény / baleset — {nm(i.user_id)}{i.car_id ? ` · ${plateOf.get(i.car_id) ?? '?'}` : ''} · {t(i.created_at)}
+                  ⚠️ Esemény / baleset — {nm(i.user_id)}{i.car_id ? ` · ${carLabel(i.car_id)}` : ''} · {t(i.created_at)}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
@@ -277,7 +292,7 @@ export default function History() {
             {show('issue') && g.issues.map((i) => (
               <div key={i.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--border)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  🔧 Autó-hiba — {plateOf.get(i.car_id) ?? '?'} · {nm(i.user_id)} · {formatDateTime(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
+                  🔧 Autó-hiba — {carLabel(i.car_id)} · {nm(i.user_id)} · {formatDateTime(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
