@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.local
+.DS_Store
+public/pwa-192.png
+public/pwa-512.png
+public/apple-touch-icon.png
+
+.netlify

@@ -1,0 +1,44 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      # Ezek kliens-oldali, nyilvános értékek (a buildelt JS-ben amúgy is benne vannak):
+      # a Supabase publishable kulcs és a VAPID publikus kulcs nem titok.
+      VITE_SUPABASE_URL: https://jmhqsfeqfghzxsyqjgjd.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_ZBYb_sGt3I6gYfjkrNUMRQ_qkta41ka
+      VITE_VAPID_PUBLIC_KEY: BHWSUoQPIVVLhqcz6si5Ku2kyGMMIN_EHJQr4iXUfP0nFUeugBD1Yq2XMANSrFFgOMbn1rZy6U8P3rIFbYp9CU4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # SPA fallback: minden ismeretlen útvonal az index.html-t kapja
+      - run: cp dist/index.html dist/404.html && touch dist/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
