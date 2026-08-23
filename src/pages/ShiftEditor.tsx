@@ -579,9 +579,7 @@ function WeekTable() {
 }
 
 export default function ShiftEditor() {
-  const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
-  const qc = useQueryClient()
   const today = todayISO()
 
   // Nézet: heti táblázat (Sheets-szerű) vagy havi naptár — a választás megmarad
