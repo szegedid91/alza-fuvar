@@ -188,6 +188,8 @@ export type Database = {
           out_gps_lng: number | null
           outside_geofence: boolean
           out_outside_geofence: boolean
+          prev_car_id: string | null
+          switch_reason: string | null
           user_id: string
           work_date: string
           workspace_id: string
@@ -205,6 +207,8 @@ export type Database = {
           out_gps_lng?: number | null
           outside_geofence?: boolean
           out_outside_geofence?: boolean
+          prev_car_id?: string | null
+          switch_reason?: string | null
           user_id: string
           work_date: string
           workspace_id: string
@@ -222,6 +226,8 @@ export type Database = {
           out_gps_lng?: number | null
           outside_geofence?: boolean
           out_outside_geofence?: boolean
+          prev_car_id?: string | null
+          switch_reason?: string | null
           user_id?: string
           work_date?: string
           workspace_id?: string

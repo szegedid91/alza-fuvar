@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { parseCarQr } from '../lib/qr'
-import { resolveCarByToken, checkInspectionRequirement, type InspectionRequirement } from '../lib/checkin'
+import { resolveCarByToken, checkInspectionRequirement, type Car, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { todayISO, formatDateTime, formatHours } from '../lib/labels'
@@ -23,6 +23,11 @@ export default function Scan() {
   const [outBusy, setOutBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inspection, setInspection] = useState<InspectionRequirement | null>(null)
+
+  // Napközbeni autócsere: a beolvasott új autó + a kötelező ok
+  const [pendingSwitch, setPendingSwitch] = useState<Car | null>(null)
+  const [switchReason, setSwitchReason] = useState('Műszaki hiba')
+  const [switchNote, setSwitchNote] = useState('')
 
   // Nap végi kijelentkezés — rögzíti az időt, GPS-t és a geofence-jelzést
   async function checkout() {
@@ -70,35 +75,85 @@ export default function Scan() {
         setBusy(false)
         return
       }
-      const date = todayISO()
-      const gps = await getCurrentPosition()
-      const req = await checkInspectionRequirement(car.id, profile.id, date)
-
-      // Geofence: bárhol enged, de jelzi a vezetőknek, ha nem a telephelyen történt
-      const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
-
-      const id = crypto.randomUUID()
-      await submitNow({
-        id,
-        table: 'check_ins',
-        op: 'insert',
-        label: `Becsekkolás – ${car.plate}`,
-        values: {
-          id,
-          workspace_id: currentWorkspaceId,
-          car_id: car.id,
-          user_id: profile.id,
-          work_date: date,
-          gps_lat: gps.lat,
-          gps_lng: gps.lng,
-          outside_geofence: outside,
-        },
-      })
-      setInspection(req)
-      await qc.invalidateQueries({ queryKey: ['today'] })
+      // Napközbeni autócsere: ha ma már be vagy csekkolva egy MÁSIK autóra és
+      // még nem jelentkeztél ki, előbb az okot kérjük be (pl. műszaki hiba).
+      const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
+      if (openCi && openCi.car_id !== car.id) {
+        setPendingSwitch(car)
+        setBusy(false)
+        return
+      }
+      await doCheckIn(car, null, null, null)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Hiba'
       setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Becsekkolás (normál vagy autócsere). Csere esetén a régi becsekkolást
+  // lezárjuk, az újba pedig bekerül az ok és az előző autó.
+  async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null) {
+    if (!currentWorkspaceId || !profile) return
+    const date = todayISO()
+    const gps = await getCurrentPosition()
+    const req = await checkInspectionRequirement(car.id, profile.id, date)
+
+    // Geofence: bárhol enged, de jelzi a vezetőknek, ha nem a telephelyen történt
+    const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
+
+    if (prevCheckinId) {
+      await submitNow({
+        id: crypto.randomUUID(),
+        table: 'check_ins',
+        op: 'update',
+        match: { id: prevCheckinId },
+        label: 'Autócsere — előző autó lezárása',
+        values: {
+          checked_out_at: new Date().toISOString(),
+          out_gps_lat: gps.lat,
+          out_gps_lng: gps.lng,
+          out_outside_geofence: outside,
+        },
+      })
+    }
+
+    const id = crypto.randomUUID()
+    await submitNow({
+      id,
+      table: 'check_ins',
+      op: 'insert',
+      label: `Becsekkolás – ${car.plate}`,
+      values: {
+        id,
+        workspace_id: currentWorkspaceId,
+        car_id: car.id,
+        user_id: profile.id,
+        work_date: date,
+        gps_lat: gps.lat,
+        gps_lng: gps.lng,
+        outside_geofence: outside,
+        switch_reason: reason,
+        prev_car_id: prevCarId,
+      },
+    })
+    setInspection(req)
+    await qc.invalidateQueries({ queryKey: ['today'] })
+  }
+
+  // Autócsere megerősítése a megadott okkal
+  async function confirmSwitch() {
+    if (!pendingSwitch || !today?.checkin) return
+    setBusy(true)
+    setError(null)
+    try {
+      const reason = switchNote.trim() ? `${switchReason}: ${switchNote.trim()}` : switchReason
+      await doCheckIn(pendingSwitch, reason, today.checkin.car_id, today.checkin.id)
+      setPendingSwitch(null)
+      setSwitchNote('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Hiba az autócsere mentésénél')
     } finally {
       setBusy(false)
     }
@@ -166,6 +221,34 @@ export default function Scan() {
             Készíts ellenőrző fotókat (elöl/hátul/bal/jobb/beltér).
           </p>
           <button className="btn" onClick={() => navigate('/ellenorzes')}>Ellenőrzés indítása</button>
+        </div>
+      )}
+
+      {pendingSwitch && (
+        <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+          <div className="row"><span style={{ fontSize: 24 }}>🔁</span><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.plate}</strong></div>
+          <p className="small muted" style={{ margin: 0 }}>
+            Ma már a(z) {today?.car?.plate} autóra vagy becsekkolva. Add meg, miért váltasz — az előző autót lezárjuk, és a vezetők értesítést kapnak.
+          </p>
+          <div className="field">
+            <label>Ok</label>
+            <select className="select" value={switchReason} onChange={(e) => setSwitchReason(e.target.value)}>
+              <option>Műszaki hiba</option>
+              <option>Baleset</option>
+              <option>Vezetői utasítás</option>
+              <option>Egyéb</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Megjegyzés (opcionális)</label>
+            <input className="input" value={switchNote} onChange={(e) => setSwitchNote(e.target.value)} placeholder="pl. nem indul, hűtő hibás…" />
+          </div>
+          <div className="btn-grid">
+            <button className="btn" disabled={busy} onClick={() => void confirmSwitch()}>
+              {busy ? 'Mentés…' : '🔁 Csere megerősítése'}
+            </button>
+            <button className="btn ghost" disabled={busy} onClick={() => { setPendingSwitch(null); setSwitchNote('') }}>Mégse</button>
+          </div>
         </div>
       )}
 

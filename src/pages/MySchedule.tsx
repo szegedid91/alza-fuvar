@@ -5,6 +5,7 @@ import { resolveNames } from '../lib/names'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, swapStatusLabel } from '../lib/labels'
+import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import type { Tables } from '../lib/database.types'
 
 type SwapRequest = Tables<'swap_requests'>
@@ -48,6 +49,26 @@ export default function MySchedule() {
   })
 
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // Mai autóhasználat idővonala (napközbeni autócserékkel)
+  const { data: myTimeline } = useQuery<TimelineEntry[]>({
+    queryKey: ['my-car-timeline', currentWorkspaceId, profile?.id, today],
+    enabled: !!currentWorkspaceId && !!profile,
+    queryFn: async () => {
+      const { data } = await supabase.from('check_ins')
+        .select('checked_in_at, checked_out_at, switch_reason, car:cars!check_ins_car_id_fkey(plate)')
+        .eq('workspace_id', currentWorkspaceId!)
+        .eq('user_id', profile!.id)
+        .eq('work_date', today)
+        .order('checked_in_at')
+      return (data ?? []).map((r) => ({
+        plate: (r.car as unknown as { plate: string } | null)?.plate ?? '?',
+        from: r.checked_in_at,
+        to: r.checked_out_at,
+        reason: r.switch_reason,
+      }))
+    },
+  })
 
   // 30 perces cserekérés-korlát: a legutóbbi saját kérésünk óta hátralévő idő.
   // A szerver (DB-trigger) is kikényszeríti, itt csak a gombot tiltjuk le hozzá.
@@ -161,6 +182,13 @@ export default function MySchedule() {
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && (shifts?.length ?? 0) === 0 && (
         <div className="empty"><span className="ico">📅</span>Nincs közelgő beosztásod.</div>
+      )}
+
+      {((myTimeline?.length ?? 0) > 1 || myTimeline?.some((e) => e.reason)) && (
+        <div className="card stack">
+          <div className="card-title">🕓 Mai autóhasználat</div>
+          <CarTimeline entries={myTimeline!} />
+        </div>
       )}
 
       {shifts?.map((s) => {

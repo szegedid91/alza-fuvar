@@ -8,6 +8,7 @@ import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
 import PersonPicker from '../components/PersonPicker'
 import ConfirmButton from '../components/ConfirmButton'
+import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import { resolveNames } from '../lib/names'
 import { todayISO, formatDate, formatDateTime, carIssueStatusLabel } from '../lib/labels'
 import type { Tables } from '../lib/database.types'
@@ -195,6 +196,38 @@ function WeekTable() {
         .gte('work_date', weekStart).lte('work_date', addDays(weekStart, 6))
       if (error) throw error
       return (data ?? []) as Shift[]
+    },
+  })
+
+  // Napközbeni autócserék a héten: user+nap szerinti idővonalak, ahol volt váltás
+  const { data: weekSwitches } = useQuery({
+    queryKey: ['week-car-switches', currentWorkspaceId, weekStart],
+    enabled: !!currentWorkspaceId,
+    queryFn: async () => {
+      const { data } = await supabase.from('check_ins')
+        .select('user_id, work_date, checked_in_at, checked_out_at, switch_reason, car:cars!check_ins_car_id_fkey(plate)')
+        .eq('workspace_id', currentWorkspaceId!)
+        .gte('work_date', weekStart).lte('work_date', addDays(weekStart, 6))
+        .order('checked_in_at')
+      const rows = data ?? []
+      // csoportosítás user+nap szerint; csak ahol tényleg volt autócsere
+      const groups = new Map<string, { userId: string; date: string; entries: TimelineEntry[] }>()
+      for (const r of rows) {
+        const key = `${r.user_id}|${r.work_date}`
+        const g = groups.get(key) ?? { userId: r.user_id, date: r.work_date, entries: [] }
+        g.entries.push({
+          plate: (r.car as unknown as { plate: string } | null)?.plate ?? '?',
+          from: r.checked_in_at,
+          to: r.checked_out_at,
+          reason: r.switch_reason,
+        })
+        groups.set(key, g)
+      }
+      const withSwitch = [...groups.values()].filter((g) => g.entries.length > 1 || g.entries.some((e) => e.reason))
+      const names = await resolveNames(withSwitch.map((g) => g.userId))
+      return withSwitch
+        .map((g) => ({ ...g, name: names[g.userId] ?? 'Munkatárs' }))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name, 'hu'))
     },
   })
 
@@ -502,6 +535,18 @@ function WeekTable() {
           Mező kiürítése törli a napi beosztást. A rendszámra koppintva az autó cserélhető vagy kivehető a hétből. Görgethető oldalra →
         </div>
       </div>
+
+      {(weekSwitches?.length ?? 0) > 0 && (
+        <div className="card stack">
+          <div className="card-title">🔁 Napközbeni autócserék ezen a héten</div>
+          {weekSwitches!.map((g) => (
+            <div key={`${g.userId}|${g.date}`} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+              <div className="small" style={{ fontWeight: 700 }}>{formatDate(g.date)} · {g.name}</div>
+              <CarTimeline entries={g.entries} />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card stack">
         <div className="card-title">👥 Napok ezen a héten</div>
