@@ -905,6 +905,9 @@ export default function ShiftEditor() {
               </div>
               </Fragment>
             ))}
+            {dShifts.length > 0 && (sw.length + inc.length + iss.length + cln.length + geo.length) > 0 && (
+              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+            )}
             {sw.map((c, idx) => (
               <div key={`s${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
