@@ -674,6 +674,14 @@ export default function ShiftEditor() {
     return map
   }, [cal])
 
+  // Autó kategória-rangsora (a kategóriák sorrendje szerint; kategória nélkül a végén)
+  const catRank = (cid: string | null) => {
+    const c = (cars ?? []).find((x) => x.id === cid)
+    if (!c?.category_id) return 9999
+    const i = (categories ?? []).findIndex((k) => k.id === c.category_id)
+    return i === -1 ? 9999 : i
+  }
+
   // Nap+autó jelzők: esemény / hibabejelentés / takarítás / telephelyen kívül —
   // autónként külön (kulcs: "nap|autóId"; autó nélküli eseménynél "nap|")
   type Marker = { incident: boolean; issue: boolean; clean: boolean; geo: boolean; sw: boolean }
@@ -769,7 +777,10 @@ export default function ShiftEditor() {
           {cells.map((date, i) => {
             if (!date) return <div key={`e${i}`} onClick={() => setSelectedDate('')} />
             const all = shiftsByDay.get(date) ?? []
-            const ds = carFilter ? all.filter((s) => s.car_id === carFilter) : all
+            const ds = (carFilter ? all.filter((s) => s.car_id === carFilter) : all)
+              .slice()
+              .sort((a, b) => catRank(a.car_id) - catRank(b.car_id)
+                || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? ''))
             // A nap be nem osztott autóihoz / autó nélküli eseményekhez tartozó jelzők alul összegezve
             const shiftCarIds = new Set(ds.map((s) => s.car_id))
             const rest: Marker = { incident: false, issue: false, clean: false, geo: false, sw: false }
@@ -834,6 +845,9 @@ export default function ShiftEditor() {
         const d = selectedDate
         const carOk = (cid: string | null) => !carFilter || cid === carFilter
         const dShifts = (shiftsByDay.get(d) ?? []).filter((x) => carOk(x.car_id))
+          .slice()
+          .sort((a, b) => catRank(a.car_id) - catRank(b.car_id)
+            || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? ''))
         const inc = (cal.incidents ?? []).filter((i) => i.work_date === d && carOk(i.car_id))
         const iss = (cal.issues ?? []).filter((i) => localDateOf(i.created_at) === d && carOk(i.car_id))
         const cln = (cal.cleanings ?? []).filter((c) => c.work_date === d && carOk(c.car_id))
@@ -854,6 +868,23 @@ export default function ShiftEditor() {
               <button className="btn ghost sm auto" title="Kijelölés megszüntetése" onClick={() => setSelectedDate('')}>✕</button>
             </div>
             {empty && <div className="tiny muted">Ezen a napon nincs beosztás és esemény. Koppints egy másik napra a naptárban.</div>}
+            {dShifts.length > 0 && (() => {
+              // Kategóriánként hány autó ment aznap
+              const counts = new Map<string, number>()
+              for (const x of dShifts) {
+                const n = catName(x.car_id) ?? 'Kategória nélkül'
+                counts.set(n, (counts.get(n) ?? 0) + 1)
+              }
+              return (
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <span className="tiny muted" style={{ alignSelf: 'center' }}>Aznap ment:</span>
+                  {[...counts.entries()].map(([n, c]) => (
+                    <span key={n} className="badge primary">{n}: {c} db</span>
+                  ))}
+                  <span className="badge">összesen {dShifts.length} autó</span>
+                </div>
+              )
+            })()}
             {dShifts.map((x) => (
               <div key={x.id} className="between" style={{ gap: 8 }}>
                 <span className="small" style={{ fontWeight: 700 }}>
@@ -896,9 +927,18 @@ export default function ShiftEditor() {
               </div>
             ))}
             {geo.map((g, idx) => (
-              <div key={`g${idx}`} className="tiny" style={{ paddingLeft: 13 }}>
-                📍 Telephelyen kívüli be-/kijelentkezés — {plate(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
-              </div>
+              <Fragment key={`g${idx}`}>
+                {g.outside_geofence && (
+                  <div className="tiny" style={{ paddingLeft: 13 }}>
+                    📍 <strong>Bejelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
+                  </div>
+                )}
+                {g.out_outside_geofence && (
+                  <div className="tiny" style={{ paddingLeft: 13 }}>
+                    🏁 <strong>Kijelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
         )
