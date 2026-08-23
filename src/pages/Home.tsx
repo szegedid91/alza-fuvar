@@ -39,6 +39,7 @@ export default function Home() {
     { to: '/bizonyitek', icon: '📸', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },
   ]
   managerHub.push({ to: '/kepek', icon: '🖼️', title: 'Képek', desc: 'Fotók: autó, nap, ember szerint' })
+  managerHub.push({ to: '/tortenet', icon: '🕓', title: 'Előzmények', desc: 'Autók, cserék, események visszamenőleg' })
   if (isAdmin) managerHub.push({ to: '/ber', icon: '🧮', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
   if (isAdmin) managerHub.push({ to: '/naplo', icon: '📜', title: 'Napló', desc: 'Módosítások nyomon követése' })
 

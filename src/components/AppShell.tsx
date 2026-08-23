@@ -201,7 +201,7 @@ function PushPrompt() {
 }
 
 // Ezek az oldalak nagy képernyőn a teljes szélességet használják
-const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/fuvar-feltoltes']
+const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/fuvar-feltoltes', '/tortenet']
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const { profile } = useAuth()

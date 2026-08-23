@@ -24,6 +24,7 @@ import PhotoReview from './pages/PhotoReview'
 import Dashboard from './pages/Dashboard'
 import ManagerRouteUpload from './pages/ManagerRouteUpload'
 import AuditLog from './pages/AuditLog'
+import History from './pages/History'
 import CarIssues from './pages/CarIssues'
 import Reports from './pages/Reports'
 import FleetMap from './pages/FleetMap'
@@ -93,6 +94,7 @@ export default function App() {
         {isManagerOrAdmin && <Route path="/bizonyitek" element={<Evidence />} />}
         {isAdmin && <Route path="/ber" element={<Payroll />} />}
         {isManagerOrAdmin && <Route path="/kepek" element={<PhotoReview />} />}
+        {isManagerOrAdmin && <Route path="/tortenet" element={<History />} />}
         {isAdmin && <Route path="/naplo" element={<AuditLog />} />}
 
         <Route path="*" element={<Navigate to="/" replace />} />
