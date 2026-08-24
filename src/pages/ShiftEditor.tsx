@@ -10,6 +10,7 @@ import PersonPicker from '../components/PersonPicker'
 import ConfirmButton from '../components/ConfirmButton'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import { resolveNames } from '../lib/names'
+import { sendPush } from '../lib/push'
 import { todayISO, formatDate, formatDateTime, carIssueStatusLabel } from '../lib/labels'
 import type { Tables } from '../lib/database.types'
 
@@ -390,6 +391,56 @@ function WeekTable() {
     } finally { setRowBusy(false) }
   }
 
+  // 📣 Heti beosztás kiküldése: minden beosztott munkatárs SZEMÉLYRE SZABOTT
+  // pusht kap a saját napjaival (nap, autó, szerep). A vezető dönt, mikor
+  // "közzétehető" a hét — ezért gombra megy, nem minden mentésnél.
+  const [publishMsg, setPublishMsg] = useState<string | null>(null)
+  const [publishBusy, setPublishBusy] = useState(false)
+  const weekPeople = useMemo(() => {
+    const ids = new Set<string>()
+    for (const sh of shifts ?? []) {
+      if (sh.driver_id) ids.add(sh.driver_id)
+      if (sh.loader_id) ids.add(sh.loader_id)
+    }
+    return ids
+  }, [shifts])
+
+  async function publishWeek() {
+    const list = shifts ?? []
+    if (weekPeople.size === 0) { setPublishMsg('Ezen a héten még nincs beosztás — nincs kinek küldeni.'); return }
+    setPublishBusy(true)
+    setPublishMsg(null)
+    try {
+      const DAY_ABBR = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V']
+      const dayIdx = (iso: string) => (new Date(`${iso}T12:00:00`).getDay() + 6) % 7
+      const byUser = new Map<string, { date: string; text: string }[]>()
+      const add = (uid: string | null, date: string, carId: string, role: string) => {
+        if (!uid) return
+        const plate = carOf(carId)?.plate ?? '?'
+        const single = crewOf(carId) === 1
+        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${single ? '' : ` (${role})`}` }
+        byUser.set(uid, [...(byUser.get(uid) ?? []), entry])
+      }
+      for (const sh of list) {
+        add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr')
+        add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó')
+      }
+      let sent = 0
+      for (const [uid, entries] of byUser) {
+        entries.sort((a, b) => a.date.localeCompare(b.date))
+        const dayCount = new Set(entries.map((e) => e.date)).size
+        const body = `${formatDate(weekStart)} – ${formatDate(days[6])}: ${dayCount} nap — ${entries.map((e) => e.text).join(', ')}`
+        await sendPush([uid], '📅 Megjött a heti beosztásod', body, '/beosztas')
+        sent++
+      }
+      setPublishMsg(`✅ Beosztás kiküldve ${sent} munkatársnak. (Csak az kapja meg, akinél be vannak kapcsolva az értesítések.)`)
+    } catch (e) {
+      setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+    } finally {
+      setPublishBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="card stack">
@@ -402,8 +453,17 @@ function WeekTable() {
           <button className="btn secondary sm" onClick={() => setWeekStart(mondayOf(todayISO()))}>📆 Ez a hét</button>
           <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (felülír)" onConfirm={() => void copyPrevWeek()}>📋 Előző hét másolása</ConfirmButton>
         </div>
+        <ConfirmButton
+          className="btn sm"
+          confirmLabel={`Küldés ${weekPeople.size} munkatársnak`}
+          disabled={publishBusy || weekPeople.size === 0}
+          onConfirm={() => void publishWeek()}
+        >
+          {publishBusy ? 'Küldés…' : '📣 Beosztás kiküldése push-ban'}
+        </ConfirmButton>
         {error && <div className="alert error">{error}</div>}
         {copyMsg && <div className="alert info">{copyMsg}</div>}
+        {publishMsg && <div className={`alert ${publishMsg.startsWith('Hiba') ? 'error' : 'info'}`}>{publishMsg}</div>}
 
         {/* Bal blokk (kategória + rendszám) FIXEN áll, csak a nap-oszlopok görgethetők.
             A két táblázat sorai azonos, rögzített magasságúak → mindig egy vonalban maradnak. */}
