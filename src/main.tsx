@@ -15,11 +15,13 @@ initTheme()
 registerSW({ immediate: true })
 
 // A query-cache localStorage-be mentése -> offline újratöltés után is elérhető a legutóbbi adat
+// FONTOS: ha egy lekérdezés visszaadott adatszerkezete változik, a buster-t
+// léptetni kell — különben a régi mentett cache összeakad az új kóddal.
 const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'alza-query-cache' })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 }}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v2' }}>
       <BrowserRouter>
         <AuthProvider>
           <WorkspaceProvider>

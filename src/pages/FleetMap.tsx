@@ -237,7 +237,7 @@ export default function FleetMap() {
       const bounds: [number, number][] = []
 
       // Szűrés: mely autók engedélyezettek (autó- és ember-szűrő szerint)
-      const personCarSet = filterPerson ? new Set(data.personCars[filterPerson] ?? []) : null
+      const personCarSet = filterPerson ? new Set(data.personCars?.[filterPerson] ?? []) : null
       const carAllowed = (carId: string | null) =>
         (!filterCar || carId === filterCar) && (!personCarSet || (carId != null && personCarSet.has(carId)))
 
@@ -258,7 +258,7 @@ export default function FleetMap() {
 
       if (filterEvent) {
         // Esemény-szűrő: az adott típus MINDEN mai előfordulása a térképen
-        for (const e of data.events) {
+        for (const e of data.events ?? []) {
           if (e.source !== filterEvent) continue
           if (!carAllowed(e.carId)) continue
           if (filterPerson && e.userId !== filterPerson) continue
@@ -281,8 +281,8 @@ export default function FleetMap() {
             iconAnchor: [40, 14],
           })
           const when = new Date(c.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
-          const crewLine = c.crew.length
-            ? `<br>👥 ${esc(c.crew.join(' + '))}`
+          const crewLine = (c.crew ?? []).length
+            ? `<br>👥 ${esc((c.crew ?? []).join(' + '))}`
             : ''
           L.marker([c.lat, c.lng], { icon, zIndexOffset: 1000 })
             .bindPopup(

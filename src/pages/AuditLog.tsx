@@ -204,7 +204,7 @@ export default function AuditLog() {
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico">📜</span>Nincs naplóbejegyzés.</div>}
       {data?.map((r) => {
-        const names = r._names as Record<string, string>
+        const names = (r._names ?? {}) as Record<string, string>
         const nm = (id: string | null) => (id ? names[id] ?? null : null)
         const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
         const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
