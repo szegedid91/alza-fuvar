@@ -14,6 +14,7 @@ import { submitNow } from '../lib/outbox'
 import { parseRouteExcel } from '../lib/excel'
 import { stopAddressText, navUrl, navAppLabel, type NavApp } from '../lib/nav'
 import { resolveNames } from '../lib/names'
+import ConfirmButton from '../components/ConfirmButton'
 import { formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Car } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
@@ -42,9 +43,12 @@ function RouteInner({ car, date }: { car: Car; date: string }) {
     queryKey: ['route-upload', currentWorkspaceId, car.id, date],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
-      const { data } = await supabase.from('route_uploads').select('*')
+      const { data, error } = await supabase.from('route_uploads').select('*')
         .eq('workspace_id', currentWorkspaceId!).eq('car_id', car.id).eq('work_date', date)
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      // Hiba esetén dobni kell — különben "nincs fuvarterv"-nek látszana, és
+      // a sofőr duplán importálná a tervet.
+      if (error) throw error
       return (data as Upload | null) ?? null
     },
   })
@@ -130,8 +134,9 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
   const { data: stops } = useQuery({
     queryKey: ['route-stops', upload.id],
     queryFn: async () => {
-      const { data } = await supabase.from('route_stops').select('*').eq('upload_id', upload.id)
+      const { data, error } = await supabase.from('route_stops').select('*').eq('upload_id', upload.id)
         .order('display_order', { ascending: true, nullsFirst: false })
+      if (error) throw error
       const rows = (data ?? []) as Stop[]
       setItems(rows)
       return rows
@@ -159,9 +164,11 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
   async function onDragEnd(e: DragEndEvent) {
     const { active, over } = e
     if (!over || active.id === over.id) return
-    const oldIndex = items.findIndex((s) => s.id === active.id)
-    const newIndex = items.findIndex((s) => s.id === over.id)
-    await applyOrder(arrayMove(items, oldIndex, newIndex))
+    // A megjelenített listán dolgozunk (cache-visszatöltésnél az items még üres lehet)
+    const oldIndex = list.findIndex((s) => s.id === active.id)
+    const newIndex = list.findIndex((s) => s.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    await applyOrder(arrayMove([...list], oldIndex, newIndex))
   }
 
   async function sortByTime() {
@@ -175,8 +182,8 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
     await applyOrder([...list].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0)))
   }
 
+  // FIGYELEM: window.confirm az iOS PWA-ban némán hamisat ad — ConfirmButton kell
   async function deleteUpload() {
-    if (!confirm('Biztosan törlöd a mai fuvartervet és újat importálsz?')) return
     await supabase.from('route_uploads').delete().eq('id', upload.id)
     onReimport()
   }
@@ -206,7 +213,9 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
         </SortableContext>
       </DndContext>
 
-      <button className="btn ghost" onClick={() => void deleteUpload()}>Új fuvarterv importálása</button>
+      <ConfirmButton className="btn ghost" confirmLabel="Biztosan? A mai terv törlődik" onConfirm={() => void deleteUpload()}>
+        Új fuvarterv importálása
+      </ConfirmButton>
     </>
   )
 }
@@ -381,7 +390,8 @@ function RouteSummary({ uploadId, startPoi, endPoi }: { uploadId: string; startP
   const { data } = useQuery({
     queryKey: ['route-summary', uploadId],
     queryFn: async () => {
-      const { data } = await supabase.from('route_stops').select('*').eq('upload_id', uploadId)
+      const { data, error } = await supabase.from('route_stops').select('*').eq('upload_id', uploadId)
+      if (error) throw error
       const stops = (data ?? []) as Stop[]
       const names = await resolveNames(stops.map((s) => s.recorded_by))
       return { stops, names }

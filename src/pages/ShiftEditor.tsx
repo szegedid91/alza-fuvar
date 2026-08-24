@@ -123,6 +123,9 @@ function SwapApprovals({ workspaceId }: { workspaceId: string | null }) {
     if (error) { setError(error.message); return }
     await qc.invalidateQueries({ queryKey: ['swap-pending'] })
     await qc.invalidateQueries({ queryKey: ['shift-cal'] })
+    // A heti táblázat és a "ma" nézet is az érintett shiftet mutatja
+    await qc.invalidateQueries({ queryKey: ['shift-week'] })
+    await qc.invalidateQueries({ queryKey: ['today'] })
   }
 
   if ((pending?.length ?? 0) === 0) return null
@@ -177,7 +180,10 @@ function WeekTable() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayISO()))
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
   const { data: members } = useMembers()
-  const { data: cars } = useCars(true)
+  // MINDEN autó kell (az inaktivált autó heti beosztása különben eltűnne a
+  // táblából, miközben a bérszámításban benne maradna) — az aktívak külön
+  const { data: cars } = useCars()
+  const activeCars = useMemo(() => (cars ?? []).filter((c) => c.active), [cars])
   const { data: categories } = useCarCategories()
   const [addedCars, setAddedCars] = useState<string[]>([])
   const memberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
@@ -249,7 +255,13 @@ function WeekTable() {
   const rowCarIds = useMemo(() => rowCars.map((c) => c.id), [rowCars])
   const categoryName = (id: string | null) => (categories ?? []).find((c) => c.id === id)?.name ?? null
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
-  const rowH = (carId: string) => (crewOf(carId) === 1 ? ROW_H_SINGLE : ROW_H)
+  // 1 fős kategóriánál is magas a sor, ha a héten valamelyik napon rakodó is
+  // van beírva (a cella olyankor két mezőt mutat — a két tábla sormagassága
+  // különben szétcsúszna)
+  const rowH = (carId: string) => (
+    crewOf(carId) === 1 && !(shifts ?? []).some((sh) => sh.car_id === carId && sh.loader_id)
+      ? ROW_H_SINGLE : ROW_H
+  )
   // Hány egymást követő sor tartozik ugyanabba a kategóriába (rowSpan-hoz)
   const groupSpan = (idx: number) => {
     const cat = rowCars[idx].category_id ?? ''
@@ -502,7 +514,7 @@ function WeekTable() {
         {rowMenu && (() => {
           const car = carOf(rowMenu.carId)
           const n = weekShiftsOf(rowMenu.carId).length
-          const freeCars = (cars ?? []).filter((c) => c.id !== rowMenu.carId && !rowCarIds.includes(c.id))
+          const freeCars = activeCars.filter((c) => c.id !== rowMenu.carId && !rowCarIds.includes(c.id))
           return (
             <>
               <div onClick={() => setRowMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 290 }} />
@@ -541,7 +553,7 @@ function WeekTable() {
           onChange={(e) => { if (e.target.value) setAddedCars((p) => [...p, e.target.value]) }}
         >
           <option value="">＋ Autó (rendszám) hozzáadása a heti táblázathoz…</option>
-          {cars?.filter((c) => !rowCarIds.includes(c.id)).map((c) => (
+          {activeCars.filter((c) => !rowCarIds.includes(c.id)).map((c) => (
             <option key={c.id} value={c.id}>{c.plate}{categoryName(c.category_id) ? ` · ${categoryName(c.category_id)}` : ''}{c.label ? ` · ${c.label}` : ''}</option>
           ))}
         </select>

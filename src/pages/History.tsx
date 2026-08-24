@@ -21,7 +21,15 @@ type Incident = { id: string; car_id: string | null; user_id: string; work_date:
 type Issue = { id: string; car_id: string; user_id: string; note: string | null; status: Enums<'car_issue_status'>; created_at: string }
 
 function isoDaysAgo(n: number): string {
-  const d = new Date(Date.now() - n * 86400000)
+  // Naptári nappal számolunk (nem 24 órával) — óraátállításnál sem csúszik el
+  const now = new Date()
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Helyi naptári nap egy UTC-időbélyegből (a .slice(0,10) az UTC-napot adná!)
+function localDateOf(iso: string): string {
+  const d = new Date(iso)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -55,7 +63,8 @@ export default function History() {
         fetchAll<Issue>((f, t) => supabase.from('car_issues')
           .select('id, car_id, user_id, note, status, created_at')
           .eq('workspace_id', ws)
-          .gte('created_at', `${from}T00:00:00`).lte('created_at', `${to}T23:59:59`)
+          .gte('created_at', new Date(`${from}T00:00:00`).toISOString())
+          .lte('created_at', new Date(`${to}T23:59:59.999`).toISOString())
           .order('created_at').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
@@ -151,7 +160,7 @@ export default function History() {
     }
 
     for (const i of incidents) day(i.work_date).incidents.push(i)
-    for (const i of issues) day(i.created_at.slice(0, 10)).issues.push(i)
+    for (const i of issues) day(localDateOf(i.created_at)).issues.push(i)
 
     const days = [...dayMap.values()].sort((a, b) => b.date.localeCompare(a.date))
 

@@ -28,10 +28,12 @@ export function useToday() {
       // A két lekérdezés független — párhuzamosan futnak.
       // FONTOS: limit(1) nélkül a maybeSingle() több sor esetén (pl. napközbeni
       // autóváltás = két becsekkolás) hibát ad és "nincs becsekkolva"-t mutatna.
-      const [{ data: ci }, { data: shift }] = await Promise.all([
+      // FK-hint kötelező: a check_ins-nek KÉT cars-hivatkozása van
+      // (car_id és prev_car_id) — enélkül a PostgREST hibát ad (PGRST201).
+      const [{ data: ci, error: ciErr }, { data: shift, error: shErr }] = await Promise.all([
         supabase
           .from('check_ins')
-          .select('*, car:cars(*)')
+          .select('*, car:cars!check_ins_car_id_fkey(*)')
           .eq('workspace_id', currentWorkspaceId!)
           .eq('user_id', profile!.id)
           .eq('work_date', date)
@@ -47,6 +49,10 @@ export function useToday() {
           .limit(1)
           .maybeSingle(),
       ])
+      // Hibát DOBNI kell — elnyelve "nincs becsekkolva"-nak látszana, és a
+      // munkatárs duplán csekkolna be / a kapuk tévesen zárnának.
+      if (ciErr) throw ciErr
+      if (shErr) throw shErr
 
       const row = ci as unknown as (Tables<'check_ins'> & { car: Car | null }) | null
       const checkin = row ? ({ ...row, car: undefined } as unknown as Tables<'check_ins'>) : null
