@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
+import { clearOutbox } from '../lib/outbox'
 import type { Tables } from '../lib/database.types'
 
 export type Profile = Tables<'profiles'>
@@ -16,6 +17,20 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
+// Közös eszközön (depó-telefon) a következő belépő ne lássa az előző
+// felhasználó gyorsítótárazott adatait, és ne játszódjanak le az ő nevében
+// az előző felhasználó sorban maradt írásai.
+async function clearLocalUserData(): Promise<void> {
+  queryClient.clear()
+  localStorage.removeItem('alza-query-cache')
+  localStorage.removeItem('alza-current-workspace')
+  localStorage.removeItem('alza-profile-cache')
+  localStorage.removeItem('alza-workspaces-cache')
+  try { await clearOutbox() } catch { /* IndexedDB hiba: nem blokkoló */ }
+  // A service worker fotó-cache-e is felhasználói adat
+  try { if ('caches' in window) await caches.delete('supabase-storage') } catch { /* n/a */ }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -27,7 +42,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', userId)
       .maybeSingle()
-    if (error) console.error('Profil betöltési hiba:', error.message)
+    if (error) {
+      console.error('Profil betöltési hiba:', error.message)
+      // Offline indulás: az utoljára ismert saját profillal lépünk tovább,
+      // különben a teljes offline cache elérhetetlen maradna
+      try {
+        const raw = localStorage.getItem('alza-profile-cache')
+        if (raw) {
+          const cached = JSON.parse(raw) as Profile
+          if (cached.id === userId) { setProfile(cached); return }
+        }
+      } catch { /* sérült cache: figyelmen kívül */ }
+      setProfile(null)
+      return
+    }
+    if (data) {
+      try { localStorage.setItem('alza-profile-cache', JSON.stringify(data)) } catch { /* betelt tárhely */ }
+    }
     setProfile(data ?? null)
   }, [])
 
@@ -44,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       // A callbackben tilos Supabase-hívást await-elni (auth-lock holtpont a
       // token-frissítésnél) — setTimeout-tal lépünk ki belőle. Azon belül
       // előbb a profil, aztán a session — így nincs olyan render-pillanat,
@@ -55,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await loadProfile(newSession.user.id)
           } else {
             setProfile(null)
+            // NEM CSAK a kézi kijelentkezésnél kell takarítani: lejárt/érvénytelenített
+            // munkamenetnél is, különben közös eszközön az előző felhasználó
+            // cache-e és sorban álló írásai a következőre maradnának.
+            if (event === 'SIGNED_OUT') await clearLocalUserData()
           }
           setSession(newSession)
         })()
@@ -69,12 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setProfile(null)
-    // Közös eszközön (depó-telefon) a következő belépő ne lássa az előző
-    // felhasználó gyorsítótárazott adatait — a memóriában lévő cache-t is
-    // üríteni kell, különben a persister visszaírná a localStorage-be.
-    queryClient.clear()
-    localStorage.removeItem('alza-query-cache')
-    localStorage.removeItem('alza-current-workspace')
+    await clearLocalUserData()
   }, [])
 
   return (

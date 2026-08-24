@@ -6,6 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useCars } from '../hooks/useCars'
 import { parseRouteExcel } from '../lib/excel'
 import { todayISO, formatDate } from '../lib/labels'
+import ConfirmButton from '../components/ConfirmButton'
 
 export default function ManagerRouteUpload() {
   const { profile } = useAuth()
@@ -32,7 +33,11 @@ export default function ManagerRouteUpload() {
     },
   })
 
-  async function handleFile(file: File) {
+  // Felülírás-megerősítés: window.confirm az iOS PWA-ban némán hamisat ad,
+  // ezért kártyás megerősítést használunk
+  const [pendingOverwrite, setPendingOverwrite] = useState<{ file: File; count: number } | null>(null)
+
+  async function handleFile(file: File, overwriteConfirmed = false) {
     if (!currentWorkspaceId || !profile || !carId) { setMsg('Válassz autót.'); return }
     setBusy(true); setMsg(null)
     try {
@@ -46,7 +51,8 @@ export default function ManagerRouteUpload() {
           .select('id', { count: 'exact', head: true })
           .in('upload_id', existing!.map((u) => u.id))
           .not('recorded_by', 'is', null)
-        if ((count ?? 0) > 0 && !confirm(`A meglévő fuvartervben már ${count} rögzített stop van (beszedett pénzzel). Felülírod? A rögzített adatok VÉGLEGESEN törlődnek!`)) {
+        if ((count ?? 0) > 0 && !overwriteConfirmed) {
+          setPendingOverwrite({ file, count: count ?? 0 })
           setBusy(false)
           return
         }
@@ -71,6 +77,7 @@ export default function ManagerRouteUpload() {
       }))
       const { error: sErr } = await supabase.from('route_stops').insert(rows)
       if (sErr) throw sErr
+      setPendingOverwrite(null)
       setMsg(`${stops.length} stop importálva ide: ${cars?.find((c) => c.id === carId)?.plate} / ${formatDate(date)}`)
       await qc.invalidateQueries({ queryKey: ['mgr-uploads'] })
     } catch (e) {
@@ -100,8 +107,26 @@ export default function ManagerRouteUpload() {
         </div>
         <div className="field"><label>Kezdő POI</label><input className="input" value={startPoi} onChange={(e) => setStartPoi(e.target.value)} placeholder="depó címe" /></div>
         <div className="field"><label>Vég POI</label><input className="input" value={endPoi} onChange={(e) => setEndPoi(e.target.value)} placeholder="depó címe" /></div>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }} />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void handleFile(f) }} />
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
+        {pendingOverwrite && (
+          <div className="alert error" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span>
+              A meglévő fuvartervben már {pendingOverwrite.count} rögzített stop van (beszedett pénzzel).
+              Felülírod? A rögzített adatok VÉGLEGESEN törlődnek!
+            </span>
+            <div className="btn-grid">
+              <ConfirmButton
+                className="btn danger sm"
+                confirmLabel="VÉGLEG felülírom"
+                onConfirm={() => { const f = pendingOverwrite.file; setPendingOverwrite(null); void handleFile(f, true) }}
+              >
+                Felülírás
+              </ConfirmButton>
+              <button className="btn ghost sm" onClick={() => setPendingOverwrite(null)}>Mégse</button>
+            </div>
+          </div>
+        )}
         <button className="btn" disabled={busy || !carId} onClick={() => fileRef.current?.click()}>{busy ? 'Feldolgozás…' : '📄 Excel kiválasztása'}</button>
       </div>
 

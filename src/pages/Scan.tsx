@@ -9,6 +9,7 @@ import { parseCarQr } from '../lib/qr'
 import { resolveCarByToken, checkInspectionRequirement, type Car, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
+import { supabase } from '../lib/supabase'
 import { todayISO, formatDateTime, formatHours } from '../lib/labels'
 
 export default function Scan() {
@@ -103,6 +104,54 @@ export default function Scan() {
     // Geofence: bárhol enged, de jelzi a vezetőknek, ha nem a telephelyen történt
     const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
 
+    // Ha MA már volt becsekkolás erre az autóra (visszaülés cserénél: A→B→A),
+    // az egyedi (autó, ember, nap) kulcs miatt nem szúrhatunk be új sort —
+    // a meglévőt nyitjuk újra.
+    let existingId: string | null = null
+    try {
+      const { data: existing } = await supabase.from('check_ins').select('id')
+        .eq('car_id', car.id).eq('user_id', profile.id).eq('work_date', date)
+        .maybeSingle()
+      existingId = existing?.id ?? null
+    } catch { /* offline: az insert-ág megy, ütközésnél a flush jelez */ }
+
+    if (existingId) {
+      await submitNow({
+        id: crypto.randomUUID(),
+        table: 'check_ins',
+        op: 'update',
+        match: { id: existingId },
+        label: `Visszaülés – ${car.plate}`,
+        values: {
+          checked_out_at: null,
+          switch_reason: reason,
+          prev_car_id: prevCarId,
+        },
+      })
+    } else {
+      const id = crypto.randomUUID()
+      await submitNow({
+        id,
+        table: 'check_ins',
+        op: 'insert',
+        label: `Becsekkolás – ${car.plate}`,
+        values: {
+          id,
+          workspace_id: currentWorkspaceId,
+          car_id: car.id,
+          user_id: profile.id,
+          work_date: date,
+          gps_lat: gps.lat,
+          gps_lng: gps.lng,
+          outside_geofence: outside,
+          switch_reason: reason,
+          prev_car_id: prevCarId,
+        },
+      })
+    }
+
+    // Az előző autót csak az új becsekkolás sikeres rögzítése UTÁN zárjuk le —
+    // ha az új mentés elhasal, ne maradjon a munkatárs "sehova sem" becsekkolva.
     if (prevCheckinId) {
       await submitNow({
         id: crypto.randomUUID(),
@@ -118,26 +167,6 @@ export default function Scan() {
         },
       })
     }
-
-    const id = crypto.randomUUID()
-    await submitNow({
-      id,
-      table: 'check_ins',
-      op: 'insert',
-      label: `Becsekkolás – ${car.plate}`,
-      values: {
-        id,
-        workspace_id: currentWorkspaceId,
-        car_id: car.id,
-        user_id: profile.id,
-        work_date: date,
-        gps_lat: gps.lat,
-        gps_lng: gps.lng,
-        outside_geofence: outside,
-        switch_reason: reason,
-        prev_car_id: prevCarId,
-      },
-    })
     setInspection(req)
     await qc.invalidateQueries({ queryKey: ['today'] })
   }
@@ -153,7 +182,8 @@ export default function Scan() {
       setPendingSwitch(null)
       setSwitchNote('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Hiba az autócsere mentésénél')
+      const msg = e instanceof Error ? e.message : 'Hiba az autócsere mentésénél'
+      setError(msg.includes('duplicate') ? 'Erre az autóra ma már volt becsekkolásod — húzd le az oldalt a frissítéshez.' : msg)
     } finally {
       setBusy(false)
     }

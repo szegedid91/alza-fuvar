@@ -8,6 +8,18 @@ export default function InspectionGate({ carId, date, children }: { carId: strin
 
   if (gate.loading) return <div className="card"><div className="spinner" /></div>
 
+  // Ha nem tudtuk ellenőrizni a követelményt (pl. nincs térerő), a kapu
+  // ZÁRVA marad — hibából nem nyithat ki a kötelező ellenőrzés megkerülésével.
+  if (gate.error) {
+    return (
+      <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+        <div className="row"><span style={{ fontSize: 26 }}>📶</span><strong>Nem sikerült ellenőrizni a követelményeket</strong></div>
+        <p className="small muted">Valószínűleg nincs kapcsolat. Próbáld újra, amint van térerő.</p>
+        <button className="btn secondary" onClick={gate.retry}>🔄 Újrapróbálás</button>
+      </div>
+    )
+  }
+
   if (gate.blocked) {
     return (
       <div className="card stack" style={{ borderColor: 'var(--warning)' }}>

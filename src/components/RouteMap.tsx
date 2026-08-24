@@ -9,6 +9,11 @@ import type { Tables } from '../lib/database.types'
 type Stop = Tables<'route_stops'>
 
 // Stopok térképen (Leaflet + OSM). Geokódolás best-effort, DB-be cache-elve.
+// Az Excelből jövő cím szöveg — HTML-ként beszúrni tilos (tárolt XSS lenne)
+function esc(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 export default function RouteMap({ stops }: { stops: Stop[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<string>('Térkép betöltése…')
@@ -63,7 +68,7 @@ export default function RouteMap({ stops }: { stops: Stop[] }) {
           })
           L.marker([item.lat, item.lng], { icon })
             .addTo(map!)
-            .bindPopup(`<b>${i + 1}.</b> ${stopAddressText(item.stop)}`)
+            .bindPopup(`<b>${i + 1}.</b> ${esc(stopAddressText(item.stop))}`)
           bounds.push([item.lat, item.lng])
         })
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 })

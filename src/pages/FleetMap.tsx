@@ -175,9 +175,15 @@ export default function FleetMap() {
     void (async () => {
       try {
         for (const s of missing.slice(0, 12)) {
-          const geo = await geocodeAddress(stopAddressText(s))
-          if (geo) await supabase.from('route_stops').update({ lat: geo.lat, lng: geo.lng, geocoded: true }).eq('id', s.id)
-          else await supabase.from('route_stops').update({ geocoded: true }).eq('id', s.id)
+          try {
+            const geo = await geocodeAddress(stopAddressText(s))
+            if (geo) await supabase.from('route_stops').update({ lat: geo.lat, lng: geo.lng, geocoded: true }).eq('id', s.id)
+            // null = tényleg nincs ilyen cím: ezt jelöljük, hogy ne pörögjön rajta örökké
+            else await supabase.from('route_stops').update({ geocoded: true }).eq('id', s.id)
+          } catch {
+            // hálózati / rate-limit hiba: NEM jelöljük geokódoltnak — később újrapróbáljuk
+            break
+          }
           await sleep(1100)
         }
         void qc.invalidateQueries({ queryKey: ['fleet-map'] })

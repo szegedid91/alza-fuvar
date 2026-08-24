@@ -41,8 +41,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     if (!hasLoadedRef.current) setLoading(true)
     // Az RLS gondoskodik róla, hogy csak az elérhető workspace-ek jöjjenek vissza
     const { data, error } = await supabase.from('workspaces').select('*').order('name')
-    if (error) console.error('Munkaterületek betöltési hiba:', error.message)
-    const list = data ?? []
+    let list = data ?? []
+    if (error) {
+      console.error('Munkaterületek betöltési hiba:', error.message)
+      // Offline indulás: az utoljára ismert lista — enélkül a currentWorkspaceId
+      // null lenne, és az összes offline cache-elt lekérdezés elérhetetlen maradna
+      try {
+        const raw = localStorage.getItem('alza-workspaces-cache')
+        if (raw) list = JSON.parse(raw) as Workspace[]
+      } catch { /* sérült cache */ }
+    } else {
+      try { localStorage.setItem('alza-workspaces-cache', JSON.stringify(list)) } catch { /* betelt tárhely */ }
+    }
     setWorkspaces(list)
 
     const stored = localStorage.getItem(STORAGE_KEY)

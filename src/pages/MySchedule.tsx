@@ -36,14 +36,17 @@ export default function MySchedule() {
 
   // Cserekérések a saját beosztásokhoz
   const { data: swaps } = useQuery({
-    queryKey: ['my-swaps', currentWorkspaceId],
-    enabled: !!currentWorkspaceId,
+    queryKey: ['my-swaps', currentWorkspaceId, profile?.id],
+    enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('swap_requests')
         .select('*')
         .eq('workspace_id', currentWorkspaceId!)
+        .or(`requested_by.eq.${profile!.id},partner_id.eq.${profile!.id}`)
         .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) throw error
       return (data ?? []) as SwapRequest[]
     },
   })

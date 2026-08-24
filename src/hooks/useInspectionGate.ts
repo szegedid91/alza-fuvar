@@ -6,6 +6,8 @@ import { checkInspectionRequirement, type InspectionReason } from '../lib/checki
 export interface InspectionGateState {
   loading: boolean
   blocked: boolean
+  error: boolean // a követelmény nem volt ellenőrizhető (pl. offline)
+  retry: () => void
   reasons: InspectionReason[]
   lastDriverName?: string | null
 }
@@ -14,7 +16,7 @@ export interface InspectionGateState {
 // a fuvar/tankolás blokkolt.
 export function useInspectionGate(carId: string | undefined, date: string): InspectionGateState {
   const { profile } = useAuth()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inspection-gate', carId, date, profile?.id],
     enabled: !!carId && !!profile,
     queryFn: async () => {
@@ -30,7 +32,11 @@ export function useInspectionGate(carId: string | undefined, date: string): Insp
   })
   return {
     loading: isLoading,
+    // Hibánál NEM nyitunk kaput (a kötelező ellenőrzés nem kerülhető meg
+    // azzal, hogy nincs térerő) — a komponens hibakártyát mutat helyette.
     blocked: data?.blocked ?? false,
+    error: isError,
+    retry: () => { void refetch() },
     reasons: data?.reasons ?? [],
     lastDriverName: data?.lastDriverName,
   }

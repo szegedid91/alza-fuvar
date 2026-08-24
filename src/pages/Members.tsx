@@ -24,6 +24,7 @@ function InviteCard() {
   const [qrFor, setQrFor] = useState<string | null>(null) // invite id, amihez QR látszik
   const [qrImg, setQrImg] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [showLinkFor, setShowLinkFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
 
   const { data: invites } = useQuery({
@@ -70,7 +71,8 @@ function InviteCard() {
       setCopiedId(id)
       setTimeout(() => setCopiedId(null), 1500)
     } catch {
-      window.prompt('Másold ki a linket:', linkOf(id))
+      // iOS PWA-ban a window.prompt néma — mutassuk a linket a kártyán
+      setShowLinkFor(id)
     }
   }
 
@@ -167,6 +169,11 @@ function InviteCard() {
                   {qrFor === inv.id ? '✕ QR' : '📱 QR-kód'}
                 </button>
                 <button className="btn secondary sm" onClick={() => void shareLink(inv)}>📤 Megosztás</button>
+              </div>
+            )}
+            {showLinkFor === inv.id && (
+              <div className="tiny" style={{ wordBreak: 'break-all', userSelect: 'all', background: 'var(--bg)', borderRadius: 8, padding: 8 }}>
+                {linkOf(inv.id)}
               </div>
             )}
             {qrFor === inv.id && qrImg && (

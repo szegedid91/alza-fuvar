@@ -132,8 +132,12 @@ async function runRecord(rec: OutboxRecord): Promise<void> {
   } else {
     let q = supabase.from(rec.table as TableName).update(values as never)
     for (const [k, v] of Object.entries(rec.match ?? {})) q = q.eq(k as never, v as never)
-    const { error } = await q
+    const { data, error } = await q.select('id')
     if (error) throw error
+    // 0 érintett sor = a cél sor (még) nincs a szerveren — pl. a becsekkolás
+    // INSERT-je parkolt. Siker helyett hibát dobunk, különben a kijelentkezés
+    // csendben elveszne.
+    if ((data ?? []).length === 0) throw new Error('A módosítandó sor nem található a szerveren (a hozzá tartozó korábbi mentés még hiányzik)')
   }
 }
 
@@ -167,7 +171,8 @@ async function doFlush(): Promise<{ done: number; remaining: number }> {
         failedIds.add(rec.id)
         continue // parkolt tétel: nem próbáljuk újra
       }
-      const refsFailed = Object.values(rec.values).some((v) => typeof v === 'string' && failedIds.has(v))
+      const refVals = [...Object.values(rec.values), ...Object.values(rec.match ?? {})]
+      const refsFailed = refVals.some((v) => typeof v === 'string' && failedIds.has(v))
       if (refsFailed) continue
       try {
         await runRecord(rec)
@@ -191,6 +196,21 @@ async function doFlush(): Promise<{ done: number; remaining: number }> {
   return { done, remaining: counts.pending }
 }
 
+// Sorban álló tételek célzott eltávolítása (pl. visszagörgetett ellenőrzés
+// fotói — hogy később ne szinkronizálódjon fel egy szándékosan törölt mentés)
+export async function removeFromOutbox(ids: string[]): Promise<void> {
+  const d = await db()
+  for (const id of ids) await d.delete('outbox', id)
+  notify()
+}
+
+// Teljes ürítés — KIJELENTKEZÉSKOR kötelező, különben az előző felhasználó
+// sorban maradt írásai a következő belépő tokenjével játszódnának le.
+export async function clearOutbox(): Promise<void> {
+  await (await db()).clear('outbox')
+  notify()
+}
+
 // ---- egyszerű pub/sub a UI-badge frissítéséhez ----
 type Listener = () => void
 const listeners = new Set<Listener>()
@@ -212,6 +232,19 @@ export async function submitNow(
   if (!navigator.onLine) {
     notify()
     return { queued: true }
+  }
+  // Ha már van korábbi, még el nem küldött tétel, NEM előzhetjük meg: a teljes
+  // sort futtatjuk időrendben (különben pl. az autócsere "új becsekkolás"
+  // hamarabb érne a szerverre, mint a régi lezárása).
+  {
+    const d = await db()
+    const others = (await d.getAll('outbox')).filter((r) => r.id !== stored.id && r.attempts < MAX_ATTEMPTS)
+    if (others.length > 0) {
+      await flushOutbox()
+      const still = await (await db()).get('outbox', stored.id)
+      notify()
+      return { queued: !!still }
+    }
   }
   try {
     await runRecord(stored)

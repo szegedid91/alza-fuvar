@@ -7,11 +7,15 @@ export async function fetchAll<T>(
   pageSize = 1000,
 ): Promise<T[]> {
   const out: T[] = []
-  for (let from = 0; ; from += pageSize) {
+  let from = 0
+  for (;;) {
     const { data, error } = await page(from, from + pageSize - 1)
     if (error) throw new Error(error.message)
     const rows = data ?? []
     out.push(...rows)
+    // FIGYELEM: a pageSize nem lehet nagyobb a szerver sor-plafonjánál
+    // (Supabase alapértelmezés: 1000) — különben a rövid oldal "végének" látszana.
     if (rows.length < pageSize) return out
+    from += rows.length
   }
 }

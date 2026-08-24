@@ -5,7 +5,7 @@ import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { supabase } from '../lib/supabase'
-import { submitNow } from '../lib/outbox'
+import { submitNow, removeFromOutbox } from '../lib/outbox'
 import { getCurrentPosition } from '../lib/geo'
 import { checkInspectionRequirement, type Car } from '../lib/checkin'
 import { inspectionViewLabel, formatDateTime } from '../lib/labels'
@@ -57,6 +57,7 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
     if (!currentWorkspaceId || !profile || !allCaptured) return
     setBusy(true); setMsg(null)
     const inspectionId = crypto.randomUUID()
+    const queuedIds: string[] = [inspectionId]
     try {
       const gps = await getCurrentPosition()
       await submitNow({
@@ -70,6 +71,7 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
       for (const view of VIEWS) {
         const p = photos[view]!
         const photoId = crypto.randomUUID()
+        queuedIds.push(photoId)
         await submitNow({
           id: photoId, table: 'car_inspection_photos', op: 'insert',
           label: `Fotó ${inspectionViewLabel[view]} – ${car.plate}`,
@@ -84,6 +86,9 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
       // Fél-kész ellenőrzés nem maradhat: a kötelező-ellenőrzés kapu hiányos
       // fotósorral is kinyílna. A már beírt sorokat visszagörgetjük.
       try {
+        // A helyi sorból is ki kell venni — különben a felszinkronizálódó
+        // fél-kész ellenőrzés kinyitná a kötelező-ellenőrzés kaput
+        await removeFromOutbox(queuedIds)
         await supabase.from('car_inspection_photos').delete().eq('inspection_id', inspectionId)
         await supabase.from('car_inspections').delete().eq('id', inspectionId)
       } catch { /* best effort */ }

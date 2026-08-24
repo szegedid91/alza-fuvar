@@ -24,6 +24,14 @@ export default function Fuel() {
   )
 }
 
+// Valódi naptári dátum-e (az OCR bármit adhat — pl. "2026-24-08" a
+// formátum-regexen átmenne, de az adatbázis date-oszlopa elutasítaná)
+function isValidISODate(v: string | null | undefined): v is string {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false
+  const d = new Date(`${v}T12:00:00`)
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v
+}
+
 function FuelInner({ car, date }: { car: Car; date: string }) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
@@ -64,7 +72,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
     // előtöltés – a mezők kézzel javíthatók
     if (res.parsed.location) setLocation(res.parsed.location)
     // csak érvényes ISO dátumot töltünk a date-mezőbe (az OCR bármit adhat)
-    if (res.parsed.date && /^\d{4}-\d{2}-\d{2}$/.test(res.parsed.date)) setFuelDate(res.parsed.date)
+    if (isValidISODate(res.parsed.date)) setFuelDate(res.parsed.date)
     if (res.parsed.amount != null) setAmount(String(res.parsed.amount))
     if (res.parsed.liters != null) setLiters(String(res.parsed.liters))
   }
@@ -85,6 +93,11 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
         return
       }
 
+      if (!isValidISODate(fuelDate)) {
+        setMsg('Hiba: érvénytelen dátum.')
+        setBusy(false)
+        return
+      }
       const prev = await previousFuelForCar(car.id, km)
       const backwards = await hasLaterOrEqualKm(car.id, km)
       const consumption = prev && !backwards ? computeConsumption(litersNum, km, Number(prev.odometer_km)) : null
@@ -95,7 +108,8 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
         id, table: 'fuel_logs', op: 'insert', label: `Tankolás – ${car.plate}`,
         values: {
           id, workspace_id: currentWorkspaceId, car_id: car.id, user_id: profile.id, work_date: date,
-          ocr_location: ocr?.raw.location ?? null, ocr_date: ocr?.raw.date ?? null,
+          ocr_location: ocr?.raw.location ?? null,
+          ocr_date: isValidISODate(ocr?.raw.date) ? ocr!.raw.date : null,
           ocr_amount: ocr?.raw.amount ?? null, ocr_liters: ocr?.raw.liters ?? null,
           location: location.trim() || null, fuel_date: fuelDate, amount: amountNum, liters: litersNum,
           odometer_km: km, consumption, km_warning: backwards, verified: true,

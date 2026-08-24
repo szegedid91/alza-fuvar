@@ -29,7 +29,12 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
       const n = name.trim()
       if (!n) throw new Error('Adj meg egy nevet')
       const { error } = await supabase.from('car_categories')
-        .insert({ workspace_id: currentWorkspaceId!, name: n, sort_order: (categories?.length ?? 0) + 1 })
+        .insert({
+          workspace_id: currentWorkspaceId!, name: n,
+          // max+1 kell (nem darabszám+1) — köztes kategória törlése után a
+          // darabszám-alapú érték duplikálná a meglévő sorrendet
+          sort_order: Math.max(0, ...(categories ?? []).map((c) => c.sort_order ?? 0)) + 1,
+        })
       if (error) throw error
     },
     onSuccess: () => { setName(''); setError(null); invalidate() },
