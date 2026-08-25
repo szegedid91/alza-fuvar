@@ -467,12 +467,12 @@ function WeekTable() {
 
         {/* Bal blokk (kategória + rendszám) FIXEN áll, csak a nap-oszlopok görgethetők.
             A két táblázat sorai azonos, rögzített magasságúak → mindig egy vonalban maradnak. */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <div className="wk-wrap" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', flexShrink: 0 }}>
             <thead>
               <tr style={{ height: HEAD_H }}>
-                <th className="wk-head wk-catcol">Kategória</th>
-                <th className="wk-head" style={{ textAlign: 'left', minWidth: 84, paddingLeft: 10 }}>Autó</th>
+                <th className="wk-head wk-catcol"><span className="wk-cat-label">Kategória</span></th>
+                <th className="wk-head wk-autocol" style={{ textAlign: 'left', minWidth: 84, paddingLeft: 10 }}>Autó</th>
               </tr>
             </thead>
             <tbody>
@@ -497,9 +497,10 @@ function WeekTable() {
                         const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
                         setRowMenu(rowMenu?.carId === carId ? null : { carId, top: r.bottom + 4, left: r.left })
                       }}
+                      className="wk-plate-btn"
                       style={{
                         width: '100%', height: '100%', minHeight: 40, border: 'none', background: 'transparent', color: 'inherit',
-                        font: 'inherit', fontWeight: 800, cursor: 'pointer', padding: '0 6px 0 10px',
+                        font: 'inherit', fontWeight: 800, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
                       }}
                     >
@@ -514,11 +515,11 @@ function WeekTable() {
           </table>
 
           <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
-            <table style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', minWidth: 7 * 146, width: '100%' }}>
+            <table className="wk-days-table" style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', width: '100%' }}>
               <thead>
                 <tr style={{ height: HEAD_H }}>
                   {days.map((d, i) => (
-                    <th key={d} style={{ minWidth: 140, fontSize: 11, padding: '3px 4px', borderRadius: 6, background: d === today ? 'rgba(20,184,166,.14)' : undefined }}>
+                    <th key={d} className="wk-day" style={{ fontSize: 11, padding: '3px 4px', borderRadius: 6, background: d === today ? 'rgba(20,184,166,.14)' : undefined }}>
                       <div>{DAY_NAMES_LONG[i]}</div>
                       <div className="muted">{d.slice(5).replace('-', '.')}.</div>
                     </th>
