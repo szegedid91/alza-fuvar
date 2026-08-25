@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import { useOutboxStatus } from '../hooks/useOutbox'
 import { isCrewRole } from '../lib/labels'
+import { useInspectionZone } from '../hooks/useInspectionZone'
 import { listFailed, retryFailed, discardFailed, flushOutbox, type OutboxRecord } from '../lib/outbox'
 import { queryClient } from '../lib/queryClient'
 import ConfirmButton from './ConfirmButton'
@@ -203,6 +204,13 @@ function PushPrompt() {
 // Ezek az oldalak nagy képernyőn a teljes szélességet használják
 const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/fuvar-feltoltes', '/tortenet']
 
+// A becsekkolás körüli 20 m-es kör figyelése (hiányzó autó-ellenőrzés esetén
+// a szerver küld értesítést a páros MINDKÉT tagjának, amíg valaki el nem végzi)
+function InspectionZoneWatcher() {
+  useInspectionZone()
+  return null
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
   const { pathname } = useLocation()
@@ -225,6 +233,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <div className="app">
       <PullToRefresh />
       <PushPrompt />
+      {isCrew && <InspectionZoneWatcher />}
       <header className="topbar">
         <div className="brand">
           <img src="/pwa-192.png" alt="" />

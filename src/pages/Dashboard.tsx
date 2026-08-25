@@ -48,12 +48,14 @@ function GeofenceCard() {
       }
     }
     setBusy(true); setMsg(null)
+    // A geofence TÖRLÉSE null értékekkel történik (a függvény elfogadja),
+    // a generált típus viszont csak number-t ismer — ezért a cast
     const { error } = await supabase.rpc('set_workspace_geofence', {
       p_workspace_id: currentWorkspaceId,
       p_lat: pLat,
       p_lng: pLng,
       p_radius_m: pRadius,
-    })
+    } as unknown as { p_workspace_id: string; p_lat: number; p_lng: number; p_radius_m: number })
     setBusy(false)
     if (error) { setMsg('Hiba: ' + error.message); return }
     setOpen(false)

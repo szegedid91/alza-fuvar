@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -49,19 +51,104 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "adjustments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustments_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "evidence_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustments_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       audit_log: {
-        Row: { id: string; workspace_id: string | null; actor_id: string | null; action: string; entity: string; entity_id: string | null; detail: Json | null; created_at: string }
-        Insert: { id?: string; workspace_id?: string | null; actor_id?: string | null; action: string; entity: string; entity_id?: string | null; detail?: Json | null; created_at?: string }
-        Update: { id?: string; workspace_id?: string | null; actor_id?: string | null; action?: string; entity?: string; entity_id?: string | null; detail?: Json | null; created_at?: string }
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          detail: Json | null
+          entity: string
+          entity_id: string | null
+          id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          entity: string
+          entity_id?: string | null
+          id?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          workspace_id?: string | null
+        }
         Relationships: []
       }
-      push_subscriptions: {
-        Row: { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; created_at: string }
-        Insert: { id?: string; user_id: string; endpoint: string; p256dh: string; auth: string; created_at?: string }
-        Update: { id?: string; user_id?: string; endpoint?: string; p256dh?: string; auth?: string; created_at?: string }
-        Relationships: []
+      car_categories: {
+        Row: {
+          created_at: string
+          crew_size: number
+          id: string
+          name: string
+          sort_order: number
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          crew_size?: number
+          id?: string
+          name: string
+          sort_order?: number
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          crew_size?: number
+          id?: string
+          name?: string
+          sort_order?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "car_categories_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       car_inspection_photos: {
         Row: {
@@ -97,7 +184,22 @@ export type Database = {
           view?: Database["public"]["Enums"]["inspection_view"]
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "car_inspection_photos_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "car_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_inspection_photos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       car_inspections: {
         Row: {
@@ -133,106 +235,29 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
-      }
-      car_categories: {
-        Row: { id: string; workspace_id: string; name: string; sort_order: number; crew_size: number; created_at: string }
-        Insert: { id?: string; workspace_id: string; name: string; sort_order?: number; crew_size?: number; created_at?: string }
-        Update: { id?: string; workspace_id?: string; name?: string; sort_order?: number; crew_size?: number; created_at?: string }
-        Relationships: []
-      }
-      cars: {
-        Row: {
-          category_id: string | null
-          active: boolean
-          created_at: string
-          id: string
-          label: string | null
-          plate: string
-          qr_token: string
-          workspace_id: string
-        }
-        Insert: {
-          category_id?: string | null
-          active?: boolean
-          created_at?: string
-          id?: string
-          label?: string | null
-          plate: string
-          qr_token?: string
-          workspace_id: string
-        }
-        Update: {
-          category_id?: string | null
-          active?: boolean
-          created_at?: string
-          id?: string
-          label?: string | null
-          plate?: string
-          qr_token?: string
-          workspace_id?: string
-        }
-        Relationships: []
-      }
-      check_ins: {
-        Row: {
-          car_id: string
-          checked_in_at: string
-          checked_out_at: string | null
-          created_at: string
-          crew_key: string | null
-          gps_lat: number | null
-          gps_lng: number | null
-          id: string
-          out_gps_lat: number | null
-          out_gps_lng: number | null
-          outside_geofence: boolean
-          out_outside_geofence: boolean
-          prev_car_id: string | null
-          switch_reason: string | null
-          user_id: string
-          work_date: string
-          workspace_id: string
-        }
-        Insert: {
-          car_id: string
-          checked_in_at?: string
-          checked_out_at?: string | null
-          created_at?: string
-          crew_key?: string | null
-          gps_lat?: number | null
-          gps_lng?: number | null
-          id?: string
-          out_gps_lat?: number | null
-          out_gps_lng?: number | null
-          outside_geofence?: boolean
-          out_outside_geofence?: boolean
-          prev_car_id?: string | null
-          switch_reason?: string | null
-          user_id: string
-          work_date: string
-          workspace_id: string
-        }
-        Update: {
-          car_id?: string
-          checked_in_at?: string
-          checked_out_at?: string | null
-          created_at?: string
-          crew_key?: string | null
-          gps_lat?: number | null
-          gps_lng?: number | null
-          id?: string
-          out_gps_lat?: number | null
-          out_gps_lng?: number | null
-          outside_geofence?: boolean
-          out_outside_geofence?: boolean
-          prev_car_id?: string | null
-          switch_reason?: string | null
-          user_id?: string
-          work_date?: string
-          workspace_id?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "car_inspections_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_inspections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_inspections_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       car_issues: {
         Row: {
@@ -271,64 +296,173 @@ export type Database = {
           user_id?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "car_issues_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_issues_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_issues_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "car_issues_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      swap_requests: {
+      cars: {
         Row: {
+          active: boolean
+          category_id: string | null
           created_at: string
-          decided_at: string | null
-          decided_by: string | null
           id: string
-          note: string | null
-          partner_decided_at: string | null
-          partner_decision: Database["public"]["Enums"]["swap_status"]
-          partner_id: string | null
-          requested_by: string
-          shift_id: string
-          status: Database["public"]["Enums"]["swap_status"]
+          label: string | null
+          plate: string
+          qr_token: string
           workspace_id: string
         }
         Insert: {
+          active?: boolean
+          category_id?: string | null
           created_at?: string
-          decided_at?: string | null
-          decided_by?: string | null
           id?: string
-          note?: string | null
-          partner_decided_at?: string | null
-          partner_decision?: Database["public"]["Enums"]["swap_status"]
-          partner_id?: string | null
-          requested_by: string
-          shift_id: string
-          status?: Database["public"]["Enums"]["swap_status"]
+          label?: string | null
+          plate: string
+          qr_token?: string
           workspace_id: string
         }
         Update: {
+          active?: boolean
+          category_id?: string | null
           created_at?: string
-          decided_at?: string | null
-          decided_by?: string | null
           id?: string
-          note?: string | null
-          partner_decided_at?: string | null
-          partner_decision?: Database["public"]["Enums"]["swap_status"]
-          partner_id?: string | null
-          requested_by?: string
-          shift_id?: string
-          status?: Database["public"]["Enums"]["swap_status"]
+          label?: string | null
+          plate?: string
+          qr_token?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cars_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "car_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cars_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      payroll_locks: {
-        Row: { workspace_id: string; ym: string; locked_by: string | null; locked_at: string }
-        Insert: { workspace_id: string; ym: string; locked_by?: string | null; locked_at?: string }
-        Update: { workspace_id?: string; ym?: string; locked_by?: string | null; locked_at?: string }
-        Relationships: []
-      }
-      photo_proofs: {
-        Row: { id: string; workspace_id: string; storage_path: string; sha256: string; user_id: string | null; taken_at: string }
-        Insert: { id?: string; workspace_id: string; storage_path: string; sha256: string; user_id?: string | null; taken_at?: string }
-        Update: { id?: string; workspace_id?: string; storage_path?: string; sha256?: string; user_id?: string | null; taken_at?: string }
-        Relationships: []
+      check_ins: {
+        Row: {
+          car_id: string
+          checked_in_at: string
+          checked_out_at: string | null
+          created_at: string
+          crew_key: string | null
+          gps_lat: number | null
+          gps_lng: number | null
+          id: string
+          out_gps_lat: number | null
+          out_gps_lng: number | null
+          out_outside_geofence: boolean
+          outside_geofence: boolean
+          prev_car_id: string | null
+          switch_reason: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          car_id: string
+          checked_in_at?: string
+          checked_out_at?: string | null
+          created_at?: string
+          crew_key?: string | null
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          out_gps_lat?: number | null
+          out_gps_lng?: number | null
+          out_outside_geofence?: boolean
+          outside_geofence?: boolean
+          prev_car_id?: string | null
+          switch_reason?: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          car_id?: string
+          checked_in_at?: string
+          checked_out_at?: string | null
+          created_at?: string
+          crew_key?: string | null
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          out_gps_lat?: number | null
+          out_gps_lng?: number | null
+          out_outside_geofence?: boolean
+          outside_geofence?: boolean
+          prev_car_id?: string | null
+          switch_reason?: string | null
+          user_id?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_ins_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_ins_prev_car_id_fkey"
+            columns: ["prev_car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_ins_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_ins_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cleanings: {
         Row: {
@@ -364,7 +498,29 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cleanings_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cleanings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cleanings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       evidence_photos: {
         Row: {
@@ -400,7 +556,29 @@ export type Database = {
           taken_at?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "evidence_photos_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_photos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evidence_photos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fuel_logs: {
         Row: {
@@ -475,7 +653,29 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fuel_logs_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fuel_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fuel_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       incidents: {
         Row: {
@@ -517,46 +717,159 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: "incidents_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspection_reminders: {
+        Row: {
+          car_id: string
+          created_at: string
+          id: string
+          last_notified_at: string | null
+          left_zone_at: string
+          left_zone_by: string | null
+          notify_count: number
+          resolved_at: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          car_id: string
+          created_at?: string
+          id?: string
+          last_notified_at?: string | null
+          left_zone_at?: string
+          left_zone_by?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          car_id?: string
+          created_at?: string
+          id?: string
+          last_notified_at?: string | null
+          left_zone_at?: string
+          left_zone_by?: string | null
+          notify_count?: number
+          resolved_at?: string | null
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspection_reminders_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_reminders_left_zone_by_fkey"
+            columns: ["left_zone_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspection_reminders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      internal_config: {
+        Row: {
+          key: string
+          value: string
+        }
+        Insert: {
+          key: string
+          value: string
+        }
+        Update: {
+          key?: string
+          value?: string
+        }
         Relationships: []
       }
       invites: {
         Row: {
-          id: string
-          workspace_id: string
-          email: string
-          full_name: string | null
-          role: Database["public"]["Enums"]["user_role"]
-          created_by: string
           created_at: string
+          created_by: string
+          email: string
           expires_at: string
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["user_role"]
           used_at: string | null
           used_by: string | null
+          workspace_id: string
         }
         Insert: {
-          id?: string
-          workspace_id: string
-          email: string
-          full_name?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
-          created_by: string
           created_at?: string
+          created_by: string
+          email: string
           expires_at?: string
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
           used_at?: string | null
           used_by?: string | null
+          workspace_id: string
         }
         Update: {
-          id?: string
-          workspace_id?: string
-          email?: string
-          full_name?: string | null
-          role?: Database["public"]["Enums"]["user_role"]
-          created_by?: string
           created_at?: string
+          created_by?: string
+          email?: string
           expires_at?: string
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["user_role"]
           used_at?: string | null
           used_by?: string | null
+          workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       manager_workspaces: {
         Row: {
@@ -574,7 +887,100 @@ export type Database = {
           manager_id?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "manager_workspaces_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manager_workspaces_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_locks: {
+        Row: {
+          locked_at: string
+          locked_by: string | null
+          workspace_id: string
+          ym: string
+        }
+        Insert: {
+          locked_at?: string
+          locked_by?: string | null
+          workspace_id: string
+          ym: string
+        }
+        Update: {
+          locked_at?: string
+          locked_by?: string | null
+          workspace_id?: string
+          ym?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_locks_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_locks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photo_proofs: {
+        Row: {
+          id: string
+          sha256: string
+          storage_path: string
+          taken_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          id?: string
+          sha256: string
+          storage_path: string
+          taken_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          id?: string
+          sha256?: string
+          storage_path?: string
+          taken_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_proofs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photo_proofs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -619,7 +1025,57 @@ export type Database = {
           status?: Database["public"]["Enums"]["user_status"]
           workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       route_stops: {
         Row: {
@@ -718,7 +1174,29 @@ export type Database = {
           weight?: number | null
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "route_uploads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       route_uploads: {
         Row: {
@@ -754,7 +1232,29 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "route_uploads_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_uploads_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shifts: {
         Row: {
@@ -787,46 +1287,165 @@ export type Database = {
           work_date?: string
           workspace_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shifts_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_loader_id_fkey"
+            columns: ["loader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      swap_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          note: string | null
+          partner_decided_at: string | null
+          partner_decision: Database["public"]["Enums"]["swap_status"]
+          partner_id: string | null
+          requested_by: string
+          shift_id: string
+          status: Database["public"]["Enums"]["swap_status"]
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          partner_decided_at?: string | null
+          partner_decision?: Database["public"]["Enums"]["swap_status"]
+          partner_id?: string | null
+          requested_by: string
+          shift_id: string
+          status?: Database["public"]["Enums"]["swap_status"]
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          partner_decided_at?: string | null
+          partner_decision?: Database["public"]["Enums"]["swap_status"]
+          partner_id?: string | null
+          requested_by?: string
+          shift_id?: string
+          status?: Database["public"]["Enums"]["swap_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swap_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_requests_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_requests_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_requests_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspaces: {
         Row: {
           created_at: string
-          id: string
-          name: string
           driver_day_rate: number
-          loader_day_rate: number
           geo_lat: number | null
           geo_lng: number | null
           geo_radius_m: number | null
+          id: string
+          loader_day_rate: number
+          name: string
           photo_retention_days: number
         }
         Insert: {
           created_at?: string
-          id?: string
-          name: string
           driver_day_rate?: number
-          loader_day_rate?: number
           geo_lat?: number | null
           geo_lng?: number | null
           geo_radius_m?: number | null
+          id?: string
+          loader_day_rate?: number
+          name: string
           photo_retention_days?: number
         }
         Update: {
           created_at?: string
-          id?: string
-          name?: string
           driver_day_rate?: number
-          loader_day_rate?: number
           geo_lat?: number | null
           geo_lng?: number | null
           geo_radius_m?: number | null
+          id?: string
+          loader_day_rate?: number
+          name?: string
           photo_retention_days?: number
         }
         Relationships: []
       }
     }
-    Views: { [_ in never]: never }
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
       approve_user: {
         Args: {
@@ -837,12 +1456,33 @@ export type Database = {
         Returns: undefined
       }
       can_access_workspace: { Args: { wid: string }; Returns: boolean }
-      current_role: { Args: never; Returns: Database["public"]["Enums"]["user_role"] }
-      current_status: { Args: never; Returns: Database["public"]["Enums"]["user_status"] }
+      current_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"]
+      }
+      current_status: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_status"]
+      }
+      decide_swap: {
+        Args: { p_approve: boolean; p_request_id: string }
+        Returns: undefined
+      }
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }
-      resolve_member_names: { Args: { ids: string[] }; Returns: { id: string; full_name: string }[] }
+      partner_decide_swap: {
+        Args: { p_accept: boolean; p_request_id: string }
+        Returns: undefined
+      }
+      push_inspection_reminder: { Args: { p_id: string }; Returns: undefined }
+      resolve_member_names: {
+        Args: { ids: string[] }
+        Returns: {
+          full_name: string
+          id: string
+        }[]
+      }
       set_user_pay: {
         Args: {
           p_pay_amount: number
@@ -858,57 +1498,175 @@ export type Database = {
         }
         Returns: undefined
       }
-      set_workspace_rates: {
-        Args: {
-          p_workspace_id: string
-          p_driver_rate: number
-          p_loader_rate: number
-        }
-        Returns: undefined
-      }
       set_workspace_geofence: {
         Args: {
+          p_lat: number
+          p_lng: number
+          p_radius_m: number
           p_workspace_id: string
-          p_lat: number | null
-          p_lng: number | null
-          p_radius_m: number | null
         }
         Returns: undefined
       }
-      decide_swap: {
-        Args: { p_request_id: string; p_approve: boolean }
-        Returns: undefined
-      }
-      partner_decide_swap: {
-        Args: { p_request_id: string; p_accept: boolean }
+      set_workspace_rates: {
+        Args: {
+          p_driver_rate: number
+          p_loader_rate: number
+          p_workspace_id: string
+        }
         Returns: undefined
       }
       storage_workspace_ok: { Args: { objname: string }; Returns: boolean }
+      tick_inspection_reminders: { Args: never; Returns: undefined }
       user_workspace_ids: { Args: never; Returns: string[] }
     }
     Enums: {
       adjustment_type: "advance" | "deduction"
       car_issue_status: "open" | "in_progress" | "resolved"
-      swap_status: "pending" | "approved" | "rejected"
       evidence_category: "dirt" | "damage" | "cigarette_burn" | "other"
       inspection_reason: "day9" | "driver_change" | "manual"
       inspection_view: "front" | "rear" | "left" | "right" | "interior"
       pay_type: "daily" | "monthly"
       stop_status: "pending" | "done" | "skipped"
+      swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
       user_status: "pending" | "active" | "disabled"
     }
-    CompositeTypes: { [_ in never]: never }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 
-type PublicSchema = Database["public"]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export type Tables<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Row"]
-export type TablesInsert<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Insert"]
-export type TablesUpdate<T extends keyof PublicSchema["Tables"]> =
-  PublicSchema["Tables"][T]["Update"]
-export type Enums<T extends keyof PublicSchema["Enums"]> =
-  PublicSchema["Enums"][T]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      adjustment_type: ["advance", "deduction"],
+      car_issue_status: ["open", "in_progress", "resolved"],
+      evidence_category: ["dirt", "damage", "cigarette_burn", "other"],
+      inspection_reason: ["day9", "driver_change", "manual"],
+      inspection_view: ["front", "rear", "left", "right", "interior"],
+      pay_type: ["daily", "monthly"],
+      stop_status: ["pending", "done", "skipped"],
+      swap_status: ["pending", "approved", "rejected"],
+      user_role: ["driver", "loader", "manager", "admin", "crew"],
+      user_status: ["pending", "active", "disabled"],
+    },
+  },
+} as const
