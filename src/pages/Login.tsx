@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEV_LOGIN_ENABLED, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
+import { RECOVERY_PATH } from '../lib/recovery'
 
-type Mode = 'login' | 'register'
+type Mode = 'login' | 'register' | 'forgot'
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login')
@@ -36,7 +37,14 @@ export default function Login() {
     setInfo(null)
     setBusy(true)
     try {
-      if (mode === 'login') {
+      if (mode === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${window.location.origin}${RECOVERY_PATH}`,
+        })
+        if (error) throw error
+        // Szándékosan nem áruljuk el, létezik-e a fiók (email-felderítés ellen)
+        setInfo('Ha van fiók ezzel az email címmel, elküldtük rá a jelszó-visszaállító linket. Nézd meg a postafiókod (a spam mappát is).')
+      } else if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (error) throw error
       } else {
@@ -72,7 +80,7 @@ export default function Login() {
 
       <div className="card auth-card">
         <div className="tabs">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null) }} type="button">
+          <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null) }} type="button">
             Belépés
           </button>
           <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); setInfo(null) }} type="button">
@@ -91,17 +99,35 @@ export default function Login() {
             <label htmlFor="email">Email cím</label>
             <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pelda@email.hu" autoComplete="email" required />
           </div>
-          <div className="field">
-            <label htmlFor="pw">Jelszó</label>
-            <input id="pw" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required />
-          </div>
+          {mode !== 'forgot' && (
+            <div className="field">
+              <label htmlFor="pw">Jelszó</label>
+              <input id="pw" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required />
+            </div>
+          )}
+          {mode === 'forgot' && (
+            <p className="tiny muted" style={{ margin: 0 }}>
+              Add meg az email címed, és küldünk egy linket, amivel új jelszót állíthatsz be.
+            </p>
+          )}
 
           {error && <div className="alert error">{error}</div>}
           {info && <div className="alert success">{info}</div>}
 
           <button className="btn" type="submit" disabled={busy}>
-            {busy ? 'Folyamatban…' : mode === 'login' ? 'Belépés' : 'Regisztráció'}
+            {busy ? 'Folyamatban…' : mode === 'login' ? 'Belépés' : mode === 'register' ? 'Regisztráció' : 'Visszaállító link kérése'}
           </button>
+
+          {mode === 'login' && (
+            <button className="btn ghost sm" type="button" onClick={() => { setMode('forgot'); setError(null); setInfo(null) }}>
+              Elfelejtettem a jelszavam
+            </button>
+          )}
+          {mode === 'forgot' && (
+            <button className="btn ghost sm" type="button" onClick={() => { setMode('login'); setError(null); setInfo(null) }}>
+              ← Vissza a belépéshez
+            </button>
+          )}
         </form>
       </div>
 
@@ -145,5 +171,7 @@ function translateAuthError(msg: string): string {
   if (m.includes('user already registered')) return 'Ezzel az email címmel már van fiók.'
   if (m.includes('password should be at least')) return 'A jelszó túl rövid (min. 6 karakter).'
   if (m.includes('unable to validate email')) return 'Érvénytelen email cím.'
+  if (m.includes('rate limit') || m.includes('too many requests')) return 'Túl sok próbálkozás — várj pár percet, és próbáld újra.'
+  if (m.includes('for security purposes')) return 'Biztonsági okból várni kell egy kicsit két kérés között — próbáld újra pár másodperc múlva.'
   return msg
 }

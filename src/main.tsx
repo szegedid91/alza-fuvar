@@ -1,3 +1,6 @@
+// ELSŐKÉNT: a jelszó-visszaállító link hash-ét még azelőtt elmentjük,
+// hogy a Supabase-kliens kitakarítaná a címsorból
+import './lib/recovery'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

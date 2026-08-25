@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
 import { clearOutbox } from '../lib/outbox'
+import { RECOVERY_IN_URL, RECOVERY_URL_ERROR } from '../lib/recovery'
 import type { Tables } from '../lib/database.types'
 
 export type Profile = Tables<'profiles'>
@@ -11,6 +12,10 @@ interface AuthState {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  // Az emailes jelszó-visszaállítás munkamenete: ilyenkor NEM az appot kell
+  // mutatni, hanem az új jelszó beállítását
+  recovery: boolean
+  endRecovery: () => void
   refreshProfile: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -35,6 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  // A linkből induló visszaállítást a hash már az induláskor jelzi; a
+  // PASSWORD_RECOVERY esemény ezt később megerősíti
+  const [recovery, setRecovery] = useState(RECOVERY_IN_URL || RECOVERY_URL_ERROR != null)
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -76,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
       // A callbackben tilos Supabase-hívást await-elni (auth-lock holtpont a
       // token-frissítésnél) — setTimeout-tal lépünk ki belőle. Azon belül
       // előbb a profil, aztán a session — így nincs olyan render-pillanat,
@@ -104,11 +113,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setProfile(null)
+    setRecovery(false)
     await clearLocalUserData()
   }, [])
 
+  // A jelszó beállítása (vagy elvetése) után az app normál módban fut tovább;
+  // a hash-t is takarítjuk, hogy újratöltésnél ne induljon újra a folyamat
+  const endRecovery = useCallback(() => {
+    setRecovery(false)
+    try { window.history.replaceState(null, '', '/') } catch { /* n/a */ }
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ session, profile, loading, refreshProfile, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, recovery, endRecovery, refreshProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   )

@@ -29,6 +29,8 @@ import History from './pages/History'
 import CarIssues from './pages/CarIssues'
 import Reports from './pages/Reports'
 import FleetMap from './pages/FleetMap'
+import ResetPassword from './pages/ResetPassword'
+import { RECOVERY_PATH } from './lib/recovery'
 
 function FullScreenSpinner() {
   return <div className="center-screen"><div className="spinner" /></div>
@@ -50,12 +52,16 @@ function ProfileRetry() {
 }
 
 export default function App() {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, recovery, endRecovery } = useAuth()
   const { pathname } = useLocation()
 
   // Meghívó-oldal: bejelentkezés NÉLKÜL is elérhető (a token a jogosultság)
   const inviteMatch = pathname.match(/^\/meghivo\/([0-9a-f-]{36})$/i)
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />
+
+  // Emailes jelszó-visszaállítás: minden más elé vág (a link "recovery"
+  // munkamenettel léptet be — az appot csak az új jelszó után mutatjuk)
+  if (recovery || pathname === RECOVERY_PATH) return <ResetPassword onDone={endRecovery} />
 
   if (loading) return <FullScreenSpinner />
   if (!session) return <Login />
