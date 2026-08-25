@@ -12,6 +12,9 @@ type SwapRequest = Tables<'swap_requests'>
 
 const DAY_NAMES = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
 
+// Cserét a mai naptól 7 napra előre lehet kérni (a DB-trigger is ezt kényszeríti)
+const SWAP_DAYS_AHEAD = 7
+
 // Helyi (Budapest) naptári nap ISO formában — nem UTC!
 const localISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -109,6 +112,14 @@ export default function MySchedule() {
     return () => { void supabase.removeChannel(ch) }
   }, [profile?.id, qc])
 
+  // Cserekérés-ablak: ma … ma+7 nap (helyi naptár szerint)
+  const swapWindowEnd = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() + SWAP_DAYS_AHEAD)
+    return localISO(d)
+  })()
+  const swapWindowOpen = (workDate: string) => workDate >= today && workDate <= swapWindowEnd
+
   const [actionError, setActionError] = useState<string | null>(null)
 
   // Mai autóhasználat idővonala (napközbeni autócserékkel)
@@ -176,7 +187,9 @@ export default function MySchedule() {
   )
 
   const { data: todayAdj } = useQuery({
-    queryKey: ['my-adj-today', currentWorkspaceId, profile?.id, today],
+    // Kulcsban az 'adv': a régi (levonást is tartalmazó) cache-elt sorok ne
+    // jelenjenek meg "Előleg" felirattal az első frissülés előtt
+    queryKey: ['my-adv-today', currentWorkspaceId, profile?.id, today],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
       // A munkatárs csak az előlegeit látja — a levonás a vezetőség/bérlap dolga
@@ -274,7 +287,7 @@ export default function MySchedule() {
           })}
         </div>
         <div className="tiny muted" style={{ textAlign: 'right' }}>
-          Ezen a héten: {(weekShifts ?? []).length} nap
+          Ezen a héten: {new Set((weekShifts ?? []).map((s) => s.work_date)).size} nap
         </div>
       </div>
 
@@ -327,10 +340,10 @@ export default function MySchedule() {
               <span className="muted small">Társ</span>
               <span className="small">{partner || 'Nincs megadva'}</span>
             </div>
-            {partnerId && s.work_date !== today && (
-              <span className="tiny muted">🔄 Cserét csak aznap lehet kérni.</span>
+            {partnerId && !swapWindowOpen(s.work_date) && (
+              <span className="tiny muted">🔄 Cserét legfeljebb egy héttel előre lehet kérni.</span>
             )}
-            {partnerId && s.work_date === today && (
+            {partnerId && swapWindowOpen(s.work_date) && (
               swap && swap.status === 'pending' ? (
                 <div className="stack" style={{ gap: 4 }}>
                   <span className="badge warning" style={{ width: 'fit-content' }}>🔄 Csere: {swapStatusLabel[swap.status]}</span>
@@ -360,7 +373,8 @@ export default function MySchedule() {
         )
       })}
       <p className="tiny muted" style={{ textAlign: 'center' }}>
-        A cserét a menedzser hagyja jóvá — akár aznap is. Jóváhagyás után a szereped automatikusan frissül.
+        Cserét a mai naptól egy héttel előre lehet kérni. A cserét a menedzser hagyja jóvá — akár aznap is.
+        Jóváhagyás után a szereped automatikusan frissül.
       </p>
     </div>
   )

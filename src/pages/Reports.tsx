@@ -56,6 +56,9 @@ export default function Reports() {
         return users.get(id)!
       }
       const seenDay = new Set<string>()
+      // Napközbeni autócserénél egy naphoz több check_ins sor tartozik — a
+      // munkaidő ezért a nap TELJES hossza (első be → utolsó ki), nem a sorok összege
+      const dayspan = new Map<string, { from: number; to: number | null }>()
       for (const c of checkins ?? []) {
         const key = `${c.user_id}|${c.work_date}`
         if (!seenDay.has(key)) {
@@ -67,7 +70,18 @@ export default function Reports() {
           if (daily === 'driver') row.driverDays++
           else row.loaderDays++
         }
-        if (c.checked_out_at) u(c.user_id).hoursMs += new Date(c.checked_out_at).getTime() - new Date(c.checked_in_at).getTime()
+        const from = new Date(c.checked_in_at).getTime()
+        const to = c.checked_out_at ? new Date(c.checked_out_at).getTime() : null
+        const span = dayspan.get(key)
+        if (!span) dayspan.set(key, { from, to })
+        else {
+          span.from = Math.min(span.from, from)
+          span.to = to == null ? span.to : span.to == null ? to : Math.max(span.to, to)
+        }
+      }
+      for (const [key, span] of dayspan) {
+        if (span.to == null) continue
+        u(key.slice(0, key.indexOf('|'))).hoursMs += Math.max(0, span.to - span.from)
       }
       for (const s of stops ?? []) {
         if (!s.recorded_by) continue

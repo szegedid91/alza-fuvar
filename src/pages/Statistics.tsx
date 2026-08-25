@@ -137,6 +137,10 @@ export default function Statistics() {
 
       // Becsekkolások: napok, órák, cserék, geofence; autónként használat
       const seenDay = new Set<string>()
+      // Napi munkaidő: napközbeni autócserénél TÖBB check_ins sor van egy napra
+      // (A→B→A esetén az elsőt újranyitjuk), ezért soronként összeadva duplázna.
+      // A nap hossza = utolsó kijelentkezés − első becsekkolás.
+      const dayspan = new Map<string, { from: number; to: number | null }>()
       const checkinDays = new Set<string>() // `${userId}|${date}` — a kihagyott beosztáshoz
       const carDays = new Map<string, Set<string>>()
       const switchedAwayByCar = new Map<string, number>()
@@ -151,9 +155,13 @@ export default function Statistics() {
           else row.loaderDays++
         }
         const row = u(c.user_id)
-        if (c.checked_out_at) {
-          row.hoursMs += new Date(c.checked_out_at).getTime() - new Date(c.checked_in_at).getTime()
-          row.daysWithHours++
+        const from = new Date(c.checked_in_at).getTime()
+        const to = c.checked_out_at ? new Date(c.checked_out_at).getTime() : null
+        const span = dayspan.get(key)
+        if (!span) dayspan.set(key, { from, to })
+        else {
+          span.from = Math.min(span.from, from)
+          span.to = to == null ? span.to : span.to == null ? to : Math.max(span.to, to)
         }
         if (c.switch_reason) row.switches++
         if (c.outside_geofence || c.out_outside_geofence) row.outside++
@@ -162,14 +170,28 @@ export default function Statistics() {
         carDays.get(c.car_id)!.add(c.work_date)
       }
 
-      // Beosztott vs ledolgozott (csak múltbeli napokra — a jövő nem "kihagyás")
+      // Napi munkaidő összegzése (naponként egyszer, a nap teljes hosszával)
+      for (const [key, span] of dayspan) {
+        if (span.to == null) continue // még nem jelentkezett ki — nincs lezárt nap
+        const row = u(key.slice(0, key.indexOf('|')))
+        row.hoursMs += Math.max(0, span.to - span.from)
+        row.daysWithHours++
+      }
+
+      // Beosztott vs ledolgozott (csak múltbeli napokra — a jövő nem "kihagyás").
+      // NAPRA deduplikálva: aki egy napon két autóra is be van osztva, annak is
+      // egy nap az egy nap (különben duplán számolna hiányzást).
       const today = todayISO()
+      const assignedDay = new Set<string>()
       for (const s of shifts ?? []) {
         for (const id of [s.driver_id, s.loader_id]) {
           if (!id) continue
+          const k = `${id}|${s.work_date}`
+          if (assignedDay.has(k)) continue
+          assignedDay.add(k)
           const row = u(id)
           row.assignedDays++
-          if (s.work_date < today && !checkinDays.has(`${id}|${s.work_date}`)) row.missedDays++
+          if (s.work_date < today && !checkinDays.has(k)) row.missedDays++
         }
       }
 
@@ -219,7 +241,11 @@ export default function Statistics() {
       }).filter((c) => c.daysUsed > 0 || c.issues > 0 || c.fuelCost > 0)
         .sort((a, b) => b.daysUsed - a.daysUsed || a.plate.localeCompare(b.plate))
 
-      const userRows = [...users.values()].filter((r) => r.days > 0 || r.assignedDays > 0)
+      // Aki bármilyen nyomot hagyott az időszakban (nap, beosztás, esemény,
+      // hiba, stop, előleg), az látszik — különben az összesítők nem stimmelnének
+      const userRows = [...users.values()].filter(
+        (r) => r.days > 0 || r.assignedDays > 0 || r.incidents > 0 || r.issues > 0 || r.stops > 0 || r.advances > 0,
+      )
         .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name))
 
       return { userRows, carRows }
@@ -348,7 +374,7 @@ export default function Statistics() {
                 <div className="between"><span className="muted">Napok</span><span>{r.days} ({r.driverDays} sofőr / {r.loaderDays} rakodó)</span></div>
                 <div className="between">
                   <span className="muted">Átlag munkaidő</span>
-                  <span>{r.daysWithHours > 0 ? `${formatHours(r.hoursMs / r.daysWithHours)}/nap` : '—'}</span>
+                  <span>{r.daysWithHours > 0 ? `${formatHours(Math.round(r.hoursMs / r.daysWithHours))}/nap` : '—'}</span>
                 </div>
                 <div className="between">
                   <span className="muted">Borravaló</span>

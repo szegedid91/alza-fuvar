@@ -38,12 +38,21 @@ export interface PayrollRow {
   days: number
   driverRate: number
   loaderRate: number
+  // A ténylegesen kiszámolt alapbér szerep szerint (a becsekkolás
+  // munkaterületének napidíjával) — a napidíj × nap szorzat félrevezető
+  // lenne annál, aki több munkaterületen dolgozott
+  driverPay: number
+  loaderPay: number
   tips: number // csak a pozitív borravalók összege
   shortfall: number // készpénz-hiányok összege (pozitív számként)
   advances: number
   deductions: number
   base: number
+  // A bérlapon látható tételek összege (előleg NÉLKÜL) — a bérlap ezzel zár
+  earned: number
+  // A ténylegesen kifizetendő (a már felvett előleggel csökkentve) — csak adminnak
   total: number
+  status: string
   workedDays: WorkedDay[]
   advanceItems: AdjustmentItem[]
   deductionItems: AdjustmentItem[]

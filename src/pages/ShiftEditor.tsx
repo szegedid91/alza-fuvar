@@ -9,6 +9,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import PersonPicker from '../components/PersonPicker'
 import ConfirmButton from '../components/ConfirmButton'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
+import { fetchAll } from '../lib/fetchAll'
 import { resolveNames } from '../lib/names'
 import { sendPush } from '../lib/push'
 import { todayISO, formatDate, formatDateTime, carIssueStatusLabel } from '../lib/labels'
@@ -427,20 +428,22 @@ function WeekTable() {
       }
       // Párhuzamosan megy minden címzettnek; a szerver megmondja, hány ESZKÖZRE
       // sikerült ténylegesen kézbesíteni — ezt írjuk ki, nem vak "kiküldve"-t.
-      const results = await Promise.all(
+      // allSettled: egyetlen hálózati hiba ne buktassa a többiek már kiment
+      // értesítését (különben újraküldésnél duplán kapnák meg)
+      const results = await Promise.allSettled(
         [...byUser.entries()].map(async ([uid, entries]) => {
           entries.sort((a, b) => a.date.localeCompare(b.date))
           const dayCount = new Set(entries.map((e) => e.date)).size
           const body = `${formatDate(weekStart)} – ${formatDate(days[6])}: ${dayCount} nap — ${entries.map((e) => e.text).join(', ')}`
-          const devices = await sendPush([uid], '📅 Megjött a heti beosztásod', body, '/beosztas')
-          return devices > 0 ? 1 : 0
+          return await sendPush([uid], '📅 Megjött a heti beosztásod', body, '/beosztas')
         }),
       )
-      const reached = results.reduce((a: number, b) => a + b, 0)
+      const reached = results.filter((r) => r.status === 'fulfilled' && r.value > 0).length
+      const failed = results.filter((r) => r.status === 'rejected').length
       setPublishMsg(
         reached === 0
-          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el a push — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).`
-          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached}-t ért el a push. A többieknél nincs bekapcsolva az értesítés.`,
+          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el a push — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).${failed ? ` (${failed} küldés hibára futott.)` : ''}`
+          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached}-t ért el a push. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
       )
     } catch (e) {
       setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
@@ -691,20 +694,23 @@ export default function ShiftEditor() {
       const [my, mm] = month.split('-').map(Number)
       const startTs = new Date(my, mm - 1, 1).toISOString()
       const endTs = new Date(my, mm, 1).toISOString()
-      const [{ data: shifts }, { data: incidents }, { data: cleanings }, { data: geoCk }, { data: issues }, { data: switches }] = await Promise.all([
-        supabase.from('shifts').select('*').eq('workspace_id', ws).gte('work_date', start).lt('work_date', end),
-        supabase.from('incidents').select('work_date, car_id, user_id, note, created_at')
-          .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end),
-        supabase.from('cleanings').select('work_date, car_id, user_id, created_at')
-          .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end),
-        supabase.from('check_ins').select('work_date, car_id, user_id, outside_geofence, out_outside_geofence')
+      // Lapozva (1000 sor felett is teljes) és hibánál dob — csonka naptár
+      // félrevezetne: üresnek látszó napokra a bér ugyanúgy fizet
+      const [shifts, incidents, cleanings, geoCk, issues, switches] = await Promise.all([
+        fetchAll((f, t) => supabase.from('shifts').select('*')
+          .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('incidents').select('work_date, car_id, user_id, note, created_at')
+          .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('cleanings').select('work_date, car_id, user_id, created_at')
+          .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('check_ins').select('work_date, car_id, user_id, outside_geofence, out_outside_geofence')
           .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end)
-          .or('outside_geofence.eq.true,out_outside_geofence.eq.true'),
-        supabase.from('car_issues').select('created_at, car_id, user_id, note, status')
-          .eq('workspace_id', ws).gte('created_at', startTs).lt('created_at', endTs),
-        supabase.from('check_ins').select('work_date, user_id, car_id, prev_car_id, checked_in_at, switch_reason')
+          .or('outside_geofence.eq.true,out_outside_geofence.eq.true').order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('car_issues').select('created_at, car_id, user_id, note, status')
+          .eq('workspace_id', ws).gte('created_at', startTs).lt('created_at', endTs).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('check_ins').select('work_date, user_id, car_id, prev_car_id, checked_in_at, switch_reason')
           .eq('workspace_id', ws).gte('work_date', start).lt('work_date', end)
-          .not('switch_reason', 'is', null),
+          .not('switch_reason', 'is', null).order('id').range(f, t)),
       ])
       const ids = [
         ...(shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id]),

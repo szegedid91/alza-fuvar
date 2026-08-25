@@ -30,6 +30,10 @@ export default function ConfirmButton({
       <button
         type="button"
         className={className}
+        // a disabled/title az élesített állapotban is érvényes marad: ha közben
+        // letiltják a gombot, a megerősítés se süljön el
+        disabled={disabled}
+        title={title}
         style={{ ...style, background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}
         onClick={() => { setArmed(false); onConfirm() }}
       >

@@ -81,7 +81,9 @@ export default function Payroll() {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
       const [profilesRes, workspacesRes, checkins, shifts, adj, stops] = await Promise.all([
-        supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)').eq('status', 'active'),
+        // Státusz-szűrő NÉLKÜL: a hónap közben letiltott munkatársnak is jár a
+        // ledolgozott napjaiért a bér — csak a bér nélküli inaktívakat hagyjuk ki lent
+        supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)'),
         supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate').order('name'),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -141,20 +143,22 @@ export default function Payroll() {
       }
 
       const rows: PayrollRow[] = ((profiles ?? []) as unknown as (Tables<'profiles'> & { workspace: { name: string } | null })[])
-        .filter((p) => isCrewRole(p.role))
+        .filter((p) => isCrewRole(p.role) && (p.status === 'active' || (daysByUser.get(p.id)?.size ?? 0) > 0))
         .map((p) => {
           const dayMap = daysByUser.get(p.id) ?? new Map<string, string>()
           let driverDays = 0
           let loaderDays = 0
           let base = 0
           const workedDays: { date: string; role: 'driver' | 'loader'; rate: number }[] = []
+          let driverPay = 0
+          let loaderPay = 0
           for (const [date, wsId] of dayMap) {
             const r = rates[wsId ?? p.workspace_id ?? '']
             // Ha nincs beosztott szerep aznap, rakodóként számoljuk (alacsonyabb díj)
             const daily = roleByUserDay.get(`${p.id}|${date}`) ?? 'loader'
             const dayRate = daily === 'driver' ? (r?.driver ?? 0) : (r?.loader ?? 0)
-            if (daily === 'driver') driverDays++
-            else loaderDays++
+            if (daily === 'driver') { driverDays++; driverPay += dayRate }
+            else { loaderDays++; loaderPay += dayRate }
             base += dayRate
             workedDays.push({ date, role: daily, rate: dayRate })
           }
@@ -169,7 +173,10 @@ export default function Payroll() {
             userId: p.id, name: p.full_name || p.email || '—', workspace: p.workspace?.name ?? '—',
             workspaceId: p.workspace_id, driverDays, loaderDays, days: driverDays + loaderDays,
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0,
+            driverPay, loaderPay,
             tips, shortfall, advances, deductions, base,
+            status: p.status as string,
+            earned: base + tips - shortfall - deductions,
             total: base + tips - shortfall - advances - deductions,
             workedDays,
             advanceItems: (advItemsByUser.get(p.id) ?? []).sort(byDate),
@@ -291,7 +298,10 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
     <div className="card stack">
       <div className="between">
         <div>
-          <div style={{ fontWeight: 800, fontSize: 16 }}>{row.name}</div>
+          <div style={{ fontWeight: 800, fontSize: 16 }}>
+            {row.name}
+            {row.status !== 'active' && <span className="badge danger" style={{ marginLeft: 6 }}>letiltott</span>}
+          </div>
           <div className="tiny muted">{row.workspace}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -301,8 +311,8 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
       </div>
 
       <div className="grid-2 small">
-        <div className="between"><span className="muted">Sofőr nap</span><span>{row.driverDays} × {formatHuf(row.driverRate)}</span></div>
-        <div className="between"><span className="muted">Rakodó nap</span><span>{row.loaderDays} × {formatHuf(row.loaderRate)}</span></div>
+        <div className="between"><span className="muted">Sofőr nap</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>
+        <div className="between"><span className="muted">Rakodó nap</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
         <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
         <div className="between"><span className="muted">Borravaló</span><span style={{ color: 'var(--success)' }}>{formatHuf(row.tips)}</span></div>

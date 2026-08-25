@@ -41,14 +41,15 @@ export function openPayslip(row: PayrollRow, ym: string): void {
   <div class="muted">${esc(row.workspace)} · ${esc(row.name)}</div>
   <table>
     <tr><th>Tétel</th><th>Mennyiség</th><th>Összeg</th></tr>
-    <tr><td>Sofőr napok</td><td>${row.driverDays} nap × ${HUF(row.driverRate)}</td><td>${HUF(row.driverDays * row.driverRate)}</td></tr>
-    <tr><td>Rakodó napok</td><td>${row.loaderDays} nap × ${HUF(row.loaderRate)}</td><td>${HUF(row.loaderDays * row.loaderRate)}</td></tr>
+    <tr><td>Sofőr napok</td><td>${row.driverDays} nap</td><td>${HUF(row.driverPay)}</td></tr>
+    <tr><td>Rakodó napok</td><td>${row.loaderDays} nap</td><td>${HUF(row.loaderPay)}</td></tr>
     <tr><td>Alapbér összesen</td><td>${row.days} ledolgozott nap</td><td>${HUF(row.base)}</td></tr>
     <tr><td>Borravaló</td><td></td><td class="pos">+${HUF(row.tips)}</td></tr>
     ${row.shortfall > 0 ? `<tr><td>Készpénz-hiány</td><td></td><td class="neg">−${HUF(row.shortfall)}</td></tr>` : ''}
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
-    <tr class="total"><td>Fizetendő</td><td></td><td>${HUF(row.total)}</td></tr>
+    <tr class="total"><td>Járandóság összesen</td><td></td><td>${HUF(row.earned)}</td></tr>
   </table>
+  <p class="none">A hónap közben már felvett előleg a kifizetéskor kerül elszámolásra.</p>
 
   <h2>Ledolgozott napok (${row.workedDays.length})</h2>
   ${row.workedDays.length === 0 ? '<p class="none">Nem volt ledolgozott nap ebben a hónapban.</p>' : `
