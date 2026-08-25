@@ -21,12 +21,20 @@ export default function ConfirmButton({
     return () => clearTimeout(t)
   }, [armed])
 
+  // FONTOS: a megerősítő gomb UGYANAZZAL a mérettel/pozícióval jelenik meg,
+  // mint az eredeti (className/style azonos) — ha kisebbre váltana, a második
+  // koppintás telefonon mellémenne, és a művelet sosem futna le.
+  // Mégse: 4 mp után magától visszaáll.
   if (armed) {
     return (
-      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-        <button type="button" className="btn danger sm auto" onClick={() => { setArmed(false); onConfirm() }}>{confirmLabel}</button>
-        <button type="button" className="btn ghost sm auto" onClick={() => setArmed(false)} aria-label="Mégse">✕</button>
-      </span>
+      <button
+        type="button"
+        className={className}
+        style={{ ...style, background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}
+        onClick={() => { setArmed(false); onConfirm() }}
+      >
+        ⚠️ {confirmLabel}
+      </button>
     )
   }
   return (
