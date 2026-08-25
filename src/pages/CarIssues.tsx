@@ -116,7 +116,21 @@ export default function CarIssues() {
         </div>
       )}
 
-      {(issues?.length ?? 0) === 0 && <div className="empty"><span className="ico">🔧</span>Nincs bejelentett hiba.</div>}
+      <div className="between">
+        <div className="card-title" style={{ margin: 0 }}>
+          {isCrew && !isManagerOrAdmin ? 'Mai bejelentéseim' : 'Bejelentések'}
+        </div>
+        {isCrew && !isManagerOrAdmin && (
+          <span className="tiny muted">Csak a mai saját bejelentéseid</span>
+        )}
+      </div>
+
+      {(issues?.length ?? 0) === 0 && (
+        <div className="empty">
+          <span className="ico">🔧</span>
+          {isCrew && !isManagerOrAdmin ? 'Ma még nem jelentettél be hibát.' : 'Nincs bejelentett hiba.'}
+        </div>
+      )}
 
       {issues?.map((i) => (
         <div key={i.id} className="card stack">
