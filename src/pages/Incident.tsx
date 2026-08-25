@@ -21,22 +21,18 @@ export default function Incident() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
-  // Az elmúlt 24 óra eseményei: a sajátjaim + ami a mai autómon történt
-  // (így ha ketten ülnek az autón, mindkettejük eseményét látja mindkét fél).
-  // A 24 órás korlátot a szerver (RLS) is kikényszeríti a munkatársaknál.
-  const carId = today?.car?.id
+  // A munkatárs CSAK a SAJÁT, MAI bejelentéseit látja — ugyanezt a szerver
+  // (RLS) is kikényszeríti, a vezetők pedig a teljes előzményt látják.
   const { data: list } = useQuery({
-    queryKey: ['incidents', currentWorkspaceId, profile?.id, carId],
+    queryKey: ['incidents', currentWorkspaceId, profile?.id, todayISO()],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
-      const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
-      let q = supabase.from('incidents').select('*')
+      const { data } = await supabase.from('incidents').select('*')
         .eq('workspace_id', currentWorkspaceId!)
-        .gte('created_at', since)
+        .eq('user_id', profile!.id)
+        .eq('work_date', todayISO())
         .order('created_at', { ascending: false })
         .limit(20)
-      q = carId ? q.or(`user_id.eq.${profile!.id},car_id.eq.${carId}`) : q.eq('user_id', profile!.id)
-      const { data } = await q
       const rows = data ?? []
       const [names, urls] = await Promise.all([
         resolveNames(rows.map((r) => r.user_id)),
@@ -94,7 +90,7 @@ export default function Incident() {
 
       {(list?.length ?? 0) > 0 && (
         <div className="card stack">
-          <div className="card-title">🕑 Események az elmúlt 24 órában</div>
+          <div className="card-title">🕑 Mai bejelentéseim</div>
           <p className="tiny muted" style={{ margin: 0 }}>
             A saját és a mai autódon rögzített események. Koppints a képre a teljes mérethez.
           </p>

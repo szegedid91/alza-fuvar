@@ -18,6 +18,15 @@ type CheckIn = {
   switch_reason: string | null
 }
 type Incident = { id: string; car_id: string | null; user_id: string; work_date: string; note: string | null; created_at: string }
+// Jóváhagyott sofőr ↔ rakodó csere (a beosztás napjához rendelve)
+type RoleSwap = {
+  id: string
+  requested_by: string
+  partner_id: string | null
+  decided_at: string | null
+  created_at: string
+  shift: { work_date: string; car_id: string } | null
+}
 type Issue = { id: string; car_id: string; user_id: string; note: string | null; status: Enums<'car_issue_status'>; created_at: string }
 
 function isoDaysAgo(n: number): string {
@@ -50,7 +59,7 @@ export default function History() {
     enabled: !!currentWorkspaceId && from <= to,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [carsRes, checkins, incidents, issues] = await Promise.all([
+      const [carsRes, checkins, incidents, issues, roleSwaps] = await Promise.all([
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll<CheckIn>((f, t) => supabase.from('check_ins')
           .select('car_id, prev_car_id, user_id, work_date, checked_in_at, checked_out_at, switch_reason')
@@ -66,14 +75,22 @@ export default function History() {
           .gte('created_at', new Date(`${from}T00:00:00`).toISOString())
           .lte('created_at', new Date(`${to}T23:59:59.999`).toISOString())
           .order('created_at').range(f, t)),
+        // Jóváhagyott sofőr ↔ rakodó cserék: a beosztás napja szerint szűrve
+        fetchAll<RoleSwap>((f, t) => supabase.from('swap_requests')
+          .select('id, requested_by, partner_id, decided_at, created_at, shift:shifts!inner(work_date, car_id)')
+          .eq('workspace_id', ws)
+          .eq('status', 'approved')
+          .gte('shifts.work_date', from).lte('shifts.work_date', to)
+          .order('id').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
       const names = await resolveNames([
         ...checkins.map((c) => c.user_id),
         ...incidents.map((i) => i.user_id),
         ...issues.map((i) => i.user_id),
+        ...roleSwaps.flatMap((s) => [s.requested_by, s.partner_id]),
       ])
-      return { cars: carsRes.data ?? [], checkins, incidents, issues, names }
+      return { cars: carsRes.data ?? [], checkins, incidents, issues, roleSwaps, names }
     },
   })
 
@@ -99,6 +116,10 @@ export default function History() {
     const incidents = data.incidents.filter((i) => okCar(i.car_id) && okPerson(i.user_id))
     const issues = data.issues.filter((i) => okCar(i.car_id) && okPerson(i.user_id))
     const switches = checkins.filter((c) => c.switch_reason != null)
+    // Sofőr ↔ rakodó cserék: a kérő VAGY a társ számít "érintettnek"
+    const roleSwaps = (data.roleSwaps ?? []).filter(
+      (s) => okCar(s.shift?.car_id ?? null) && (!filterPerson || s.requested_by === filterPerson || s.partner_id === filterPerson),
+    )
 
     // Statisztika: cserék okok szerint (a kettőspont előtti fő ok alapján)
     const reasonCounts = new Map<string, number>()
@@ -113,13 +134,14 @@ export default function History() {
       usage: { carId: string; plate: string; segments: { who: string; from: string; to: string | null }[] }[]
       switches: { who: string; fromPlate: string; toPlate: string; at: string; reason: string }[]
       timelines: { userId: string; who: string; entries: TimelineEntry[] }[]
+      roleSwaps: { id: string; who: string; partner: string | null; carId: string | null; at: string }[]
       incidents: Incident[]
       issues: Issue[]
     }
     const dayMap = new Map<string, DayGroup>()
     const day = (date: string): DayGroup => {
       let g = dayMap.get(date)
-      if (!g) { g = { date, usage: [], switches: [], timelines: [], incidents: [], issues: [] }; dayMap.set(date, g) }
+      if (!g) { g = { date, usage: [], switches: [], timelines: [], roleSwaps: [], incidents: [], issues: [] }; dayMap.set(date, g) }
       return g
     }
 
@@ -159,6 +181,17 @@ export default function History() {
       }
     }
 
+    for (const s of roleSwaps) {
+      if (!s.shift) continue
+      day(s.shift.work_date).roleSwaps.push({
+        id: s.id,
+        who: nm(s.requested_by) ?? '?',
+        partner: nm(s.partner_id),
+        carId: s.shift.car_id,
+        at: s.decided_at ?? s.created_at,
+      })
+    }
+
     for (const i of incidents) day(i.work_date).incidents.push(i)
     for (const i of issues) day(localDateOf(i.created_at)).issues.push(i)
 
@@ -169,11 +202,15 @@ export default function History() {
       stats: {
         dayCount: new Set(checkins.map((c) => c.work_date)).size,
         switchCount: switches.length,
+        roleSwapCount: roleSwaps.length,
         incidentCount: incidents.length,
         issueCount: issues.length,
         reasons: [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]),
       },
-      people: [...new Set([...checkins.map((c) => c.user_id), ...incidents.map((i) => i.user_id), ...issues.map((i) => i.user_id)])]
+      people: [...new Set([
+        ...checkins.map((c) => c.user_id), ...incidents.map((i) => i.user_id), ...issues.map((i) => i.user_id),
+        ...(data.roleSwaps ?? []).flatMap((s) => [s.requested_by, s.partner_id]).filter((x): x is string => !!x),
+      ])]
         .map((id) => ({ id, name: data.names[id] ?? 'munkatárs' }))
         .sort((a, b) => a.name.localeCompare(b.name, 'hu')),
     }
@@ -220,6 +257,7 @@ export default function History() {
             <option value="">📋 Minden típus</option>
             <option value="usage">🚚 Autóhasználat</option>
             <option value="switch">🔁 Autócserék</option>
+            <option value="roleswap">🔄 Sofőr ↔ rakodó cserék</option>
             <option value="incident">⚠️ Események / balesetek</option>
             <option value="issue">🔧 Autó-hibák</option>
           </select>
@@ -237,6 +275,7 @@ export default function History() {
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             <span className="badge">{view.stats.dayCount} munkanap</span>
             <span className="badge primary">🔁 {view.stats.switchCount} autócsere</span>
+            <span className="badge primary">🔄 {view.stats.roleSwapCount} szerepcsere</span>
             <span className="badge warning">⚠️ {view.stats.incidentCount} esemény</span>
             <span className="badge">🔧 {view.stats.issueCount} hiba</span>
           </div>
@@ -256,6 +295,7 @@ export default function History() {
         const hasContent =
           (show('usage') && g.usage.length > 0) ||
           (show('switch') && g.switches.length > 0) ||
+          (show('roleswap') && g.roleSwaps.length > 0) ||
           (show('incident') && g.incidents.length > 0) ||
           (show('issue') && g.issues.length > 0)
         if (!hasContent) return null
@@ -286,6 +326,17 @@ export default function History() {
               <div key={tl.userId} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--warning)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>🔁 Autócsere — {tl.who}</span>
                 <CarTimeline entries={tl.entries} />
+              </div>
+            ))}
+
+            {show('roleswap') && g.roleSwaps.map((s) => (
+              <div key={s.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
+                <span className="tiny" style={{ fontWeight: 700 }}>
+                  🔄 Sofőr ↔ rakodó csere{s.carId ? ` — ${carLabel(s.carId)}` : ''} · {t(s.at)}
+                </span>
+                <span className="small">
+                  {s.who}{s.partner ? ` ↔ ${s.partner}` : ''} — a menedzser jóváhagyta, a szerepek cserélődtek
+                </span>
               </div>
             ))}
 
