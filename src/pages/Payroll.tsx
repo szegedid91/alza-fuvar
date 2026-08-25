@@ -87,7 +87,7 @@ export default function Payroll() {
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount')
+        fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, reason')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('route_stops').select('recorded_by, tip')
           .gte('recorded_at', range.startISO).lt('recorded_at', range.endISO).not('tip', 'is', null).order('id').range(f, t)),
@@ -117,11 +117,17 @@ export default function Payroll() {
         daysByUser.get(c.user_id)!.set(c.work_date, c.workspace_id)
       }
 
+      // Előleg/levonás tételesen is (dátum + indok) — a bérlap napi bontásához
       const advByUser = new Map<string, number>()
       const dedByUser = new Map<string, number>()
+      const advItemsByUser = new Map<string, { date: string; amount: number; reason: string | null }[]>()
+      const dedItemsByUser = new Map<string, { date: string; amount: number; reason: string | null }[]>()
       for (const a of adj ?? []) {
         const map = a.type === 'advance' ? advByUser : dedByUser
         map.set(a.user_id, (map.get(a.user_id) ?? 0) + Number(a.amount))
+        const items = a.type === 'advance' ? advItemsByUser : dedItemsByUser
+        if (!items.has(a.user_id)) items.set(a.user_id, [])
+        items.get(a.user_id)!.push({ date: a.work_date, amount: Number(a.amount), reason: a.reason ?? null })
       }
       // Borravaló (pozitív) és készpénz-hiány (negatív tip) külön gyűjtve —
       // a hiány levonásként jelenik meg, nem "negatív borravalóként".
@@ -141,13 +147,19 @@ export default function Payroll() {
           let driverDays = 0
           let loaderDays = 0
           let base = 0
+          const workedDays: { date: string; role: 'driver' | 'loader'; rate: number }[] = []
           for (const [date, wsId] of dayMap) {
             const r = rates[wsId ?? p.workspace_id ?? '']
             // Ha nincs beosztott szerep aznap, rakodóként számoljuk (alacsonyabb díj)
             const daily = roleByUserDay.get(`${p.id}|${date}`) ?? 'loader'
-            if (daily === 'driver') { driverDays++; base += r ? r.driver : 0 }
-            else { loaderDays++; base += r ? r.loader : 0 }
+            const dayRate = daily === 'driver' ? (r?.driver ?? 0) : (r?.loader ?? 0)
+            if (daily === 'driver') driverDays++
+            else loaderDays++
+            base += dayRate
+            workedDays.push({ date, role: daily, rate: dayRate })
           }
+          workedDays.sort((a, b) => a.date.localeCompare(b.date))
+          const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date)
           const wsRate = rates[p.workspace_id ?? '']
           const tips = tipsByUser.get(p.id) ?? 0
           const shortfall = shortfallByUser.get(p.id) ?? 0
@@ -159,6 +171,9 @@ export default function Payroll() {
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0,
             tips, shortfall, advances, deductions, base,
             total: base + tips - shortfall - advances - deductions,
+            workedDays,
+            advanceItems: (advItemsByUser.get(p.id) ?? []).sort(byDate),
+            deductionItems: (dedItemsByUser.get(p.id) ?? []).sort(byDate),
           }
         })
         .sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))

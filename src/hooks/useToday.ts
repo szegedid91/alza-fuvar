@@ -3,13 +3,13 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO } from '../lib/labels'
-import { getCrewForDay, type Car, type CrewMember } from '../lib/checkin'
+import { getCrewForDay, type CarWithCategory, type CrewMember } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
 
 export interface TodayState {
   date: string
   checkin: Tables<'check_ins'> | null
-  car: Car | null
+  car: CarWithCategory | null
   crew: CrewMember[]
   // A mai beosztott szerep a beosztásból (nem a profilból) — a menedzser dönti el.
   assignedRole: 'driver' | 'loader' | null
@@ -33,7 +33,7 @@ export function useToday() {
       const [{ data: ci, error: ciErr }, { data: shift, error: shErr }] = await Promise.all([
         supabase
           .from('check_ins')
-          .select('*, car:cars!check_ins_car_id_fkey(*)')
+          .select('*, car:cars!check_ins_car_id_fkey(*, category:car_categories(name, crew_size))')
           .eq('workspace_id', currentWorkspaceId!)
           .eq('user_id', profile!.id)
           .eq('work_date', date)
@@ -54,7 +54,7 @@ export function useToday() {
       if (ciErr) throw ciErr
       if (shErr) throw shErr
 
-      const row = ci as unknown as (Tables<'check_ins'> & { car: Car | null }) | null
+      const row = ci as unknown as (Tables<'check_ins'> & { car: CarWithCategory | null }) | null
       const checkin = row ? ({ ...row, car: undefined } as unknown as Tables<'check_ins'>) : null
       const car = row?.car ?? null
       const crew = car ? await getCrewForDay(car.id, date) : []

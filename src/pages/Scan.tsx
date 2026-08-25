@@ -214,7 +214,10 @@ export default function Scan() {
           </div>
           <div className="divider" />
           <div>
-            <div className="muted small" style={{ marginBottom: 6 }}>Mai páros</div>
+            {/* Box (1 fős) autón nincs társ — a régi cache-ben nincs category, akkor párost mutatunk */}
+            <div className="muted small" style={{ marginBottom: 6 }}>
+              {today.car.category?.crew_size === 1 ? 'Ma az autón' : 'Mai páros'}
+            </div>
             <div className="list">
               {today.crew.map((c) => (
                 <div key={c.user_id} className="row between">
@@ -222,7 +225,9 @@ export default function Scan() {
                   <span className="tiny muted">{formatDateTime(c.checked_in_at)}</span>
                 </div>
               ))}
-              {today.crew.length < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
+              {today.car.category?.crew_size === 1
+                ? <div className="tiny muted">1 fős autó — ma egyedül dolgozol.</div>
+                : today.crew.length < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
             </div>
           </div>
           <div className="divider" />

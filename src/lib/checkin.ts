@@ -4,6 +4,9 @@ import type { Enums, Tables } from './database.types'
 
 export type Car = Tables<'cars'>
 
+// Autó a kategóriájával — a crew_size mondja meg, hányan dolgoznak rajta (Box = 1 fő)
+export type CarWithCategory = Car & { category: { name: string; crew_size: number } | null }
+
 export interface CrewMember {
   user_id: string
   full_name: string | null

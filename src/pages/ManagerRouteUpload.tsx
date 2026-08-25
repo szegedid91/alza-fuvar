@@ -97,7 +97,11 @@ export default function ManagerRouteUpload() {
             <label>Autó</label>
             <select className="select" value={carId} onChange={(e) => setCarId(e.target.value)}>
               <option value="">— válassz —</option>
-              {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+              {cars?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.plate}{c.category?.name ? ` · ${c.category.name}` : ''}{c.label ? ` · ${c.label}` : ''}
+                </option>
+              ))}
             </select>
           </div>
           <div className="field">

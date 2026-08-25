@@ -20,6 +20,11 @@ export function currentYm(): string {
   return todayISO().slice(0, 7)
 }
 
+// Napi részletek a bérlaphoz: mikor dolgozott és milyen szerepben,
+// mikor kapott előleget, és mi a levonás indoka.
+export interface WorkedDay { date: string; role: 'driver' | 'loader'; rate: number }
+export interface AdjustmentItem { date: string; amount: number; reason: string | null }
+
 // Csapat-szintű, szerep szerinti napidíjak: a bér a napi beosztott szerep
 // (sofőr/rakodó) szerint áll össze. A ledolgozott napok a becsekkolásból,
 // a napi szerep a beosztásból (shift) származik.
@@ -39,4 +44,7 @@ export interface PayrollRow {
   deductions: number
   base: number
   total: number
+  workedDays: WorkedDay[]
+  advanceItems: AdjustmentItem[]
+  deductionItems: AdjustmentItem[]
 }

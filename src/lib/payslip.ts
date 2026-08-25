@@ -2,6 +2,15 @@ import type { PayrollRow } from './payroll'
 
 const HUF = (n: number) => new Intl.NumberFormat('hu-HU', { style: 'currency', currency: 'HUF', maximumFractionDigits: 0 }).format(n)
 
+const WEEKDAY = ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat']
+
+// 'YYYY-MM-DD' → '07.01. hétfő' — helyi naptári napként értelmezve (nem UTC)
+function fmtDay(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const wd = WEEKDAY[new Date(y, m - 1, d).getDay()]
+  return `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}. ${wd}`
+}
+
 // Nyomtatható bérlap külön ablakban — a böngésző "Mentés PDF-ként" opciójával
 // lesz belőle PDF. Szándékosan függőség-mentes (nincs jsPDF).
 export function openPayslip(row: PayrollRow, ym: string): void {
@@ -18,6 +27,11 @@ export function openPayslip(row: PayrollRow, ym: string): void {
   .total td { font-weight: 800; font-size: 16px; border-top: 2px solid #111; border-bottom: none; }
   .neg { color: #b00020; }
   .pos { color: #0a7d33; }
+  h2 { font-size: 14px; margin: 26px 0 4px; }
+  .days { columns: 2; column-gap: 32px; margin-top: 6px; }
+  .dayrow { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #eee; break-inside: avoid; }
+  .detail td, .detail th { font-size: 12px; padding: 5px 8px; }
+  .none { font-size: 12px; color: #888; margin: 4px 0 0; }
   .foot { margin-top: 40px; font-size: 12px; color: #888; }
   .sig { margin-top: 60px; display: flex; justify-content: space-between; gap: 40px; }
   .sig div { flex: 1; border-top: 1px solid #111; padding-top: 6px; font-size: 12px; text-align: center; color: #444; }
@@ -36,6 +50,27 @@ export function openPayslip(row: PayrollRow, ym: string): void {
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
     <tr class="total"><td>Fizetendő</td><td></td><td>${HUF(row.total)}</td></tr>
   </table>
+
+  <h2>Ledolgozott napok (${row.workedDays.length})</h2>
+  ${row.workedDays.length === 0 ? '<p class="none">Nem volt ledolgozott nap ebben a hónapban.</p>' : `
+  <div class="days">
+    ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${w.role === 'driver' ? 'Sofőr' : 'Rakodó'} · ${HUF(w.rate)}</span></div>`).join('')}
+  </div>`}
+
+  <h2>Előlegek</h2>
+  ${row.advanceItems.length === 0 ? '<p class="none">Nem volt előleg ebben a hónapban.</p>' : `
+  <table class="detail">
+    <tr><th>Dátum</th><th>Megjegyzés</th><th>Összeg</th></tr>
+    ${row.advanceItems.map((a) => `<tr><td>${fmtDay(a.date)}</td><td>${a.reason ? esc(a.reason) : '—'}</td><td class="neg">−${HUF(a.amount)}</td></tr>`).join('')}
+  </table>`}
+
+  <h2>Levonások</h2>
+  ${row.deductionItems.length === 0 ? '<p class="none">Nem volt levonás ebben a hónapban.</p>' : `
+  <table class="detail">
+    <tr><th>Dátum</th><th>Indok</th><th>Összeg</th></tr>
+    ${row.deductionItems.map((a) => `<tr><td>${fmtDay(a.date)}</td><td>${a.reason ? esc(a.reason) : '—'}</td><td class="neg">−${HUF(a.amount)}</td></tr>`).join('')}
+  </table>`}
+
   <div class="sig"><div>Munkáltató</div><div>Munkavállaló</div></div>
   <div class="foot">Készült: ${new Date().toLocaleString('hu-HU')} · Alza Fuvarszervező</div>
   <script>window.print()</script>

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { resolveNames } from '../lib/names'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, swapStatusLabel } from '../lib/labels'
+import { todayISO, formatDate, formatHuf, swapStatusLabel } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import type { Tables } from '../lib/database.types'
 
@@ -158,15 +158,16 @@ export default function MySchedule() {
     queryKey: ['my-adj-today', currentWorkspaceId, profile?.id, today],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
+      // A munkatárs csak az előlegeit látja — a levonás a vezetőség/bérlap dolga
       const { data } = await supabase.from('adjustments').select('*')
         .eq('workspace_id', currentWorkspaceId!)
-        .eq('user_id', profile!.id).eq('work_date', today).order('created_at')
+        .eq('user_id', profile!.id).eq('work_date', today)
+        .eq('type', 'advance').order('created_at')
       return data ?? []
     },
   })
 
-  const advances = (todayAdj ?? []).filter((a) => a.type === 'advance').reduce((s, a) => s + Number(a.amount), 0)
-  const deductions = (todayAdj ?? []).filter((a) => a.type === 'deduction').reduce((s, a) => s + Number(a.amount), 0)
+  const advances = (todayAdj ?? []).reduce((s, a) => s + Number(a.amount), 0)
 
   // Név-térkép a bejövő kérések kiírásához (a shifts lekérdezés _names-éből)
   const anyNames = (shifts?.[0]?._names ?? {}) as Record<string, string>
@@ -257,16 +258,13 @@ export default function MySchedule() {
       </div>
 
       <div className="card">
-        <div className="card-title">Mai előleg / levonás</div>
-        <div className="grid-2">
-          <div className="between"><span className="muted small">Előleg</span><span className="badge warning">{formatHuf(advances)}</span></div>
-          <div className="between"><span className="muted small">Levonás</span><span className="badge danger">{formatHuf(deductions)}</span></div>
-        </div>
+        <div className="card-title">Mai előleg</div>
+        <div className="between"><span className="muted small">Előleg</span><span className="badge warning">{formatHuf(advances)}</span></div>
         {(todayAdj?.length ?? 0) > 0 && (
           <div className="list" style={{ marginTop: 10 }}>
             {todayAdj!.map((a) => (
               <div key={a.id} className="between">
-                <span className="small">{adjustmentTypeLabel[a.type]}{a.reason ? ` · ${a.reason}` : ''}</span>
+                <span className="small">Előleg{a.reason ? ` · ${a.reason}` : ''}</span>
                 <span className="small">{formatHuf(Number(a.amount))}</span>
               </div>
             ))}
