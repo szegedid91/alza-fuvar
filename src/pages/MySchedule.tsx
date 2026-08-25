@@ -86,7 +86,28 @@ export default function MySchedule() {
       if (error) throw error
       return (data ?? []) as SwapRequest[]
     },
+    // Tartalék: ha a realtime kapcsolat épp megszakadt (pl. iOS háttér után),
+    // 20 mp-enként akkor is frissül — nem kell kézzel frissíteni az appot
+    refetchInterval: 20_000,
   })
+
+  // Élő frissítés: ha cserekérés érkezik hozzám (vagy az enyém változik),
+  // azonnal megjelenik a döntő kártya / az új állapot.
+  useEffect(() => {
+    if (!profile?.id) return
+    const invalidate = () => {
+      void qc.invalidateQueries({ queryKey: ['my-swaps'] })
+      // jóváhagyott csere a beosztást is átírja (sofőr ↔ rakodó)
+      void qc.invalidateQueries({ queryKey: ['my-shifts'] })
+      void qc.invalidateQueries({ queryKey: ['my-week'] })
+    }
+    const ch = supabase
+      .channel(`my-swaps-${profile.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `partner_id=eq.${profile.id}` }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `requested_by=eq.${profile.id}` }, invalidate)
+      .subscribe()
+    return () => { void supabase.removeChannel(ch) }
+  }, [profile?.id, qc])
 
   const [actionError, setActionError] = useState<string | null>(null)
 
