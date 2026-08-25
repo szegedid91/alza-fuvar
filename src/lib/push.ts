@@ -54,12 +54,12 @@ export async function unsubscribePush(): Promise<void> {
   }
 }
 
-// Push küldése (a send-push edge function-ön keresztül)
-export async function sendPush(userIds: string[], title: string, body: string, url = '/'): Promise<void> {
-  if (userIds.length === 0) return
-  try {
-    await supabase.functions.invoke('send-push', { body: { user_ids: userIds, title, body, url } })
-  } catch (e) {
-    console.error('Push küldési hiba:', e)
-  }
+// Push küldése (a send-push edge function-ön keresztül).
+// Visszaadja, hány ESZKÖZRE sikerült ténylegesen kézbesíteni — hibánál dob,
+// hogy a hívó ne mutathasson hamis "kiküldve" állapotot.
+export async function sendPush(userIds: string[], title: string, body: string, url = '/'): Promise<number> {
+  if (userIds.length === 0) return 0
+  const { data, error } = await supabase.functions.invoke('send-push', { body: { user_ids: userIds, title, body, url } })
+  if (error) throw new Error(error instanceof Error ? error.message : 'a küldés nem érte el a szervert')
+  return (data as { sent?: number } | null)?.sent ?? 0
 }

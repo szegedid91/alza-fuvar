@@ -77,7 +77,7 @@ function PendingCard({
         p_workspace_id: workspaceId,
       })
       if (error) throw error
-      void sendPush([user.id], 'Fiók jóváhagyva', 'A fiókodat jóváhagyták, beléphetsz az Alza appba.', '/')
+      void sendPush([user.id], 'Fiók jóváhagyva', 'A fiókodat jóváhagyták, beléphetsz az Alza appba.', '/').catch(() => undefined)
     },
     onSuccess: onDone,
     onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),

@@ -425,15 +425,23 @@ function WeekTable() {
         add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr')
         add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó')
       }
-      let sent = 0
-      for (const [uid, entries] of byUser) {
-        entries.sort((a, b) => a.date.localeCompare(b.date))
-        const dayCount = new Set(entries.map((e) => e.date)).size
-        const body = `${formatDate(weekStart)} – ${formatDate(days[6])}: ${dayCount} nap — ${entries.map((e) => e.text).join(', ')}`
-        await sendPush([uid], '📅 Megjött a heti beosztásod', body, '/beosztas')
-        sent++
-      }
-      setPublishMsg(`✅ Beosztás kiküldve ${sent} munkatársnak. (Csak az kapja meg, akinél be vannak kapcsolva az értesítések.)`)
+      // Párhuzamosan megy minden címzettnek; a szerver megmondja, hány ESZKÖZRE
+      // sikerült ténylegesen kézbesíteni — ezt írjuk ki, nem vak "kiküldve"-t.
+      const results = await Promise.all(
+        [...byUser.entries()].map(async ([uid, entries]) => {
+          entries.sort((a, b) => a.date.localeCompare(b.date))
+          const dayCount = new Set(entries.map((e) => e.date)).size
+          const body = `${formatDate(weekStart)} – ${formatDate(days[6])}: ${dayCount} nap — ${entries.map((e) => e.text).join(', ')}`
+          const devices = await sendPush([uid], '📅 Megjött a heti beosztásod', body, '/beosztas')
+          return devices > 0 ? 1 : 0
+        }),
+      )
+      const reached = results.reduce((a: number, b) => a + b, 0)
+      setPublishMsg(
+        reached === 0
+          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el a push — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).`
+          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached}-t ért el a push. A többieknél nincs bekapcsolva az értesítés.`,
+      )
     } catch (e) {
       setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
     } finally {
