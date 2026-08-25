@@ -10,11 +10,48 @@ import type { Tables } from '../lib/database.types'
 
 type SwapRequest = Tables<'swap_requests'>
 
+const DAY_NAMES = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
+
+// Helyi (Budapest) naptári nap ISO formában — nem UTC!
+const localISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
 export default function MySchedule() {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const today = todayISO()
+
+  // Heti nézet: 0 = aktuális hét, -1 = előző, +1 = következő
+  const [weekOffset, setWeekOffset] = useState(0)
+  const weekDays = (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + weekOffset * 7) // hétfő
+    return Array.from({ length: 7 }, (_, i) => {
+      const x = new Date(d)
+      x.setDate(d.getDate() + i)
+      return localISO(x)
+    })
+  })()
+
+  const { data: weekShifts } = useQuery({
+    queryKey: ['my-week', currentWorkspaceId, profile?.id, weekDays[0]],
+    enabled: !!currentWorkspaceId && !!profile,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*, car:cars(plate,label,category:car_categories(name))')
+        .eq('workspace_id', currentWorkspaceId!)
+        .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id}`)
+        .gte('work_date', weekDays[0])
+        .lte('work_date', weekDays[6])
+        .order('work_date')
+      if (error) throw error
+      const rows = data ?? []
+      const names = await resolveNames(rows.flatMap((s) => [s.driver_id, s.loader_id]))
+      return rows.map((s) => ({ ...s, _names: names }))
+    },
+  })
 
   const { data: shifts, isLoading } = useQuery({
     queryKey: ['my-shifts', currentWorkspaceId, profile?.id],
@@ -163,6 +200,61 @@ export default function MySchedule() {
           <p className="tiny muted" style={{ margin: 0 }}>A végső szót a menedzser mondja ki.</p>
         </div>
       )}
+
+      <div className="card stack" style={{ gap: 8 }}>
+        <div className="between">
+          <div className="card-title" style={{ marginBottom: 0 }}>📆 Heti nézet</div>
+          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+            <button className="btn ghost sm" onClick={() => setWeekOffset((o) => o - 1)} aria-label="Előző hét">‹</button>
+            {weekOffset !== 0 && (
+              <button className="btn ghost sm" onClick={() => setWeekOffset(0)}>Ma</button>
+            )}
+            <button className="btn ghost sm" onClick={() => setWeekOffset((o) => o + 1)} aria-label="Következő hét">›</button>
+          </div>
+        </div>
+        <div className="tiny muted">{formatDate(weekDays[0])} – {formatDate(weekDays[6])}</div>
+        <div className="stack" style={{ gap: 0 }}>
+          {weekDays.map((dISO, i) => {
+            const sh = (weekShifts ?? []).find((s) => s.work_date === dISO)
+            const isToday = dISO === today
+            const car = sh?.car as unknown as { plate: string; label: string | null; category: { name: string } | null } | null
+            const names = (sh?._names ?? {}) as Record<string, string>
+            const iAmDriver = sh?.driver_id === profile?.id
+            const partnerId = sh ? (iAmDriver ? sh.loader_id : sh.driver_id) : null
+            return (
+              <div
+                key={dISO}
+                className="between"
+                style={{
+                  padding: '6px 8px',
+                  borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                  borderRadius: isToday ? 8 : 0,
+                  background: isToday ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
+                  opacity: sh ? 1 : 0.55,
+                }}
+              >
+                <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+                  <span className="small" style={{ fontWeight: isToday ? 800 : 600, minWidth: 78 }}>
+                    {DAY_NAMES[i]}{isToday ? ' · ma' : ''}
+                  </span>
+                  {sh ? (
+                    <span className="small">
+                      {car?.category?.name ? `${car.category.name} · ` : ''}{car?.plate ?? '–'}
+                      {partnerId && names[partnerId] ? <span className="muted"> · {names[partnerId]}</span> : null}
+                    </span>
+                  ) : (
+                    <span className="small muted">Szabadnap</span>
+                  )}
+                </div>
+                {sh && <span className="badge primary">{iAmDriver ? 'Sofőr' : 'Rakodó'}</span>}
+              </div>
+            )
+          })}
+        </div>
+        <div className="tiny muted" style={{ textAlign: 'right' }}>
+          Ezen a héten: {(weekShifts ?? []).length} nap
+        </div>
+      </div>
 
       <div className="card">
         <div className="card-title">Mai előleg / levonás</div>
