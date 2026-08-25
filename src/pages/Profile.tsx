@@ -53,6 +53,10 @@ export default function ProfilePage() {
       <PushCard />
 
       <button className="btn danger" onClick={() => void signOut()}>Kilépés</button>
+
+      <p className="tiny muted" style={{ textAlign: 'center', margin: 0 }}>
+        Verzió: {new Date(__BUILD_TIME__).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}
+      </p>
     </div>
   )
 }
