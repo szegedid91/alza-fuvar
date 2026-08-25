@@ -20,6 +20,7 @@ import MySchedule from './pages/MySchedule'
 import Adjustments from './pages/Adjustments'
 import RoutePage from './pages/Route'
 import Payroll from './pages/Payroll'
+import Statistics from './pages/Statistics'
 import PhotoReview from './pages/PhotoReview'
 import Dashboard from './pages/Dashboard'
 import ManagerRouteUpload from './pages/ManagerRouteUpload'
@@ -93,6 +94,7 @@ export default function App() {
         {isManagerOrAdmin && <Route path="/elolegek" element={<Adjustments />} />}
         {isManagerOrAdmin && <Route path="/bizonyitek" element={<Evidence />} />}
         {isAdmin && <Route path="/ber" element={<Payroll />} />}
+        {isAdmin && <Route path="/statisztika" element={<Statistics />} />}
         {isManagerOrAdmin && <Route path="/kepek" element={<PhotoReview />} />}
         {isManagerOrAdmin && <Route path="/tortenet" element={<History />} />}
         {isAdmin && <Route path="/naplo" element={<AuditLog />} />}
