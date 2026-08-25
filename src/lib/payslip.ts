@@ -46,7 +46,6 @@ export function openPayslip(row: PayrollRow, ym: string): void {
     <tr><td>Alapbér összesen</td><td>${row.days} ledolgozott nap</td><td>${HUF(row.base)}</td></tr>
     <tr><td>Borravaló</td><td></td><td class="pos">+${HUF(row.tips)}</td></tr>
     ${row.shortfall > 0 ? `<tr><td>Készpénz-hiány</td><td></td><td class="neg">−${HUF(row.shortfall)}</td></tr>` : ''}
-    <tr><td>Előleg</td><td></td><td class="neg">−${HUF(row.advances)}</td></tr>
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
     <tr class="total"><td>Fizetendő</td><td></td><td>${HUF(row.total)}</td></tr>
   </table>
@@ -56,13 +55,6 @@ export function openPayslip(row: PayrollRow, ym: string): void {
   <div class="days">
     ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${w.role === 'driver' ? 'Sofőr' : 'Rakodó'} · ${HUF(w.rate)}</span></div>`).join('')}
   </div>`}
-
-  <h2>Előlegek</h2>
-  ${row.advanceItems.length === 0 ? '<p class="none">Nem volt előleg ebben a hónapban.</p>' : `
-  <table class="detail">
-    <tr><th>Dátum</th><th>Megjegyzés</th><th>Összeg</th></tr>
-    ${row.advanceItems.map((a) => `<tr><td>${fmtDay(a.date)}</td><td>${a.reason ? esc(a.reason) : '—'}</td><td class="neg">−${HUF(a.amount)}</td></tr>`).join('')}
-  </table>`}
 
   <h2>Levonások</h2>
   ${row.deductionItems.length === 0 ? '<p class="none">Nem volt levonás ebben a hónapban.</p>' : `

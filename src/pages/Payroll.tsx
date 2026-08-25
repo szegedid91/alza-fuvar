@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useAuth } from '../context/AuthContext'
 import { monthRange, currentYm, type PayrollRow } from '../lib/payroll'
-import { formatHuf, isCrewRole, formatDateTime, parseHuNumber } from '../lib/labels'
+import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { openPayslip } from '../lib/payslip'
 import type { Tables } from '../lib/database.types'
@@ -312,6 +312,18 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         <div className="between"><span className="muted">Előleg</span><span style={{ color: 'var(--warning)' }}>−{formatHuf(row.advances)}</span></div>
         <div className="between"><span className="muted">Levonás</span><span style={{ color: 'var(--danger)' }}>−{formatHuf(row.deductions)}</span></div>
       </div>
+
+      {row.advanceItems.length > 0 && (
+        <div className="stack" style={{ gap: 2 }}>
+          <div className="tiny muted" style={{ fontWeight: 700 }}>Előlegek — csak itt látható, a bérlapra nem kerül rá</div>
+          {row.advanceItems.map((a, i) => (
+            <div key={i} className="between tiny">
+              <span className="muted">{formatDate(a.date)}{a.reason ? ` · ${a.reason}` : ''}</span>
+              <span style={{ color: 'var(--warning)' }}>−{formatHuf(a.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <button className="btn secondary sm" onClick={() => openPayslip(row, ym)}>📄 Bérlap (nyomtatás / PDF)</button>
     </div>
