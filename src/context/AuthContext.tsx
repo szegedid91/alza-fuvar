@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
 import { clearOutbox } from '../lib/outbox'
-import { RECOVERY_IN_URL, RECOVERY_URL_ERROR } from '../lib/recovery'
+import { RECOVERY_IN_URL, RECOVERY_URL_ERROR, markRecoveryPending, clearRecoveryPending, isRecoveryPending } from '../lib/recovery'
 import type { Tables } from '../lib/database.types'
 
 export type Profile = Tables<'profiles'>
@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   // A linkből induló visszaállítást a hash már az induláskor jelzi; a
   // PASSWORD_RECOVERY esemény ezt később megerősíti
-  const [recovery, setRecovery] = useState(RECOVERY_IN_URL || RECOVERY_URL_ERROR != null)
+  const [recovery, setRecovery] = useState(RECOVERY_IN_URL || RECOVERY_URL_ERROR != null || isRecoveryPending())
 
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
+      if (event === 'PASSWORD_RECOVERY') { markRecoveryPending(); setRecovery(true) }
       // A callbackben tilos Supabase-hívást await-elni (auth-lock holtpont a
       // token-frissítésnél) — setTimeout-tal lépünk ki belőle. Azon belül
       // előbb a profil, aztán a session — így nincs olyan render-pillanat,
@@ -114,12 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setProfile(null)
     setRecovery(false)
+    clearRecoveryPending()
     await clearLocalUserData()
   }, [])
 
   // A jelszó beállítása (vagy elvetése) után az app normál módban fut tovább;
   // a hash-t is takarítjuk, hogy újratöltésnél ne induljon újra a folyamat
   const endRecovery = useCallback(() => {
+    clearRecoveryPending()
     setRecovery(false)
     try { window.history.replaceState(null, '', '/') } catch { /* n/a */ }
   }, [])

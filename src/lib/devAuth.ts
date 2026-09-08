@@ -31,12 +31,13 @@ const DEV_PASSWORDS: Record<string, string> = Object.fromEntries(
     .map(([email, pw]) => [email.trim(), pw.trim()]),
 )
 
-const DEV_ACCOUNT_META: Omit<DevAccount, 'password'>[] = [
+// A ternárius miatt éles buildben a lista (és benne az email címek) kiesik
+const DEV_ACCOUNT_META: Omit<DevAccount, 'password'>[] = import.meta.env.DEV ? [
   { key: 'crew1',   label: 'Munkatárs 1', sub: 'crew — napi szerep a beosztásból', icon: '🧑‍🔧', email: 'sofor.teszt@alza.hu' },
   { key: 'crew2',   label: 'Munkatárs 2', sub: 'crew — napi szerep a beosztásból', icon: '🧑‍🔧', email: 'rakodo.teszt@alza.hu' },
   { key: 'manager', label: 'Menedzser',   sub: 'beosztás, jóváhagyás',             icon: '🧭', email: 'manager.teszt@alza.hu' },
   { key: 'admin',   label: 'Admin',       sub: 'minden munkaterület, bér',         icon: '🛠️', email: 'admin@alza.hu' },
-]
+] : []
 
 // Csak azok a gombok jelennek meg, amikhez a .env.local ad jelszót
 export const DEV_ACCOUNTS: DevAccount[] = DEV_ACCOUNT_META

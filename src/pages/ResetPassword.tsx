@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { RECOVERY_URL_ERROR } from '../lib/recovery'
+import { RECOVERY_URL_ERROR, clearRecoveryPending } from '../lib/recovery'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
@@ -21,6 +21,9 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
     try {
       const { error } = await supabase.auth.updateUser({ password: pw })
       if (error) throw error
+      // A jelszó megvan: a "függőben" jelölés azonnal megszűnik, akkor is, ha a
+      // felhasználó nem nyom a "Tovább az appba" gombra
+      clearRecoveryPending()
       setDone(true)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Ismeretlen hiba'

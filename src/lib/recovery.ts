@@ -21,3 +21,24 @@ export const RECOVERY_URL_ERROR: string | null = (() => {
 
 // A visszaállító útvonal — ide irányít az emailben lévő link
 export const RECOVERY_PATH = '/jelszo-visszaallitas'
+
+// A visszaállítás "függőben" jelzése. Enélkül a linkkel érkező munkamenet
+// egyszerű újratöltéssel az egész appot megnyitná ANÉLKÜL, hogy jelszót
+// állítottak volna — a jelölés miatt a jelszó beállításáig (vagy kilépésig)
+// csak a jelszó-képernyő jön elő.
+const PENDING_KEY = 'alza-recovery-pending'
+
+export function markRecoveryPending(): void {
+  try { localStorage.setItem(PENDING_KEY, '1') } catch { /* tele van a tár */ }
+}
+export function clearRecoveryPending(): void {
+  try { localStorage.removeItem(PENDING_KEY) } catch { /* n/a */ }
+}
+export function isRecoveryPending(): boolean {
+  try { return localStorage.getItem(PENDING_KEY) === '1' } catch { return false }
+}
+
+// A linkkel érkezés azonnal "függőben"-re állít: a Supabase PASSWORD_RECOVERY
+// eseménye nem minden böngészőben/időzítésben tüzel, a jelölés viszont túléli
+// az újratöltést is.
+if (RECOVERY_IN_URL) markRecoveryPending()
