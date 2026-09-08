@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { resolveNames } from '../lib/names'
+import { resolveContacts, telHref } from '../lib/names'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO, formatDate, formatHuf, swapStatusLabel } from '../lib/labels'
@@ -51,8 +51,8 @@ export default function MySchedule() {
         .order('work_date')
       if (error) throw error
       const rows = data ?? []
-      const names = await resolveNames(rows.flatMap((s) => [s.driver_id, s.loader_id]))
-      return rows.map((s) => ({ ...s, _names: names }))
+      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id]))
+      return rows.map((s) => ({ ...s, _contacts: contacts }))
     },
   })
 
@@ -69,8 +69,8 @@ export default function MySchedule() {
         .order('work_date')
       if (error) throw error
       const rows = data ?? []
-      const names = await resolveNames(rows.flatMap((s) => [s.driver_id, s.loader_id]))
-      return rows.map((s) => ({ ...s, _names: names }))
+      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id]))
+      return rows.map((s) => ({ ...s, _contacts: contacts }))
     },
   })
 
@@ -203,8 +203,9 @@ export default function MySchedule() {
 
   const advances = (todayAdj ?? []).reduce((s, a) => s + Number(a.amount), 0)
 
-  // Név-térkép a bejövő kérések kiírásához (a shifts lekérdezés _names-éből)
-  const anyNames = (shifts?.[0]?._names ?? {}) as Record<string, string>
+  // Név-térkép a bejövő kérések kiírásához (a shifts lekérdezés _contacts-jából)
+  type Contact = { name: string | null; phone: string | null }
+  const anyContacts = (shifts?.[0]?._contacts ?? {}) as Record<string, Contact>
 
   return (
     <div className="stack">
@@ -220,7 +221,7 @@ export default function MySchedule() {
             return (
               <div key={r.id} className="stack" style={{ gap: 6 }}>
                 <div className="small">
-                  <strong>{anyNames[r.requested_by] ?? 'Egy munkatárs'}</strong> cserélne veled
+                  <strong>{anyContacts[r.requested_by]?.name ?? 'Egy munkatárs'}</strong> cserélne veled
                   {sh ? ` (${formatDate(sh.work_date)} — sofőr ↔ rakodó)` : ' (sofőr ↔ rakodó)'}.
                 </div>
                 <div className="btn-grid">
@@ -253,7 +254,7 @@ export default function MySchedule() {
             const sh = (weekShifts ?? []).find((s) => s.work_date === dISO)
             const isToday = dISO === today
             const car = sh?.car as unknown as { plate: string; label: string | null; category: { name: string } | null } | null
-            const names = (sh?._names ?? {}) as Record<string, string>
+            const contacts = (sh?._contacts ?? {}) as Record<string, Contact>
             const iAmDriver = sh?.driver_id === profile?.id
             const partnerId = sh ? (iAmDriver ? sh.loader_id : sh.driver_id) : null
             return (
@@ -275,7 +276,9 @@ export default function MySchedule() {
                   {sh ? (
                     <span className="small">
                       {car?.category?.name ? `${car.category.name} · ` : ''}{car?.plate ?? '–'}
-                      {partnerId && names[partnerId] ? <span className="muted"> · {names[partnerId]}</span> : null}
+                      {partnerId && contacts[partnerId]?.name ? (
+                        <span className="muted"> · {contacts[partnerId]!.name}</span>
+                      ) : null}
                     </span>
                   ) : (
                     <span className="small muted">Szabadnap</span>
@@ -320,10 +323,11 @@ export default function MySchedule() {
 
       {shifts?.map((s) => {
         const car = s.car as unknown as { plate: string; label: string | null } | null
-        const names = (s._names ?? {}) as Record<string, string>
+        const contacts = (s._contacts ?? {}) as Record<string, Contact>
         const iAmDriver = s.driver_id === profile?.id
         const partnerId = iAmDriver ? s.loader_id : s.driver_id
-        const partner = partnerId ? names[partnerId] : null
+        const partner = partnerId ? contacts[partnerId]?.name ?? null : null
+        const partnerTel = partnerId ? telHref(contacts[partnerId]?.phone) : null
         const myRole = iAmDriver ? 'Sofőr' : 'Rakodó'
         // Legutóbbi cserekérés ehhez a shifthez
         const swap = (swaps ?? []).find((r) => r.shift_id === s.id)
@@ -338,7 +342,17 @@ export default function MySchedule() {
             </div>
             <div className="between">
               <span className="muted small">Társ</span>
-              <span className="small">{partner || 'Nincs megadva'}</span>
+              {partnerTel ? (
+                // Egy koppintás = hívás (a telefon tárcsázója nyílik meg)
+                <a className="btn secondary sm auto" href={partnerTel} style={{ textDecoration: 'none' }}>
+                  📞 {partner || 'Társ'}
+                </a>
+              ) : (
+                <span className="small">
+                  {partner || 'Nincs megadva'}
+                  {partner && <span className="tiny muted"> · nincs telefonszám</span>}
+                </span>
+              )}
             </div>
             {partnerId && !swapWindowOpen(s.work_date) && (
               <span className="tiny muted">🔄 Cserét legfeljebb egy héttel előre lehet kérni.</span>

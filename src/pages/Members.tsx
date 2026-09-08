@@ -236,6 +236,34 @@ export default function Members() {
     onError: (e) => setActionError('A szerep mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
+  // Tag törlése. A szerver alapból MEGTAGADJA, ha munka-/bér-adat tartozik hozzá
+  // (ADATOS_TAG hiba) — ilyenkor megmutatjuk, mi veszne el, és a felhasználó
+  // dönthet a végleges törlésről vagy a letiltásról.
+  const [deleteWarn, setDeleteWarn] = useState<{ id: string; name: string; details: string } | null>(null)
+
+  const removeMember = useMutation({
+    mutationFn: async ({ id, force }: { id: string; force: boolean }) => {
+      const { error } = await supabase.rpc('delete_member', { target_id: id, p_force: force })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setActionError(null); setDeleteWarn(null)
+      void qc.invalidateQueries({ queryKey: ['members'] })
+    },
+    onError: (e, vars) => {
+      const msg = e instanceof Error ? e.message : 'ismeretlen hiba'
+      const m = msg.match(/ADATOS_TAG:\s*(.*)$/)
+      if (m) {
+        const who = (members ?? []).find((x) => x.id === vars.id)
+        setDeleteWarn({ id: vars.id, name: who?.full_name || who?.email || 'a munkatárs', details: m[1] })
+        setActionError(null)
+      } else {
+        setDeleteWarn(null)
+        setActionError('A törlés nem sikerült: ' + msg)
+      }
+    },
+  })
+
   const roles: Enums<'user_role'>[] = isAdmin
     ? ['crew', 'manager', 'admin']
     : ['crew', 'manager']
@@ -319,6 +347,37 @@ export default function Members() {
       </div>
 
       {actionError && <div className="alert error">{actionError}</div>}
+
+      {deleteWarn && (
+        <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
+          <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
+            ⚠️ {deleteWarn.name} törlése adatvesztéssel jár
+          </div>
+          <p className="small" style={{ margin: 0 }}>
+            Hozzá tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
+            eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak azt szeretnéd,
+            hogy ne tudjon belépni, válaszd a <strong>Letiltást</strong>: az adatok megmaradnak.
+          </p>
+          <div className="btn-grid">
+            <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
+            <button
+              className="btn sm"
+              disabled={setStatus.isPending}
+              onClick={() => { setStatus.mutate({ id: deleteWarn.id, status: 'disabled' }); setDeleteWarn(null) }}
+            >
+              🚫 Inkább letiltom
+            </button>
+          </div>
+          <ConfirmButton
+            className="btn danger sm"
+            confirmLabel="Igen, törlés az adatokkal együtt"
+            disabled={removeMember.isPending}
+            onConfirm={() => removeMember.mutate({ id: deleteWarn.id, force: true })}
+          >
+            🗑 Végleges törlés az adataival együtt
+          </ConfirmButton>
+        </div>
+      )}
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
         <div className="empty"><span className="ico">👥</span>Még nincs jóváhagyott tag ezen a munkaterületen.</div>
@@ -391,6 +450,24 @@ export default function Members() {
                           onClick={() => setStatus.mutate({ id: m.id, status: 'active' })}>✅ Aktiválás</button>
                       )}
                     </div>
+                    {/* Törlés: admin bárkit, menedzser csak munkatársat (a szerver is ellenőrzi) */}
+                    {!isSelf && (isAdmin || role === 'crew') && (
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Végleges törlés</label>
+                        <ConfirmButton
+                          className="btn danger sm"
+                          confirmLabel="Igen, törlöm a tagot"
+                          disabled={removeMember.isPending}
+                          onConfirm={() => removeMember.mutate({ id: m.id, force: false })}
+                        >
+                          🗑 Tag törlése
+                        </ConfirmButton>
+                        <div className="tiny muted">
+                          A fiók megszűnik, a munkatárs nem tud belépni. Ha van hozzá munka- vagy
+                          bér-adat, előbb figyelmeztetést kapsz.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

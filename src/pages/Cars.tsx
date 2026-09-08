@@ -237,6 +237,33 @@ export default function Cars() {
     onError: (e) => setError('Az autó állapotának módosítása nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
+  // Autó törlése. A szerver alapból MEGTAGADJA, ha tartozik hozzá adat
+  // (ADATOS_AUTO) — ilyenkor megmutatjuk, mi veszne el; alternatíva: inaktiválás.
+  const [deleteWarn, setDeleteWarn] = useState<{ id: string; plate: string; details: string } | null>(null)
+
+  const removeCar = useMutation({
+    mutationFn: async ({ id, force }: { id: string; force: boolean }) => {
+      const { error } = await supabase.rpc('delete_car', { p_car_id: id, p_force: force })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setError(null); setDeleteWarn(null)
+      void qc.invalidateQueries({ queryKey: ['cars'] })
+    },
+    onError: (e, vars) => {
+      const msg = e instanceof Error ? e.message : 'ismeretlen hiba'
+      const m = msg.match(/ADATOS_AUTO:\s*(.*)$/)
+      if (m) {
+        const car = (cars ?? []).find((c) => c.id === vars.id)
+        setDeleteWarn({ id: vars.id, plate: car?.plate ?? 'az autó', details: m[1] })
+        setError(null)
+      } else {
+        setDeleteWarn(null)
+        setError('A törlés nem sikerült: ' + msg)
+      }
+    },
+  })
+
   const editCar = useMutation({
     mutationFn: async (car: Car) => {
       const p = editPlate.trim().toUpperCase()
@@ -305,6 +332,35 @@ export default function Cars() {
           🗂️ Kategóriák{(categories?.length ?? 0) > 0 ? ` (${categories!.length})` : ''}
         </button>
       </div>
+
+      {deleteWarn && (
+        <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
+          <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
+            ⚠️ {deleteWarn.plate} törlése adatvesztéssel jár
+          </div>
+          <p className="small" style={{ margin: 0 }}>
+            Az autóhoz tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
+            eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak ki akarod vonni
+            a forgalomból, válaszd az <strong>Inaktiválást</strong>: az adatok megmaradnak, és az autó
+            eltűnik a beosztásból.
+          </p>
+          <div className="btn-grid">
+            <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
+            <button className="btn sm" disabled={toggleActive.isPending}
+              onClick={() => {
+                const car = (cars ?? []).find((c) => c.id === deleteWarn.id)
+                if (car?.active) toggleActive.mutate(car)
+                setDeleteWarn(null)
+              }}>
+              ⏸ Inkább inaktiválom
+            </button>
+          </div>
+          <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés az adatokkal együtt"
+            disabled={removeCar.isPending} onConfirm={() => removeCar.mutate({ id: deleteWarn.id, force: true })}>
+            🗑 Végleges törlés az adataival együtt
+          </ConfirmButton>
+        </div>
+      )}
 
       {panel === 'add' && (
         <div className="card stack">
@@ -435,6 +491,10 @@ export default function Cars() {
                       ) : (
                         <button className="btn sm" disabled={toggleActive.isPending} onClick={() => toggleActive.mutate(car)}>▶️ Aktiválás</button>
                       )}
+                      <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlöm az autót"
+                        disabled={removeCar.isPending} onConfirm={() => removeCar.mutate({ id: car.id, force: false })}>
+                        🗑 Törlés
+                      </ConfirmButton>
                     </div>
                   </div>
                 )}
