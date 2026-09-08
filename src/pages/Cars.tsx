@@ -249,6 +249,7 @@ export default function Cars() {
     onSuccess: () => {
       setError(null); setDeleteWarn(null)
       void qc.invalidateQueries({ queryKey: ['cars'] })
+      void qc.invalidateQueries({ queryKey: ['car-categories'] })
     },
     onError: (e, vars) => {
       const msg = e instanceof Error ? e.message : 'ismeretlen hiba'
@@ -420,7 +421,7 @@ export default function Cars() {
 
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
-        <div className="empty"><span className="ico">🚗</span>Még nincs autó. Koppints az „➕ Új autó" gombra.</div>
+        <div className="empty"><span className="ico">🚗</span>Még nincs autó. Koppints az „➕ Új autó” gombra.</div>
       )}
       {!isLoading && all.length > 0 && visible.length === 0 && (
         <div className="empty"><span className="ico">🔍</span>Nincs találat a szűrésre.</div>

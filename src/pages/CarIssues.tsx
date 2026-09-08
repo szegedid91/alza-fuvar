@@ -7,7 +7,7 @@ import { useToday } from '../hooks/useToday'
 import { useCars } from '../hooks/useCars'
 import { submitNow } from '../lib/outbox'
 import { resolveNames } from '../lib/names'
-import { carIssueStatusLabel, formatDateTime, isCrewRole } from '../lib/labels'
+import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../lib/labels'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import PhotoThumb from '../components/PhotoThumb'
 import type { Enums, Tables } from '../lib/database.types'
@@ -31,7 +31,7 @@ export default function CarIssues() {
   const { data: cars } = useCars()
 
   const { data: issues } = useQuery({
-    queryKey: ['car-issues', currentWorkspaceId],
+    queryKey: ['car-issues', currentWorkspaceId, profile?.id, todayISO()],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const { data } = await supabase

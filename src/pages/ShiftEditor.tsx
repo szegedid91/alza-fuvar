@@ -442,8 +442,8 @@ function WeekTable() {
       const failed = results.filter((r) => r.status === 'rejected').length
       setPublishMsg(
         reached === 0
-          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el a push — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).${failed ? ` (${failed} küldés hibára futott.)` : ''}`
-          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached}-t ért el a push. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
+          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el az értesítés — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).${failed ? ` (${failed} küldés hibára futott.)` : ''}`
+          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached} főt ért el az értesítés. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
       )
     } catch (e) {
       setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
@@ -470,7 +470,7 @@ function WeekTable() {
           disabled={publishBusy || weekPeople.size === 0}
           onConfirm={() => void publishWeek()}
         >
-          {publishBusy ? 'Küldés…' : '📣 Beosztás kiküldése push-ban'}
+          {publishBusy ? 'Küldés…' : '📣 Beosztás kiküldése értesítésben'}
         </ConfirmButton>
         {error && <div className="alert error">{error}</div>}
         {copyMsg && <div className="alert info">{copyMsg}</div>}
@@ -563,10 +563,10 @@ function WeekTable() {
                                   compact
                                   value={val}
                                   options={memberOptions}
-                                  placeholder={field === 'driver_id' ? (crewOf(carId) === 1 ? '— munkatárs —' : '— sofőr —') : '— rakodó —'}
+                                  placeholder={field === 'driver_id' ? ('— sofőr —') : '— rakodó —'}
                                   disabled={busy}
                                   danger={dup}
-                                  title={dup ? 'Ütközés: aznap máshova is be van osztva!' : field === 'driver_id' ? (crewOf(carId) === 1 ? 'Munkatárs' : 'Sofőr') : 'Rakodó'}
+                                  title={dup ? 'Ütközés: aznap máshova is be van osztva!' : field === 'driver_id' ? ('Sofőr') : 'Rakodó'}
                                   onChange={(id) => void setCell(carId, d, field, id)}
                                 />
                               </div>
@@ -828,7 +828,7 @@ export default function ShiftEditor() {
     type Ev = { sort: string; date: string; icon: string; label: string; who: string | null }
     const evs: Ev[] = []
     for (const i of cal.incidents) if (i.car_id === carFilter)
-      evs.push({ sort: i.created_at, date: i.work_date, icon: '⚠️', label: `Esemény/baleset${i.note ? `: ${i.note}` : ''}`, who: nameOf[i.user_id] ?? null })
+      evs.push({ sort: i.created_at, date: i.work_date, icon: '⚠️', label: `Esemény / baleset${i.note ? `: ${i.note}` : ''}`, who: nameOf[i.user_id] ?? null })
     for (const i of cal.issues) if (i.car_id === carFilter)
       evs.push({ sort: i.created_at, date: localDateOf(i.created_at), icon: '❗', label: `Hibabejelentés: ${i.note} (${carIssueStatusLabel[i.status]})`, who: nameOf[i.user_id] ?? null })
     for (const c of cal.cleanings) if (c.car_id === carFilter)

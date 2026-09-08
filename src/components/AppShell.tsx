@@ -322,7 +322,7 @@ function FailedPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
         <p className="tiny muted" style={{ margin: 0 }}>
-          Ezek a tételek többszöri próbálkozás után sem mentek fel. Az „Újra" új kört indít; az „Eldobás" végleg törli őket.
+          Ezek a tételek többszöri próbálkozás után sem mentek fel. Az „Újra” új kört indít; az „Eldobás” végleg törli őket.
         </p>
       </div>
     </div>

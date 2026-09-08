@@ -131,7 +131,7 @@ export default function Reports() {
           <label>Hónap</label>
           <input className="input" type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
         </div>
-        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Export Excel</button>
+        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
       </div>
 
       {isLoading && <div className="card"><div className="spinner" /></div>}

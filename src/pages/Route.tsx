@@ -399,7 +399,10 @@ function RouteSummary({ uploadId, startPoi, endPoi }: { uploadId: string; startP
   })
   if (!data) return null
   const { stops, names } = data
-  const cashToHandOver = stops.filter((s) => s.is_cash).reduce((sum, s) => sum + Number(s.expected_amount ?? 0), 0)
+  // A sikertelen (skipped) stopokból nincs beszedett pénz — nem is leadandó
+  const cashToHandOver = stops
+    .filter((s) => s.is_cash && s.status !== 'skipped')
+    .reduce((sum, s) => sum + Number(s.expected_amount ?? 0), 0)
   const collected = stops.reduce((sum, s) => sum + Number(s.received_amount ?? 0), 0)
   // Borravaló és kp-hiány külön (a hiány nem "negatív borravaló" — bérszámítási szabály)
   const tips = stops.reduce((sum, s) => sum + Math.max(0, Number(s.tip ?? 0)), 0)

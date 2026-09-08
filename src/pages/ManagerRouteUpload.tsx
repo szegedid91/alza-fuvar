@@ -91,7 +91,7 @@ export default function ManagerRouteUpload() {
     <div className="stack">
       <h2>Fuvarterv feltöltés — {currentWorkspace?.name}</h2>
       <div className="card stack">
-        <p className="small muted">Tölts fel egy crew Excelt egy adott autóhoz és naphoz. A sofőr a saját eszközén látja majd.</p>
+        <p className="small muted">Tölts fel egy fuvarterv Excelt egy adott autóhoz és naphoz. A sofőr a saját eszközén látja majd.</p>
         <div className="grid-2">
           <div className="field">
             <label>Autó</label>

@@ -86,7 +86,7 @@ export default function RouteMap({ stops }: { stops: Stop[] }) {
     <div className="card" style={{ padding: 10 }}>
       {status && <div className="small muted" style={{ marginBottom: 8 }}>{status}</div>}
       <div ref={containerRef} style={{ height: 360, borderRadius: 12, overflow: 'hidden' }} />
-      <p className="tiny muted" style={{ marginTop: 8 }}>A térkép csak tájékoztató. A navigációhoz használd a stop „Navigáció" gombját.</p>
+      <p className="tiny muted" style={{ marginTop: 8 }}>A térkép csak tájékoztató. A navigációhoz használd a stop „Navigáció” gombját.</p>
     </div>
   )
 }

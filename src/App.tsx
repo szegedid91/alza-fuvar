@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import InvitePage from './pages/Invite'
 import { isCrewRole } from './lib/labels'
@@ -54,16 +54,21 @@ function ProfileRetry() {
 export default function App() {
   const { session, profile, loading, recovery, endRecovery } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
 
   // Meghívó-oldal: bejelentkezés NÉLKÜL is elérhető (a token a jogosultság)
   const inviteMatch = pathname.match(/^\/meghivo\/([0-9a-f-]{36})$/i)
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />
 
-  // Emailes jelszó-visszaállítás: minden más elé vág (a link "recovery"
-  // munkamenettel léptet be — az appot csak az új jelszó után mutatjuk)
-  if (recovery || pathname === RECOVERY_PATH) return <ResetPassword onDone={endRecovery} />
-
   if (loading) return <FullScreenSpinner />
+
+  // Emailes jelszó-visszaállítás: minden más elé vág (a link "recovery"
+  // munkamenettel léptet be — az appot csak az új jelszó után mutatjuk).
+  // A kilépés router-navigációval megy: a puszta history.replaceState-ről a
+  // react-router nem értesül, és a képernyő beragadna.
+  if (recovery || pathname === RECOVERY_PATH) {
+    return <ResetPassword onDone={() => { endRecovery(); navigate('/', { replace: true }) }} />
+  }
   if (!session) return <Login />
   if (!profile) return <ProfileRetry />
   if (profile.status !== 'active' || !profile.role) return <Pending />

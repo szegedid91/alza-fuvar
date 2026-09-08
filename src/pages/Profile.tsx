@@ -79,7 +79,7 @@ function ThemeCard() {
         ))}
       </div>
       <p className="tiny muted" style={{ margin: 0 }}>
-        „Rendszer": a telefon/számítógép sötét-világos beállítását követi.
+        „Rendszer”: a telefon/számítógép sötét-világos beállítását követi.
       </p>
     </div>
   )
@@ -110,7 +110,7 @@ function PushCard() {
     <div className="card stack">
       <div className="card-title">Értesítések</div>
       <div className="between">
-        <span className="small muted">Push értesítések ezen az eszközön</span>
+        <span className="small muted">Push-értesítések ezen az eszközön</span>
         <span className={`badge ${subscribed ? 'success' : ''}`}>{subscribed ? 'Bekapcsolva' : 'Kikapcsolva'}</span>
       </div>
       {err && <div className="alert error">{err}</div>}

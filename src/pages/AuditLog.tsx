@@ -8,7 +8,7 @@ import {
 import type { Enums } from '../lib/database.types'
 
 const ENTITY_LABEL: Record<string, string> = {
-  adjustments: 'Előleg/levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
+  adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
 }

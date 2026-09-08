@@ -132,12 +132,12 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
   return (
     <>
       <div className="card between">
-        <span className="muted small">Autó átlagfogyasztás (crew)</span>
+        <span className="muted small">Autó átlagfogyasztás (páros)</span>
         <span className="badge primary">{avg != null ? `${avg} l/100km` : 'nincs adat'}</span>
       </div>
 
       <div className="card stack">
-        <div className="card-title">Blokk fotó — {car.plate}</div>
+        <div className="card-title">Blokkfotó — {car.plate}</div>
         <div style={{ maxWidth: 220 }}>
           <PhotoSlot label="Tankolós blokk" photo={photo} onCapture={handlePhoto} />
         </div>
@@ -175,7 +175,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
           <span className="small">Ellenőriztem, az adatok helyesek</span>
         </label>
 
-        {msg && <div className={`alert ${msg.startsWith('Hiba') || msg.includes('Figyelem') ? 'error' : 'success'}`}>{msg}</div>}
+        {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : msg.includes('Figyelem') ? 'warning' : 'success'}`}>{msg}</div>}
         <button className="btn" disabled={!canSave} onClick={() => void submit()}>
           {busy ? 'Mentés…' : 'Tankolás mentése'}
         </button>
@@ -190,7 +190,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
               // Korábbi napi tankolásnál csak a dátumot mutatjuk
               <div key={f.id} className="between">
                 <span className="small">{formatDate(f.fuel_date)}</span>
-                {f.km_warning && <span className="badge danger">km hiba</span>}
+                {f.km_warning && <span className="badge danger">km-hiba</span>}
               </div>
             ) : (
               <div key={f.id} className="between">
@@ -199,7 +199,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
                   <div className="tiny muted">{formatHuf(f.amount)} {f.location ? `· ${f.location}` : ''}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  {f.km_warning && <div className="badge danger">km hiba</div>}
+                  {f.km_warning && <div className="badge danger">km-hiba</div>}
                   {f.consumption != null && <div className="badge">{f.consumption} l/100km</div>}
                 </div>
               </div>

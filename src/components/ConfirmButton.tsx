@@ -15,10 +15,15 @@ export default function ConfirmButton({
   style?: React.CSSProperties
 }) {
   const [armed, setArmed] = useState(false)
+  // A megerősítő gomb ugyanoda kerül, mint a kiváltó — ez telefonon jó, de a
+  // véletlen dupla koppintás azonnal végrehajtaná a műveletet. Ezért rövid
+  // ideig még nem aktív.
+  const [ready, setReady] = useState(false)
   useEffect(() => {
-    if (!armed) return
+    if (!armed) { setReady(false); return }
+    const r = setTimeout(() => setReady(true), 450)
     const t = setTimeout(() => setArmed(false), 4000)
-    return () => clearTimeout(t)
+    return () => { clearTimeout(r); clearTimeout(t) }
   }, [armed])
 
   // FONTOS: a megerősítő gomb UGYANAZZAL a mérettel/pozícióval jelenik meg,
@@ -32,10 +37,10 @@ export default function ConfirmButton({
         className={className}
         // a disabled/title az élesített állapotban is érvényes marad: ha közben
         // letiltják a gombot, a megerősítés se süljön el
-        disabled={disabled}
+        disabled={disabled || !ready}
         title={title}
-        style={{ ...style, background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}
-        onClick={() => { setArmed(false); onConfirm() }}
+        style={{ ...style, background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff', opacity: ready ? 1 : 0.75 }}
+        onClick={() => { if (!ready) return; setArmed(false); onConfirm() }}
       >
         ⚠️ {confirmLabel}
       </button>

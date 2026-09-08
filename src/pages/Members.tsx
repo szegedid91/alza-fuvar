@@ -249,6 +249,7 @@ export default function Members() {
     onSuccess: () => {
       setActionError(null); setDeleteWarn(null)
       void qc.invalidateQueries({ queryKey: ['members'] })
+      void qc.invalidateQueries({ queryKey: ['ws-members'] })
     },
     onError: (e, vars) => {
       const msg = e instanceof Error ? e.message : 'ismeretlen hiba'

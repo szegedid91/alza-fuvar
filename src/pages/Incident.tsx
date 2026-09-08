@@ -27,12 +27,13 @@ export default function Incident() {
     queryKey: ['incidents', currentWorkspaceId, profile?.id, todayISO()],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
-      const { data } = await supabase.from('incidents').select('*')
+      const { data, error } = await supabase.from('incidents').select('*')
         .eq('workspace_id', currentWorkspaceId!)
         .eq('user_id', profile!.id)
         .eq('work_date', todayISO())
         .order('created_at', { ascending: false })
         .limit(20)
+      if (error) throw error
       const rows = data ?? []
       const [names, urls] = await Promise.all([
         resolveNames(rows.map((r) => r.user_id)),
@@ -92,7 +93,7 @@ export default function Incident() {
         <div className="card stack">
           <div className="card-title">🕑 Mai bejelentéseim</div>
           <p className="tiny muted" style={{ margin: 0 }}>
-            A saját és a mai autódon rögzített események. Koppints a képre a teljes mérethez.
+            A ma általad rögzített események. Koppints a képre a teljes mérethez.
           </p>
           {list!.map((i) => (
             <div key={i.id} className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
@@ -105,7 +106,7 @@ export default function Incident() {
               {i._url && (
                 <img
                   src={i._url}
-                  alt="Esemény fotó"
+                  alt="Eseményfotó"
                   style={{ width: '100%', maxWidth: 320, borderRadius: 10, cursor: 'zoom-in' }}
                   onClick={() => window.open(i._url!, '_blank')}
                 />

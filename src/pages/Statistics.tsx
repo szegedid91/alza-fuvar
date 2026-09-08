@@ -14,7 +14,7 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: 'prev-month', label: 'Előző hónap' },
   { key: 'm3', label: 'Utolsó 3 hónap' },
   { key: 'm6', label: 'Utolsó 6 hónap' },
-  { key: 'ytd', label: 'Idén (jan. 1-től)' },
+  { key: 'ytd', label: 'Idén (jan. 1-jétől)' },
   { key: 'm12', label: 'Utolsó 12 hónap' },
 ]
 
@@ -140,7 +140,9 @@ export default function Statistics() {
       // Napi munkaidő: napközbeni autócserénél TÖBB check_ins sor van egy napra
       // (A→B→A esetén az elsőt újranyitjuk), ezért soronként összeadva duplázna.
       // A nap hossza = utolsó kijelentkezés − első becsekkolás.
-      const dayspan = new Map<string, { from: number; to: number | null }>()
+      // open = aznap van még NYITOTT becsekkolása (autócsere után is): a nap
+      // nem tekinthető lezártnak, különben a részleges idő rontaná az átlagot
+      const dayspan = new Map<string, { from: number; to: number | null; open: boolean }>()
       const checkinDays = new Set<string>() // `${userId}|${date}` — a kihagyott beosztáshoz
       const carDays = new Map<string, Set<string>>()
       const switchedAwayByCar = new Map<string, number>()
@@ -158,10 +160,11 @@ export default function Statistics() {
         const from = new Date(c.checked_in_at).getTime()
         const to = c.checked_out_at ? new Date(c.checked_out_at).getTime() : null
         const span = dayspan.get(key)
-        if (!span) dayspan.set(key, { from, to })
+        if (!span) dayspan.set(key, { from, to, open: to == null })
         else {
           span.from = Math.min(span.from, from)
           span.to = to == null ? span.to : span.to == null ? to : Math.max(span.to, to)
+          if (to == null) span.open = true
         }
         if (c.switch_reason) row.switches++
         if (c.outside_geofence || c.out_outside_geofence) row.outside++
@@ -172,7 +175,7 @@ export default function Statistics() {
 
       // Napi munkaidő összegzése (naponként egyszer, a nap teljes hosszával)
       for (const [key, span] of dayspan) {
-        if (span.to == null) continue // még nem jelentkezett ki — nincs lezárt nap
+        if (span.open || span.to == null) continue // még nem jelentkezett ki — nincs lezárt nap
         const row = u(key.slice(0, key.indexOf('|')))
         row.hoursMs += Math.max(0, span.to - span.from)
         row.daysWithHours++
@@ -308,7 +311,7 @@ export default function Statistics() {
           </select>
         </div>
         <div className="tiny muted">{range.start} – {range.endExclusive} (a záró nap nélkül)</div>
-        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Export Excel</button>
+        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
       </div>
 
       {isLoading && <div className="card"><div className="spinner" /></div>}

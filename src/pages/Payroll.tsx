@@ -220,7 +220,7 @@ export default function Payroll() {
           <label>Hónap</label>
           <input className="input" type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
         </div>
-        <button className="btn secondary sm" disabled={!data || data.rows.length === 0} onClick={() => void exportXlsx()}>📊 Export Excel</button>
+        <button className="btn secondary sm" disabled={!data || data.rows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
       </div>
 
       {isLoading && <div className="card"><div className="spinner" /></div>}
@@ -236,7 +236,7 @@ export default function Payroll() {
 
       {data && <MonthLockCard ym={ym} workspaces={data.workspaces} />}
 
-      {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico">🧮</span>Nincs munkatárs adat.</div>}
+      {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico">🧮</span>Nincs adat a munkatársakról.</div>}
 
       {data?.rows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} />)}
     </div>
@@ -337,8 +337,8 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       </div>
 
       <div className="grid-2 small">
-        <div className="between"><span className="muted">Most: sofőr / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.driver)}</span></div>
-        <div className="between"><span className="muted">Most: rakodó / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.loader)}</span></div>
+        <div className="between"><span className="muted">Sofőr / nap ({nowYm})</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.driver)}</span></div>
+        <div className="between"><span className="muted">Rakodó / nap ({nowYm})</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.loader)}</span></div>
       </div>
 
       {open && isAdmin && (
@@ -358,8 +358,8 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
             </div>
           </div>
           <div className="tiny muted">
-            A bérszámítás {addFrom.replace('-', '. ')}. hónaptól automatikusan ezzel számol. A korábbi
-            hónapok változatlanok maradnak.
+            A bérszámítás {addFrom.replace('-', '. ')}. hónaptól automatikusan ezzel számol.
+            Az ez elé eső hónapok változatlanok maradnak; zárolt hónapra nem lehet díjat állítani.
           </div>
           <button className="btn sm" disabled={save.isPending || !driver.trim() || !loader.trim()} onClick={() => save.mutate()}>
             {save.isPending ? 'Mentés…' : 'Mentés'}
@@ -399,7 +399,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                       📦 {formatHuf(Number(r.loader_day_rate))}
                       {lPct && <span style={{ color: lPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({lPct})</span>}
                     </span>
-                    {isActive && <span className="badge primary">most érvényes</span>}
+                    {isActive && <span className="badge primary">ekkor érvényes</span>}
                     {isFuture && <span className="badge warning">jövőbeli</span>}
                   </div>
                   {isAdmin && (
@@ -420,7 +420,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
               <span className="muted" style={{ minWidth: 86, display: 'inline-block' }}>kezdettől</span>
               🚚 {formatHuf(Number(base.driver_day_rate))}<span className="muted"> · </span>📦 {formatHuf(Number(base.loader_day_rate))}
             </span>
-            {activeRow?.id === base.id && <span className="badge primary">most érvényes</span>}
+            {activeRow?.id === base.id && <span className="badge primary">ekkor érvényes</span>}
           </div>
         )}
         {rows.length === 0 && <div className="tiny muted">Még nincs rögzített napidíj.</div>}

@@ -31,6 +31,9 @@ async function clearLocalUserData(): Promise<void> {
   localStorage.removeItem('alza-current-workspace')
   localStorage.removeItem('alza-profile-cache')
   localStorage.removeItem('alza-workspaces-cache')
+  // Közös telefonon a félbehagyott jelszó-visszaállítás ne a következő
+  // belépőnek jöjjön elő
+  clearRecoveryPending()
   try { await clearOutbox() } catch { /* IndexedDB hiba: nem blokkoló */ }
   // A service worker fotó-cache-e is felhasználói adat
   try { if ('caches' in window) await caches.delete('supabase-storage') } catch { /* n/a */ }
@@ -123,7 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const endRecovery = useCallback(() => {
     clearRecoveryPending()
     setRecovery(false)
-    try { window.history.replaceState(null, '', '/') } catch { /* n/a */ }
   }, [])
 
   return (
