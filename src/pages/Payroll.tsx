@@ -7,6 +7,7 @@ import { monthRange, currentYm, type PayrollRow } from '../lib/payroll'
 import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { openPayslip } from '../lib/payslip'
+import ConfirmButton from '../components/ConfirmButton'
 import type { Tables } from '../lib/database.types'
 
 interface WorkspaceRate { id: string; name: string; driver: number; loader: number }
@@ -72,7 +73,6 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
 
 export default function Payroll() {
   const [ym, setYm] = useState(currentYm())
-  const qc = useQueryClient()
   const range = useMemo(() => monthRange(ym), [ym])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
@@ -80,11 +80,16 @@ export default function Payroll() {
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
-      const [profilesRes, workspacesRes, checkins, shifts, adj, stops] = await Promise.all([
+      const [profilesRes, workspacesRes, rateHistRes, checkins, shifts, adj, stops] = await Promise.all([
         // Státusz-szűrő NÉLKÜL: a hónap közben letiltott munkatársnak is jár a
         // ledolgozott napjaiért a bér — csak a bér nélküli inaktívakat hagyjuk ki lent
         supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)'),
         supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate').order('name'),
+        // A hónapra ÉRVÉNYES napidíjak: minden olyan sor, ami a hónap kezdetéig
+        // hatályba lépett — munkaterületenként a legutolsó számít
+        supabase.from('workspace_rate_history')
+          .select('workspace_id, valid_from, driver_day_rate, loader_day_rate')
+          .lte('valid_from', range.start).order('valid_from'),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date, workspace_id')
@@ -99,10 +104,17 @@ export default function Payroll() {
       const profiles = profilesRes.data
       const workspaces = workspacesRes.data
 
-      // Napidíjak munkaterületenként
+      // Napidíjak munkaterületenként — a KIVÁLASZTOTT HÓNAPRA érvényes érték.
+      // Egy későbbi emelés így nem írja át visszamenőleg a korábbi hónapokat.
+      if (rateHistRes.error) throw rateHistRes.error
       const rates: Record<string, WorkspaceRate> = {}
       for (const w of workspaces ?? []) {
         rates[w.id] = { id: w.id, name: w.name, driver: Number(w.driver_day_rate ?? 0), loader: Number(w.loader_day_rate ?? 0) }
+      }
+      // valid_from szerint növekvő sorrendben jön: az utolsó illeszkedő nyer
+      for (const r of rateHistRes.data ?? []) {
+        const ws = rates[r.workspace_id]
+        if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0) }
       }
 
       // Napi szerep a beosztásból: kulcs `${userId}|${date}` -> 'driver' | 'loader'
@@ -190,16 +202,6 @@ export default function Payroll() {
     },
   })
 
-  const [rateError, setRateError] = useState<string | null>(null)
-  const setRates = useMutation({
-    mutationFn: async ({ id, driver, loader }: { id: string; driver: number; loader: number }) => {
-      const { error } = await supabase.rpc('set_workspace_rates', { p_workspace_id: id, p_driver_rate: driver, p_loader_rate: loader })
-      if (error) throw error
-    },
-    onSuccess: () => { setRateError(null); void qc.invalidateQueries({ queryKey: ['payroll'] }) },
-    onError: (e) => setRateError(e instanceof Error ? e.message : 'A napidíj mentése nem sikerült'),
-  })
-
   async function exportXlsx() {
     if (!data) return
     await exportRowsToXlsx(`ber_${ym}.xlsx`, `Bér ${ym}`, data.rows.map((r) => ({
@@ -227,10 +229,9 @@ export default function Payroll() {
           A béradatok betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
         </div>
       )}
-      {rateError && <div className="alert error">{rateError}</div>}
 
       {data && data.workspaces.map((w) => (
-        <RateCard key={w.id} ws={w} onSave={(driver, loader) => setRates.mutate({ id: w.id, driver, loader })} saving={setRates.isPending} />
+        <RateHistoryCard key={w.id} ws={w} currentYm={ym} />
       ))}
 
       {data && <MonthLockCard ym={ym} workspaces={data.workspaces} />}
@@ -242,53 +243,188 @@ export default function Payroll() {
   )
 }
 
-function RateCard({ ws, onSave, saving }: { ws: WorkspaceRate; onSave: (driver: number, loader: number) => void; saving: boolean }) {
-  const [edit, setEdit] = useState(false)
-  const [driver, setDriver] = useState(String(ws.driver))
-  const [loader, setLoader] = useState(String(ws.loader))
-  const [inputError, setInputError] = useState<string | null>(null)
+// Napidíj-történet egy munkaterülethez: melyik hónaptól mennyi volt a díj,
+// és hónapról hónapra hány százalék volt a változás. Új sor felvételekor a
+// bérszámítás AZ ADOTT HÓNAPTÓL automatikusan az új díjjal számol.
+// Hónapnevek "-tól/-től" toldalékkal (magyar hangrend szerint, kézzel)
+const MONTH_FROM = ['januártól', 'februártól', 'márciustól', 'áprilistól', 'májustól', 'júniustól',
+  'júliustól', 'augusztustól', 'szeptembertől', 'októbertől', 'novembertől', 'decembertől']
+
+function pct(from: number, to: number): string | null {
+  if (!Number.isFinite(from) || from <= 0 || from === to) return null
+  const p = ((to - from) / from) * 100
+  const sign = p > 0 ? '+' : ''
+  return `${sign}${Math.abs(p) >= 10 ? Math.round(p) : Math.round(p * 10) / 10}%`
+}
+
+function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentYm: string }) {
+  const { profile } = useAuth()
+  const qc = useQueryClient()
+  const isAdmin = profile?.role === 'admin'
+  const [open, setOpen] = useState(false)
+  const [addFrom, setAddFrom] = useState(nowYm)
+  const [driver, setDriver] = useState('')
+  const [loader, setLoader] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: history } = useQuery({
+    queryKey: ['rate-history', ws.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('workspace_rate_history')
+        .select('id, valid_from, driver_day_rate, loader_day_rate')
+        .eq('workspace_id', ws.id)
+        .order('valid_from', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+  })
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const d = parseHuNumber(driver)
+      const l = parseHuNumber(loader)
+      if (!Number.isFinite(d) || !Number.isFinite(l) || d < 0 || l < 0) {
+        throw new Error('Érvénytelen összeg — írj be számot, pl. 25 000')
+      }
+      const { error } = await supabase.rpc('set_workspace_rate_from', {
+        p_workspace_id: ws.id, p_valid_from: `${addFrom}-01`, p_driver_rate: d, p_loader_rate: l,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setError(null); setDriver(''); setLoader(''); setOpen(false)
+      void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
+      void qc.invalidateQueries({ queryKey: ['payroll'] })
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : 'A mentés nem sikerült'),
+  })
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('delete_workspace_rate', { p_id: id })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setError(null)
+      void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
+      void qc.invalidateQueries({ queryKey: ['payroll'] })
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : 'A törlés nem sikerült'),
+  })
+
+  // Évekre bontva, azon belül hónapok — a változás az ELŐZŐ (régebbi) sorhoz képest
+  const rows = history ?? []
+  const byYear = new Map<string, typeof rows>()
+  for (const r of rows) {
+    if (r.valid_from === '2000-01-01') continue // a kiinduló sor külön látszik
+    const y = r.valid_from.slice(0, 4)
+    byYear.set(y, [...(byYear.get(y) ?? []), r])
+  }
+  const base = rows.find((r) => r.valid_from === '2000-01-01')
+  const prevOf = (idx: number) => rows[idx + 1] // a lista csökkenő sorrendű
+  const today = `${nowYm}-01`
+  const activeRow = rows.find((r) => r.valid_from <= today) ?? null
 
   return (
     <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}>💶 Napidíjak — {ws.name}</div>
-        {!edit && <button className="btn ghost sm" onClick={() => setEdit(true)}>Módosítás</button>}
+        {isAdmin && (
+          <button className="btn ghost sm" onClick={() => { setOpen((o) => !o); setError(null) }}>
+            {open ? 'Bezárás' : '➕ Új díj hónaptól'}
+          </button>
+        )}
       </div>
-      {edit ? (
-        <div className="stack">
+
+      <div className="grid-2 small">
+        <div className="between"><span className="muted">Most: sofőr / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.driver)}</span></div>
+        <div className="between"><span className="muted">Most: rakodó / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.loader)}</span></div>
+      </div>
+
+      {open && isAdmin && (
+        <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <div className="field">
+            <label>Ettől a hónaptól érvényes</label>
+            <input className="input" type="month" value={addFrom} onChange={(e) => setAddFrom(e.target.value)} />
+          </div>
           <div className="grid-2">
             <div className="field">
               <label>Sofőr napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={driver} onChange={(e) => setDriver(e.target.value)} />
+              <input className="input" inputMode="decimal" value={driver} onChange={(e) => setDriver(e.target.value)} placeholder="pl. 25 000" />
             </div>
             <div className="field">
               <label>Rakodó napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={loader} onChange={(e) => setLoader(e.target.value)} />
+              <input className="input" inputMode="decimal" value={loader} onChange={(e) => setLoader(e.target.value)} placeholder="pl. 20 000" />
             </div>
           </div>
-          {inputError && <div className="alert error">{inputError}</div>}
-          <div className="btn-grid">
-            <button className="btn ghost sm" onClick={() => { setEdit(false); setInputError(null); setDriver(String(ws.driver)); setLoader(String(ws.loader)) }}>Mégse</button>
-            <button className="btn sm" disabled={saving} onClick={() => {
-              const d = parseHuNumber(driver)
-              const l = parseHuNumber(loader)
-              // Érvénytelen bevitelből nem lehet csendben 0 Ft napidíj
-              if (!Number.isFinite(d) || !Number.isFinite(l) || d < 0 || l < 0) {
-                setInputError('Érvénytelen összeg — írj be számot, pl. 25 000')
-                return
-              }
-              setInputError(null)
-              onSave(d, l)
-              setEdit(false)
-            }}>Mentés</button>
+          <div className="tiny muted">
+            A bérszámítás {addFrom.replace('-', '. ')}. hónaptól automatikusan ezzel számol. A korábbi
+            hónapok változatlanok maradnak.
           </div>
-        </div>
-      ) : (
-        <div className="grid-2 small">
-          <div className="between"><span className="muted">Sofőr / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.driver)}</span></div>
-          <div className="between"><span className="muted">Rakodó / nap</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.loader)}</span></div>
+          <button className="btn sm" disabled={save.isPending || !driver.trim() || !loader.trim()} onClick={() => save.mutate()}>
+            {save.isPending ? 'Mentés…' : 'Mentés'}
+          </button>
         </div>
       )}
+
+      {error && <div className="alert error">{error}</div>}
+
+      <div className="stack" style={{ gap: 6 }}>
+        <div className="tiny muted" style={{ fontWeight: 700 }}>Változások</div>
+        {[...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([year, items]) => (
+          <div key={year} className="stack" style={{ gap: 2 }}>
+            <div className="small" style={{ fontWeight: 800, marginTop: 4 }}>{year}</div>
+            {items.map((r) => {
+              const idx = rows.indexOf(r)
+              const prev = prevOf(idx)
+              const dPct = prev ? pct(Number(prev.driver_day_rate), Number(r.driver_day_rate)) : null
+              const lPct = prev ? pct(Number(prev.loader_day_rate), Number(r.loader_day_rate)) : null
+              const month = MONTH_FROM[Number(r.valid_from.slice(5, 7)) - 1]
+              const isActive = activeRow?.id === r.id
+              const isFuture = r.valid_from > today
+              return (
+                <div key={r.id} className="between" style={{
+                  padding: '6px 8px', borderRadius: 8,
+                  background: isActive ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
+                  opacity: isFuture ? 0.7 : 1,
+                }}>
+                  <div className="row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span className="small" style={{ fontWeight: isActive ? 800 : 600, minWidth: 86 }}>
+                      {month}
+                    </span>
+                    <span className="small">
+                      🚚 {formatHuf(Number(r.driver_day_rate))}
+                      {dPct && <span style={{ color: dPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({dPct})</span>}
+                      <span className="muted"> · </span>
+                      📦 {formatHuf(Number(r.loader_day_rate))}
+                      {lPct && <span style={{ color: lPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({lPct})</span>}
+                    </span>
+                    {isActive && <span className="badge primary">most érvényes</span>}
+                    {isFuture && <span className="badge warning">jövőbeli</span>}
+                  </div>
+                  {isAdmin && (
+                    <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés" disabled={remove.isPending}
+                      onConfirm={() => remove.mutate(r.id)}>🗑</ConfirmButton>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+        {base && (
+          <div className="between" style={{
+            padding: '6px 8px', borderRadius: 8, opacity: 0.85,
+            background: activeRow?.id === base.id ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
+          }}>
+            <span className="small">
+              <span className="muted" style={{ minWidth: 86, display: 'inline-block' }}>kezdettől</span>
+              🚚 {formatHuf(Number(base.driver_day_rate))}<span className="muted"> · </span>📦 {formatHuf(Number(base.loader_day_rate))}
+            </span>
+            {activeRow?.id === base.id && <span className="badge primary">most érvényes</span>}
+          </div>
+        )}
+        {rows.length === 0 && <div className="tiny muted">Még nincs rögzített napidíj.</div>}
+      </div>
     </div>
   )
 }

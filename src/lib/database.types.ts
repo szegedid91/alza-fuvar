@@ -1406,6 +1406,51 @@ export type Database = {
           },
         ]
       }
+      workspace_rate_history: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          driver_day_rate: number
+          id: string
+          loader_day_rate: number
+          valid_from: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          driver_day_rate: number
+          id?: string
+          loader_day_rate: number
+          valid_from: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          driver_day_rate?: number
+          id?: string
+          loader_day_rate?: number
+          valid_from?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_rate_history_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_rate_history_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspaces: {
         Row: {
           created_at: string
@@ -1476,6 +1521,7 @@ export type Database = {
         Args: { p_force?: boolean; target_id: string }
         Returns: undefined
       }
+      delete_workspace_rate: { Args: { p_id: string }; Returns: undefined }
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }
@@ -1519,6 +1565,15 @@ export type Database = {
           p_lat: number
           p_lng: number
           p_radius_m: number
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      set_workspace_rate_from: {
+        Args: {
+          p_driver_rate: number
+          p_loader_rate: number
+          p_valid_from: string
           p_workspace_id: string
         }
         Returns: undefined
