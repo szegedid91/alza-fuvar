@@ -603,8 +603,10 @@ function WeekTable() {
                   <select className="select" style={selStyle} value="" disabled={rowBusy || freeCars.length === 0}
                     onChange={(e) => { if (e.target.value) void swapCar(rowMenu.carId, e.target.value) }}>
                     <option value="">{freeCars.length === 0 ? 'Nincs szabad autó ezen a héten' : '— válassz autót —'}</option>
-                    {freeCars.map((c) => (
-                      <option key={c.id} value={c.id}>{c.plate}{categoryName(c.category_id) ? ` · ${categoryName(c.category_id)}` : ''}</option>
+                    {groupByCategory(freeCars, categories).map((g) => (
+                      <optgroup key={g.name} label={g.name}>
+                        {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -625,8 +627,12 @@ function WeekTable() {
           onChange={(e) => { if (e.target.value) setAddedCars((p) => [...p, e.target.value]) }}
         >
           <option value="">＋ Autó (rendszám) hozzáadása a heti táblázathoz…</option>
-          {activeCars.filter((c) => !rowCarIds.includes(c.id)).map((c) => (
-            <option key={c.id} value={c.id}>{c.plate}{categoryName(c.category_id) ? ` · ${categoryName(c.category_id)}` : ''}{c.label ? ` · ${c.label}` : ''}</option>
+          {groupByCategory(activeCars.filter((c) => !rowCarIds.includes(c.id)), categories).map((g) => (
+            <optgroup key={g.name} label={g.name}>
+              {g.cars.map((c) => (
+                <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <div className="tiny muted">
@@ -661,6 +667,22 @@ function WeekTable() {
       </div>
     </>
   )
+}
+
+// Autó-lista kategóriánként csoportosítva, a kategóriák beállított sorrendjében.
+// A kategória nélküli autók a végén, "Egyéb" néven.
+function groupByCategory<T extends { id: string; category_id: string | null }>(
+  list: T[],
+  categories: { id: string; name: string }[] | undefined,
+): { name: string; cars: T[] }[] {
+  const groups: { name: string; cars: T[] }[] = []
+  for (const cat of categories ?? []) {
+    const inCat = list.filter((c) => c.category_id === cat.id)
+    if (inCat.length > 0) groups.push({ name: cat.name, cars: inCat })
+  }
+  const rest = list.filter((c) => !c.category_id || !(categories ?? []).some((k) => k.id === c.category_id))
+  if (rest.length > 0) groups.push({ name: 'Egyéb', cars: rest })
+  return groups
 }
 
 export default function ShiftEditor() {
@@ -853,7 +875,11 @@ export default function ShiftEditor() {
           <label>Autó-szűrő</label>
           <select className="select" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}>
             <option value="">Összes autó</option>
-            {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+            {groupByCategory(cars ?? [], categories).map((g) => (
+              <optgroup key={g.name} label={g.name}>
+                {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.active ? '' : ' (inaktív)'}</option>)}
+              </optgroup>
+            ))}
           </select>
         </div>
 
