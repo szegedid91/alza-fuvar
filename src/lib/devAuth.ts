@@ -1,15 +1,16 @@
-// Fejlesztői gyors-belépés — CSAK dev buildben aktív.
-// A `vite build` (éles) során az `import.meta.env.DEV` false, így a Login
-// oldalon a panel meg sem jelenik, és élesben rendesen be kell jelentkezni.
+// Fejlesztői gyors-belépés — minden szerepkörhöz egy gomb a bejelentkező oldalon.
 //
-// A gombok VALÓDI, előre felvett demo-fiókokba lépnek be (Supabase Auth),
-// hogy minden RLS-es adat-hozzáférés és írás rendesen működjön — csak épp
-// nem kell gépelni. Ezek a fiókok az "Alza" munkaterülethez tartoznak.
+// FONTOS: a kódban SEMMILYEN hitelesítő adat (jelszó, email) nincs. A fiókok a
+// .env.local-ból jönnek, ami nincs verziókövetve — így éles buildbe nem is
+// kerülhetnek bele: a CI-ben nincs ilyen változó, ezért ott a panel és a
+// fiókok teljesen eltűnnek a kódból.
 //
-// FONTOS: a sofőr/rakodó megkülönböztetés NEM itt dől el. A munkatársak
-// egységes "crew" szerepűek; hogy ma ki a sofőr és ki a rakodó, azt a
-// menedzser beosztása (shift) határozza meg. Ezért a két crew-fiók csak
-// két különböző munkatárs — a napi szerepük a beosztástól függ.
+// Formátum (EGY sorban, a .env.local-ban):
+//   VITE_DEV_ACCOUNTS=[{"label":"Munkatárs 1","email":"...","password":"...","sub":"crew","icon":"🧑‍🔧"}]
+//
+// A napi sofőr/rakodó szerep NEM itt dől el: a munkatársak egységes "crew"
+// szerepűek, a napi szerepet a menedzser beosztása (shift) határozza meg.
+// Ezért kell két munkatárs-fiók: a páros (sofőr + rakodó) teszteléséhez.
 
 export interface DevAccount {
   key: string
@@ -20,28 +21,43 @@ export interface DevAccount {
   password: string
 }
 
-// A jelszavak SOHA nem kerülhetnek a kódba: a repó publikus, és a fiókok
-// az ÉLES backendhez tartoznak. A .env.local-ból jönnek (nincs verziókövetve),
-// formátum:  VITE_DEV_PASSWORDS=sofor.teszt@alza.hu:jelszó,admin@alza.hu:jelszó
-const DEV_PASSWORDS: Record<string, string> = Object.fromEntries(
-  ((import.meta.env.VITE_DEV_PASSWORDS as string | undefined) ?? '')
-    .split(',')
-    .map((pair) => pair.split(':'))
-    .filter((p): p is [string, string] => p.length === 2 && !!p[0].trim() && !!p[1].trim())
-    .map(([email, pw]) => [email.trim(), pw.trim()]),
-)
+// Csak helyi futtatásnál: dev szerver VAGY localhost-on megnyitott preview build.
+// Az éles domainen akkor sem jelenik meg, ha valaki véletlenül beállítaná.
+const isLocalHost =
+  typeof window !== 'undefined' &&
+  (['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
+    window.location.hostname.endsWith('.localhost'))
 
-// A ternárius miatt éles buildben a lista (és benne az email címek) kiesik
-const DEV_ACCOUNT_META: Omit<DevAccount, 'password'>[] = import.meta.env.DEV ? [
-  { key: 'crew1',   label: 'Munkatárs 1', sub: 'crew — napi szerep a beosztásból', icon: '🧑‍🔧', email: 'sofor.teszt@alza.hu' },
-  { key: 'crew2',   label: 'Munkatárs 2', sub: 'crew — napi szerep a beosztásból', icon: '🧑‍🔧', email: 'rakodo.teszt@alza.hu' },
-  { key: 'manager', label: 'Menedzser',   sub: 'beosztás, jóváhagyás',             icon: '🧭', email: 'manager.teszt@alza.hu' },
-  { key: 'admin',   label: 'Admin',       sub: 'minden munkaterület, bér',         icon: '🛠️', email: 'admin@alza.hu' },
-] : []
+const LOCAL_ONLY = import.meta.env.DEV || isLocalHost
 
-// Csak azok a gombok jelennek meg, amikhez a .env.local ad jelszót
-export const DEV_ACCOUNTS: DevAccount[] = DEV_ACCOUNT_META
-  .filter((a) => !!DEV_PASSWORDS[a.email])
-  .map((a) => ({ ...a, password: DEV_PASSWORDS[a.email] }))
+function parseAccounts(): DevAccount[] {
+  const raw = (import.meta.env.VITE_DEV_ACCOUNTS as string | undefined)?.trim()
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as Partial<DevAccount>[]
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((a): a is Partial<DevAccount> & { email: string; password: string } =>
+        !!a && typeof a.email === 'string' && !!a.email && typeof a.password === 'string' && !!a.password)
+      .map((a, i) => ({
+        key: a.key ?? `dev${i}`,
+        label: a.label ?? a.email.split('@')[0],
+        sub: a.sub ?? '',
+        icon: a.icon ?? '👤',
+        email: a.email,
+        password: a.password,
+      }))
+  } catch {
+    // Hibás JSON: inkább ne legyen panel, mint hogy fél adattal próbálkozzon
+    console.error('VITE_DEV_ACCOUNTS: érvénytelen JSON — a gyors belépés kikapcsolva')
+    return []
+  }
+}
 
-export const DEV_LOGIN_ENABLED = import.meta.env.DEV && DEV_ACCOUNTS.length > 0
+export const DEV_ACCOUNTS: DevAccount[] = LOCAL_ONLY ? parseAccounts() : []
+
+export const DEV_LOGIN_ENABLED = DEV_ACCOUNTS.length > 0
+
+// Helyben futunk, de egy fiók sincs beállítva → a bejelentkező oldalon
+// megmutatjuk, mit kell a .env.local-ba írni
+export const DEV_LOGIN_SETUP_HINT = LOCAL_ONLY && DEV_ACCOUNTS.length === 0

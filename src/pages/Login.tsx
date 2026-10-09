@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { DEV_LOGIN_ENABLED, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
+import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { RECOVERY_PATH } from '../lib/recovery'
 
 type Mode = 'login' | 'register' | 'forgot'
@@ -131,12 +131,33 @@ export default function Login() {
         </form>
       </div>
 
+
+      {DEV_LOGIN_SETUP_HINT && (
+        <div className="card auth-card" style={{ borderColor: 'var(--warning)', borderStyle: 'dashed' }}>
+          <div className="card-title" style={{ color: 'var(--warning)' }}>🧪 Gyors belépés — nincs beállítva</div>
+          <p className="tiny muted" style={{ marginTop: 0 }}>
+            Helyben futsz, de nincs fejlesztői fiók megadva. Vedd fel őket a projekt
+            <strong> .env.local</strong> fájljába egy sorban (a fájl nincs verziókövetve, éles buildbe nem kerül):
+          </p>
+          <pre className="tiny" style={{
+            margin: 0, padding: 10, borderRadius: 8, overflowX: 'auto',
+            background: 'var(--bg-elev-2)', border: '1px solid var(--border)',
+          }}>
+{`VITE_DEV_ACCOUNTS=[{"label":"Munkatárs 1","email":"...","password":"..."}]`}
+          </pre>
+          <p className="tiny muted" style={{ marginBottom: 0 }}>
+            A minta a <strong>.env.example</strong> fájlban van. Mentés után indítsd újra a dev szervert.
+          </p>
+        </div>
+      )}
+
       {DEV_LOGIN_ENABLED && (
         <div className="card auth-card" style={{ borderColor: 'var(--warning)', borderStyle: 'dashed' }}>
           <div className="card-title" style={{ color: 'var(--warning)' }}>🧪 Gyors belépés (fejlesztői)</div>
           <p className="tiny muted" style={{ marginTop: 0 }}>
-            Csak fejlesztői módban látszik. Válaszd ki, melyik fiókkal szeretnél belépni. A munkatársak napi
-            szerepe (sofőr/rakodó) a menedzser beosztásából derül ki, nem itt.
+            Csak helyi futtatásnál látszik (éles oldalon soha). Válaszd ki, melyik fiókkal szeretnél belépni.
+            A munkatársak napi szerepe (sofőr/rakodó) a menedzser beosztásából derül ki, nem itt — ezért van
+            két munkatárs-fiók: velük a páros is tesztelhető.
           </p>
           <div className="grid-2">
             {DEV_ACCOUNTS.map((acc) => (
