@@ -127,7 +127,7 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
                   <input className="input" style={{ minHeight: 32, padding: '4px 8px', fontSize: 14 }} value={renameVal} autoFocus onChange={(e) => setRenameVal(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') rename.mutate({ id: cat.id, value: renameVal }); if (e.key === 'Escape') setRenaming(null) }} />
                   <button className="btn sm auto" style={iconBtn} onClick={() => rename.mutate({ id: cat.id, value: renameVal })}>✔</button>
-                  <button className="btn ghost sm auto" style={iconBtn} onClick={() => setRenaming(null)}>✕</button>
+                  <button className="btn ghost sm auto" style={iconBtn} aria-label="Mégse" onClick={() => setRenaming(null)}>✕</button>
                 </div>
               ) : (
                 <div style={{ fontWeight: 800, fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

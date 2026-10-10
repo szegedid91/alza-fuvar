@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase'
 import { submitNow } from '../lib/outbox'
 import { parseRouteExcel } from '../lib/excel'
 import { stopAddressText, navUrl, navAppLabel, type NavApp } from '../lib/nav'
-import { resolveNames } from '../lib/names'
+import { resolveNames, telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Car } from '../lib/checkin'
@@ -175,6 +175,9 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
     onReimport()
   }
 
+  const nextId = list.find((x) => x.status === 'pending')?.id ?? null
+  const doneCount = list.filter((x) => x.status !== 'pending').length
+
   return (
     <>
       <RouteSummary stops={list} startPoi={upload.start_poi} endPoi={upload.end_poi} />
@@ -192,10 +195,23 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
         </Suspense>
       )}
 
+      {list.length > 0 && (
+        <div className="card" style={{ padding: '10px 14px' }}>
+          <div className="between">
+            <span className="small" style={{ fontWeight: 700 }}>{doneCount}/{list.length} stop kész</span>
+            <span className="tiny muted">{list.length - doneCount} hátra</span>
+          </div>
+          <div className="progress" aria-hidden="true"><div style={{ width: `${list.length ? Math.round((doneCount / list.length) * 100) : 0}%` }} /></div>
+        </div>
+      )}
+
+      {/* Kompakt lista: a KÖVETKEZŐ stop nyitva, a többi egy soros — koppintásra
+          nyílik. A kész stopok zölden, összecsukva maradnak a helyükön
+          (a sorrend a sofőré, nem rendezzük át a háta mögött). */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={list.map((s) => s.id)} strategy={verticalListSortingStrategy}>
           <div className="stack">
-            {list.map((s, i) => <SortableStop key={s.id} stop={s} index={i} uploadId={upload.id} />)}
+            {list.map((s, i) => <SortableStop key={s.id} stop={s} index={i} uploadId={upload.id} isNext={s.id === nextId} />)}
           </div>
         </SortableContext>
       </DndContext>
@@ -207,19 +223,29 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
   )
 }
 
-function SortableStop({ stop, index, uploadId }: { stop: Stop; index: number; uploadId: string }) {
+function SortableStop({ stop, index, uploadId, isNext }: { stop: Stop; index: number; uploadId: string; isNext: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }
   return (
     <div ref={setNodeRef} style={style}>
-      <StopCard stop={stop} index={index} uploadId={uploadId} dragHandle={<span className="drag-handle" {...attributes} {...listeners}>⠿</span>} />
+      <StopCard
+        stop={stop}
+        index={index}
+        uploadId={uploadId}
+        isNext={isNext}
+        dragHandle={<span className="drag-handle" aria-label="Sorrend módosítása (húzd)" {...attributes} {...listeners}>⠿</span>}
+      />
     </div>
   )
 }
 
-function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: number; uploadId: string; dragHandle: React.ReactNode }) {
+function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; index: number; uploadId: string; isNext: boolean; dragHandle: React.ReactNode }) {
   const { profile } = useAuth()
   const qc = useQueryClient()
+  // Nyitva: a következő stop automatikusan; a többi koppintásra. Ha a
+  // "következő" tovább lép (mentés után), az új következő magától kinyílik.
+  const [open, setOpen] = useState(isNext)
+  useEffect(() => { if (isNext) setOpen(true) }, [isNext])
   const [received, setReceived] = useState(stop.received_amount != null ? String(stop.received_amount) : '')
   const [eventNote, setEventNote] = useState(stop.event_note ?? '')
   const [address, setAddress] = useState(stop.address_override ?? '')
@@ -234,6 +260,7 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
   const expected = Number(stop.expected_amount ?? 0)
   const recvNum = received !== '' ? parseHuNumber(received) : null
   const tip = recvNum != null && Number.isFinite(recvNum) ? recvNum - expected : null
+  const phoneHref = telHref(stop.phone)
 
   function openNav(app: NavApp) {
     window.open(navUrl(app, addrText), '_blank')
@@ -248,6 +275,7 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
     }
     setBusy(true)
     setSaveError(null)
+    let ok = false
     try {
       const recv = Number.isFinite(recvNum as number) ? recvNum : null
       await submitNow({
@@ -261,6 +289,7 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
           status: 'done', recorded_by: profile.id, recorded_at: new Date().toISOString(),
         },
       })
+      ok = true
       setSaved(true); setTimeout(() => setSaved(false), 1500)
     } catch (e) {
       // pl. zárolt hónap vagy jogosultsági hiba — látható hibaüzenet, nem néma elakadás
@@ -269,40 +298,75 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
       setBusy(false)
     }
     await qc.invalidateQueries({ queryKey: ['route-stops', uploadId] })
+    // kész → összecsukjuk, a következő stop nyílik ki helyette
+    if (ok) setOpen(false)
   }
 
   async function skip(reason: string) {
     if (!profile) return
     setBusy(true); setShowSkip(false)
     setSaveError(null)
+    let ok = false
     try {
       await submitNow({
         id: crypto.randomUUID(), table: 'route_stops', op: 'update', match: { id: stop.id },
         label: `Sikertelen – ${stop.city ?? ''}`,
         values: { status: 'skipped', skip_reason: reason, recorded_by: profile.id, recorded_at: new Date().toISOString() },
       })
+      ok = true
     } catch (e) {
       setSaveError('Mentés sikertelen: ' + (e instanceof Error ? e.message : 'ismeretlen hiba'))
     } finally {
       setBusy(false)
     }
     await qc.invalidateQueries({ queryKey: ['route-stops', uploadId] })
+    if (ok) setOpen(false)
   }
 
-  const borderColor = stop.status === 'done' ? 'var(--success)' : stop.status === 'skipped' ? 'var(--danger)' : undefined
+  const borderColor = stop.status === 'done' ? 'var(--success)' : stop.status === 'skipped' ? 'var(--danger)' : isNext ? 'var(--primary)' : undefined
 
+  // ---- Összecsukott sor ----
+  if (!open) {
+    const summary = stop.status === 'done'
+      ? (stop.is_cash && stop.received_amount != null ? `✔ ${formatHuf(Number(stop.received_amount))}` : '✔ kész')
+      : stop.status === 'skipped' ? `✖ ${stop.skip_reason ?? 'sikertelen'}`
+      : (stop.time_window || stop.planned_time || (stop.is_cash ? `💵 ${formatHuf(expected)}` : ''))
+    return (
+      <div className="card stop-row" style={{ borderColor, padding: '8px 10px' }}>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          {dragHandle}
+          <span className="badge" style={{ flexShrink: 0 }}>{index + 1}.</span>
+          <button
+            type="button"
+            className="stop-row-btn"
+            onClick={() => setOpen(true)}
+            aria-label={`${index + 1}. stop megnyitása: ${addrText}`}
+          >
+            <span className="stop-row-addr" style={{ opacity: stop.status === 'pending' ? 1 : 0.8 }}>{addrText || '(nincs cím)'}</span>
+            <span className="tiny muted" style={{ flexShrink: 0 }}>{summary}</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ---- Nyitott kártya ----
   return (
-    <div className="card stack" style={{ borderColor }}>
+    <div className="card stack" style={{ borderColor, borderWidth: isNext ? 2 : undefined }}>
       <div className="between">
         <div className="row" style={{ gap: 8 }}>
           {dragHandle}
           <span className="badge">{index + 1}.</span>
-          {stop.sheet_name && <span className="badge primary">{stop.sheet_name}</span>}
+          {isNext && stop.status === 'pending' && <span className="badge primary">Következő</span>}
+          {stop.sheet_name && <span className="badge">{stop.sheet_name}</span>}
           {stop.is_cash && <span className="badge warning">Készpénz</span>}
           {stop.status === 'done' && <span className="badge success">✔</span>}
           {stop.status === 'skipped' && <span className="badge danger">Sikertelen</span>}
         </div>
-        {stop.time_window && <span className="tiny muted">{stop.time_window}</span>}
+        <div className="row" style={{ gap: 6 }}>
+          {stop.time_window && <span className="tiny muted">{stop.time_window}</span>}
+          <button type="button" className="btn ghost sm auto" aria-label="Összecsukás" onClick={() => setOpen(false)}>⌃</button>
+        </div>
       </div>
 
       <div>
@@ -312,7 +376,7 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
         ) : (
           <div className="row between">
             <div style={{ fontWeight: 700 }}>{addrText || '(nincs cím)'}</div>
-            <button className="btn ghost sm auto" onClick={() => setEditAddr(true)}>✎</button>
+            <button className="btn ghost sm auto" aria-label="Cím szerkesztése" onClick={() => setEditAddr(true)}>✎</button>
           </div>
         )}
         {stop.planned_time && <div className="tiny muted">Tervezett: {stop.planned_time}</div>}
@@ -321,7 +385,9 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
 
       <div className="row" style={{ gap: 8 }}>
         <button className="btn secondary sm" style={{ flex: 1 }} onClick={() => setShowNav((v) => !v)}>🧭 Navigáció</button>
-        <button className="btn ghost sm" style={{ flex: 1 }} disabled title="Nincs adatforrás (kikapcsolva)">📞 Hívás</button>
+        {phoneHref && (
+          <a className="btn ghost sm" style={{ flex: 1, textDecoration: 'none' }} href={phoneHref}>📞 Hívás</a>
+        )}
       </div>
       {showNav && (
         <div className="grid-3">

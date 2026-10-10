@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { roleLabel, formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
+import TodayStepper from '../components/TodayStepper'
 
 interface HubItem { to: string; icon: string; title: string; desc: string }
 
@@ -48,10 +49,11 @@ export default function Home() {
     <div className="stack">
       <div className="card">
         <div className="between">
-          <div>
+          <Link to="/profil" style={{ textDecoration: 'none', color: 'inherit' }} aria-label="Profil megnyitása">
             <div className="muted small">Üdv,</div>
-            <h2>{profile?.full_name ?? profile?.email}</h2>
-          </div>
+            <h2>{profile?.full_name ?? profile?.email} <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>›</span></h2>
+            <div className="tiny muted">👤 Profil, értesítések, kilépés</div>
+          </Link>
           <span className="badge primary">{role ? roleLabel[role] : ''}</span>
         </div>
         <div className="divider" style={{ margin: '14px 0' }} />
@@ -80,6 +82,7 @@ export default function Home() {
         )}
       </div>
 
+      {isCrew && <TodayStepper />}
       {isCrew && <HubGrid title="Napi munkafolyamat" items={crewHub} />}
       {isManagerOrAdmin && <HubGrid title="Vezetői eszközök" items={managerHub} />}
     </div>

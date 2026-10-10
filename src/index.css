@@ -421,3 +421,13 @@ input[type='date'].input {
   background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 14px;
 }
 .update-banner .btn { background: var(--bg-elev); color: var(--text); border-color: transparent; }
+
+/* ---------- Fuvarterv: kompakt stop-sorok + haladás ---------- */
+.progress { height: 6px; border-radius: 3px; background: var(--bg-elev-2); overflow: hidden; margin-top: 8px; }
+.progress > div { height: 100%; background: var(--success); border-radius: 3px; transition: width .2s ease; }
+.stop-row-btn {
+  flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 6px 0; cursor: pointer;
+  min-height: 40px;
+}
+.stop-row-addr { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

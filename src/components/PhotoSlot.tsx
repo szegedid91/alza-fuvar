@@ -7,20 +7,24 @@ export interface CapturedPhoto {
 }
 
 // Egy fotó-hely: érintésre élő kamera nyílik, utána a bélyegkép látszik.
+// onOpen: ha a szülő adja, a koppintás NEM itt nyit kamerát, hanem a szülő
+// kezeli (pl. autó-ellenőrzés: felvétel után automatikusan a következő nézet).
 export default function PhotoSlot({
   label,
   photo,
   onCapture,
+  onOpen,
 }: {
   label: string
   photo: CapturedPhoto | null
   onCapture: (p: CapturedPhoto) => void
+  onOpen?: () => void
 }) {
   const [open, setOpen] = useState(false)
 
   return (
     <>
-      <button type="button" className="thumb-slot" onClick={() => setOpen(true)} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+      <button type="button" className="thumb-slot" onClick={() => (onOpen ? onOpen() : setOpen(true))} style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
         {photo ? (
           <img src={photo.previewUrl} className="thumb" alt={label} />
         ) : (

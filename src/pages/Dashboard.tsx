@@ -110,7 +110,7 @@ export default function Dashboard() {
       const [{ data: cars }, { data: checkins }, { data: shifts }, { data: uploads }, { data: fuel }, { data: insp }, { data: issues }] =
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
-          supabase.from('check_ins').select('car_id, user_id, checked_in_at, outside_geofence, out_outside_geofence').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('check_ins').select('car_id, user_id, checked_in_at, outside_geofence, out_outside_geofence, manual_checkin').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('route_uploads').select('id, car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
@@ -156,6 +156,7 @@ export default function Dashboard() {
         const who = `${names[c.user_id] ?? '?'} (${carMap.get(c.car_id)?.plate ?? '?'})`
         if (c.outside_geofence) flags.push({ kind: 'geo', text: `Telephelyen kívüli becsekkolás: ${who}` })
         if (c.out_outside_geofence) flags.push({ kind: 'geo', text: `Telephelyen kívüli kijelentkezés: ${who}` })
+        if (c.manual_checkin) flags.push({ kind: 'manual', text: `Kézi becsekkolás (QR nélkül): ${who}` })
       }
       // nyitott autó-hibák
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })

@@ -5,6 +5,10 @@ import { prefetchRoute } from '../lib/routeQueries'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
+import { useCars } from '../hooks/useCars'
+import { useCarCategories } from '../hooks/useCarCategories'
+import { groupByCategory } from '../lib/calendar'
+import ConfirmButton from '../components/ConfirmButton'
 import { parseCarQr } from '../lib/qr'
 import { resolveCarByToken, checkInspectionRequirement, type Car, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
@@ -29,7 +33,12 @@ export default function Scan() {
   const [inspection, setInspection] = useState<InspectionRequirement | null>(null)
 
   // Napközbeni autócsere: a beolvasott új autó + a kötelező ok
-  const [pendingSwitch, setPendingSwitch] = useState<Car | null>(null)
+  const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean } | null>(null)
+  // Kézi becsekkolás (sérült matrica / tiltott kamera): autó a listából
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualCarId, setManualCarId] = useState('')
+  const { data: cars } = useCars(true)
+  const { data: categories } = useCarCategories()
   const [switchReason, setSwitchReason] = useState('Műszaki hiba')
   const [switchNote, setSwitchNote] = useState('')
 
@@ -79,15 +88,36 @@ export default function Scan() {
         setBusy(false)
         return
       }
-      // Napközbeni autócsere: ha ma már be vagy csekkolva egy MÁSIK autóra és
-      // még nem jelentkeztél ki, előbb az okot kérjük be (pl. műszaki hiba).
-      const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
-      if (openCi && openCi.car_id !== car.id) {
-        setPendingSwitch(car)
-        setBusy(false)
-        return
-      }
-      await doCheckIn(car, null, null, null)
+      await startCheckIn(car, false)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Hiba'
+      setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Közös belépési pont QR-ből és kézi választásból: ha ma már egy MÁSIK
+  // autóra vagy becsekkolva és nem jelentkeztél ki, előbb az okot kérjük
+  // (autócsere), egyébként azonnal becsekkolunk.
+  async function startCheckIn(car: Car, manual: boolean) {
+    const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
+    if (openCi && openCi.car_id !== car.id) {
+      setPendingSwitch({ car, manual })
+      return
+    }
+    await doCheckIn(car, null, null, null, manual)
+  }
+
+  async function manualCheckIn() {
+    const car = cars?.find((c) => c.id === manualCarId)
+    if (!car) return
+    setError(null)
+    setBusy(true)
+    try {
+      await startCheckIn(car, true)
+      setManualOpen(false)
+      setManualCarId('')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Hiba'
       setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
@@ -98,7 +128,8 @@ export default function Scan() {
 
   // Becsekkolás (normál vagy autócsere). Csere esetén a régi becsekkolást
   // lezárjuk, az újba pedig bekerül az ok és az előző autó.
-  async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null) {
+  // manual: QR nélkül, listából választva — a vezetők jelzést kapnak róla.
+  async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null, manual = false) {
     if (!currentWorkspaceId || !profile) return
     const date = todayISO()
     const gps = await getCurrentPosition()
@@ -129,6 +160,7 @@ export default function Scan() {
           checked_out_at: null,
           switch_reason: reason,
           prev_car_id: prevCarId,
+          manual_checkin: manual,
         },
       })
     } else {
@@ -149,6 +181,7 @@ export default function Scan() {
           outside_geofence: outside,
           switch_reason: reason,
           prev_car_id: prevCarId,
+          manual_checkin: manual,
         },
       })
     }
@@ -183,7 +216,7 @@ export default function Scan() {
     setError(null)
     try {
       const reason = switchNote.trim() ? `${switchReason}: ${switchNote.trim()}` : switchReason
-      await doCheckIn(pendingSwitch, reason, today.checkin.car_id, today.checkin.id)
+      await doCheckIn(pendingSwitch.car, reason, today.checkin.car_id, today.checkin.id, pendingSwitch.manual)
       setPendingSwitch(null)
       setSwitchNote('')
     } catch (e) {
@@ -270,7 +303,7 @@ export default function Scan() {
 
       {pendingSwitch && (
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-          <div className="row"><span style={{ fontSize: 24 }}>🔁</span><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.plate}</strong></div>
+          <div className="row"><span style={{ fontSize: 24 }}>🔁</span><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.car.plate}</strong></div>
           <p className="small muted" style={{ margin: 0 }}>
             Ma már a(z) {today?.car?.plate} autóra vagy becsekkolva. Add meg, miért váltasz — az előző autót lezárjuk, és a vezetők értesítést kapnak.
           </p>
@@ -304,6 +337,35 @@ export default function Scan() {
           <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
             {busy ? 'Feldolgozás…' : '📷 QR beolvasása'}
           </button>
+          {!manualOpen && (
+            <button className="btn ghost sm" type="button" onClick={() => { setError(null); setManualOpen(true) }} disabled={busy}>
+              Nem megy a beolvasás? Kézi választás
+            </button>
+          )}
+          {manualOpen && (
+            <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+              <div className="tiny muted">
+                Sérült matrica vagy tiltott kamera esetén válaszd ki az autót. A kézi becsekkolást a vezetők jelzésként látják.
+              </div>
+              <div className="field">
+                <label>Autó</label>
+                <select className="select" value={manualCarId} onChange={(e) => setManualCarId(e.target.value)}>
+                  <option value="">— válassz —</option>
+                  {groupByCategory(cars ?? [], categories).map((g) => (
+                    <optgroup key={g.name} label={g.name}>
+                      {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div className="btn-grid">
+                <button className="btn ghost sm" type="button" onClick={() => { setManualOpen(false); setManualCarId('') }}>Mégse</button>
+                <ConfirmButton className="btn sm" confirmLabel="Igen, becsekkolok" disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
+                  {busy ? 'Feldolgozás…' : '✍️ Becsekkolás kézzel'}
+                </ConfirmButton>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

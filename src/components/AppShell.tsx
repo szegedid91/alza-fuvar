@@ -221,14 +221,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const nav: NavItem[] = [{ to: '/', icon: '🏠', label: 'Kezdőlap', end: true }]
   if (isCrew) {
+    // A munkatárs napi útja: beolvasás → fuvar → (este) beosztás. A Profil a
+    // kezdőlap fejlécéből érhető el — az alsó menüben a Beosztás értékesebb.
     nav.push({ to: '/beolvasas', icon: '📷', label: 'Beolvasás' })
     nav.push({ to: '/fuvar', icon: '🗺️', label: 'Fuvar' })
+    nav.push({ to: '/beosztas', icon: '📅', label: 'Beosztás' })
   }
   if (isManagerOrAdmin) {
     nav.push({ to: '/jovahagyas', icon: '✅', label: 'Jóváhagyás' })
     nav.push({ to: '/tagok', icon: '👥', label: 'Tagok' })
+    nav.push({ to: '/profil', icon: '👤', label: 'Profil' })
   }
-  nav.push({ to: '/profil', icon: '👤', label: 'Profil' })
 
   return (
     <div className="app">
@@ -309,7 +312,7 @@ function FailedPanel({ onClose }: { onClose: () => void }) {
       <div className="card stack" style={{ maxWidth: 460, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="between">
           <div className="card-title" style={{ margin: 0 }}>⚠️ Nem szinkronizált tételek</div>
-          <button className="btn ghost sm" onClick={onClose}>✕</button>
+          <button className="btn ghost sm" aria-label="Bezárás" onClick={onClose}>✕</button>
         </div>
         {items.length === 0 && <p className="muted small">Nincs több hibás tétel. 🎉</p>}
         {items.map((r) => (

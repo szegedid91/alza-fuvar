@@ -240,7 +240,7 @@ export default function PhotoReview() {
         <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
           <div className="between">
             <div className="card-title" style={{ margin: 0 }}>⚖️ Összehasonlítás</div>
-            <button className="btn ghost sm auto" onClick={() => setPicked([])}>✕ Bezárás</button>
+            <button className="btn ghost sm auto" aria-label="Összehasonlítás bezárása" onClick={() => setPicked([])}>✕ Bezárás</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {pickedItems.map((it, idx) => (

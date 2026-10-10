@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import RequireCheckin from '../components/RequireCheckin'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
+import CameraCapture from '../components/CameraCapture'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { supabase } from '../lib/supabase'
@@ -31,6 +32,17 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const [photos, setPhotos] = useState<Partial<Record<Enums<'inspection_view'>, CapturedPhoto>>>({})
+  // Épp nyitott kamera-nézet. Felvétel után automatikusan a KÖVETKEZŐ hiányzó
+  // nézet jön — nem kell minden fotó után visszalépni a rácsba és újra koppintani.
+  const [activeView, setActiveView] = useState<Enums<'inspection_view'> | null>(null)
+  function onCaptured(blob: Blob, previewUrl: string) {
+    if (!activeView) return
+    const nextPhotos = { ...photos, [activeView]: { blob, previewUrl } }
+    setPhotos(nextPhotos)
+    const idx = VIEWS.indexOf(activeView)
+    const ordered = [...VIEWS.slice(idx + 1), ...VIEWS.slice(0, idx)]
+    setActiveView(ordered.find((v) => !nextPhotos[v]) ?? null)
+  }
   const [reason, setReason] = useState<Enums<'inspection_reason'>>('manual')
   const [reasonText, setReasonText] = useState<string>('')
   const [busy, setBusy] = useState(false)
@@ -113,10 +125,21 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
         <div className="grid-3">
           {VIEWS.map((v) => (
             <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
+              onOpen={() => setActiveView(v)}
               onCapture={(p) => setPhotos((prev) => ({ ...prev, [v]: p }))} />
           ))}
         </div>
+        {!allCaptured && (
+          <div className="tiny muted">Koppints egy nézetre — felvétel után automatikusan a következő jön.</div>
+        )}
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
+        {activeView && (
+          <CameraCapture
+            title={`${inspectionViewLabel[activeView]} (${VIEWS.indexOf(activeView) + 1}/${VIEWS.length})`}
+            onCancel={() => setActiveView(null)}
+            onCapture={onCaptured}
+          />
+        )}
         <button className="btn" disabled={!allCaptured || busy} onClick={() => void submit()}>
           {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Fotók: ${VIEWS.filter((v) => photos[v]).length}/5`}
         </button>
