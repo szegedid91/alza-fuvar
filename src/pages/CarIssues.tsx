@@ -10,6 +10,7 @@ import { resolveNames } from '../lib/names'
 import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../lib/labels'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import PhotoThumb from '../components/PhotoThumb'
+import ConfirmButton from '../components/ConfirmButton'
 import type { Enums, Tables } from '../lib/database.types'
 
 type Issue = Tables<'car_issues'>
@@ -61,6 +62,10 @@ export default function CarIssues() {
 
   // Alapértelmezett autó: amire ma be van csekkolva
   const effectiveCarId = carId || today?.car?.id || ''
+  // Ha MÁSIK autóra jelent hibát, mint amin ma ül, rákérdezünk — a gyakori
+  // tévesztés az, hogy a tegnapi/másik autó marad kiválasztva
+  const otherCar = !!today?.car && !!effectiveCarId && effectiveCarId !== today.car.id
+  const otherPlate = otherCar ? (cars?.find((c) => c.id === effectiveCarId)?.plate ?? '?') : ''
 
   async function submit() {
     if (!currentWorkspaceId || !profile || !effectiveCarId || !note.trim()) return
@@ -75,7 +80,8 @@ export default function CarIssues() {
         },
         ...(photo ? { photo: { workspaceId: currentWorkspaceId, folder: 'issues', id, column: 'photo_path', blob: photo.blob } } : {}),
       })
-      setNote(''); setPhoto(null); setMsg('Hiba bejelentve. A menedzser látja és követi.')
+      // a választó visszaáll a mai autóra — a következő bejelentés ne a másik autón ragadjon
+      setNote(''); setPhoto(null); setCarId(''); setMsg('Hiba bejelentve. A menedzser látja és követi.')
       await qc.invalidateQueries({ queryKey: ['car-issues'] })
     } catch (e) {
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))
@@ -98,8 +104,13 @@ export default function CarIssues() {
             <label>Autó</label>
             <select className="select" value={effectiveCarId} onChange={(e) => setCarId(e.target.value)}>
               <option value="">— válassz —</option>
-              {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` (${c.label})` : ''}</option>)}
+              {cars?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.plate}{c.label ? ` (${c.label})` : ''}{today?.car?.id === c.id ? ' — mai autóm' : ''}
+                </option>
+              ))}
             </select>
+            {!today?.car && <div className="tiny muted" style={{ marginTop: 4 }}>Nincs mai becsekkolás — válaszd ki, melyik autóról van szó.</div>}
           </div>
           <div className="field">
             <label>Mi a probléma? *</label>
@@ -110,9 +121,31 @@ export default function CarIssues() {
             <PhotoSlot label="Fotó (opcionális)" photo={photo} onCapture={setPhoto} />
           </div>
           {msg && <div className={`alert ${msg.startsWith('Hiba:') ? 'error' : 'success'}`}>{msg}</div>}
-          <button className="btn" disabled={!effectiveCarId || !note.trim() || busy} onClick={() => void submit()}>
-            {busy ? 'Mentés…' : '🔧 Bejelentés'}
-          </button>
+          {otherCar && (
+            <div className="alert error" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span>
+                Ma a(z) <strong>{today!.car!.plate}</strong> autót használod, de a hibát a(z) <strong>{otherPlate}</strong> autóra adod le.
+                Biztos arra jelented?
+              </span>
+              <button className="btn ghost sm" type="button" onClick={() => setCarId(today!.car!.id)}>
+                ← Inkább a mai autómra ({today!.car!.plate})
+              </button>
+            </div>
+          )}
+          {otherCar ? (
+            <ConfirmButton
+              className="btn"
+              confirmLabel={`Igen, a(z) ${otherPlate} autóra jelentem`}
+              disabled={!effectiveCarId || !note.trim() || busy}
+              onConfirm={() => void submit()}
+            >
+              {busy ? 'Mentés…' : '🔧 Bejelentés másik autóra'}
+            </ConfirmButton>
+          ) : (
+            <button className="btn" disabled={!effectiveCarId || !note.trim() || busy} onClick={() => void submit()}>
+              {busy ? 'Mentés…' : '🔧 Bejelentés'}
+            </button>
+          )}
         </div>
       )}
 
