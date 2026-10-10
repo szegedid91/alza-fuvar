@@ -7,7 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { useCars } from '../hooks/useCars'
 import { resolveNames } from '../lib/names'
-import { signedUrl, signedUrls, sha256Hex } from '../lib/photos'
+import { signedUrl, signedUrls, sha256Hex, thumbPath } from '../lib/photos'
 import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 
@@ -148,9 +148,16 @@ export default function PhotoReview() {
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const items = await fetchPhotos(type, filters, currentWorkspaceId!)
-      // Kötegelt aláírás: 1 kérés a képenkénti helyett
-      const urls = await signedUrls(items.map((i) => i.path).filter((p): p is string => !!p))
-      return items.map((i) => ({ ...i, url: i.path ? urls[i.path] : undefined }))
+      // Kötegelt aláírás: 1 kérés a képenkénti helyett — a teljes kép ÉS a
+      // bélyegkép egyszerre; a rácsban a bélyegkép megy (régi fotónál nincs →
+      // a teljes kép), nagyításhoz/összehasonlításhoz a teljes.
+      const paths = items.map((i) => i.path).filter((p): p is string => !!p)
+      const urls = await signedUrls([...paths, ...paths.map(thumbPath)])
+      return items.map((i) => ({
+        ...i,
+        url: i.path ? urls[i.path] : undefined,
+        thumb: i.path ? (urls[thumbPath(i.path)] ?? urls[i.path]) : undefined,
+      }))
     },
   })
 
@@ -277,7 +284,7 @@ export default function PhotoReview() {
               onClick={compare ? () => togglePick(it.id) : undefined}
             >
               {pickIdx > -1 && <span className="badge primary" style={{ marginBottom: 6 }}>{pickIdx + 1}. kiválasztva</span>}
-              <PhotoThumb path={it.path} src={it.url} />
+              <PhotoThumb path={it.path} src={it.thumb ?? it.url} />
               <div style={{ marginTop: 8 }}>
                 <div className="small" style={{ fontWeight: 700 }}>{it.title}</div>
                 <div className="tiny muted">{it.subtitle}</div>

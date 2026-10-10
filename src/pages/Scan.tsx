@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import QrScanner from '../components/QrScanner'
+import { prefetchRoute } from '../lib/routeQueries'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
@@ -11,6 +11,9 @@ import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
 import { todayISO, formatDateTime, formatHours } from '../lib/labels'
+
+// A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
+const QrScanner = lazy(() => import('../components/QrScanner'))
 
 export default function Scan() {
   const { profile } = useAuth()
@@ -169,6 +172,8 @@ export default function Scan() {
     }
     setInspection(req)
     await qc.invalidateQueries({ queryKey: ['today'] })
+    // A mai fuvarterv előtöltése a háttérben — a Fuvar oldal azonnal nyílik
+    void prefetchRoute(qc, currentWorkspaceId, car.id, date)
   }
 
   // Autócsere megerősítése a megadott okkal
@@ -190,7 +195,11 @@ export default function Scan() {
   }
 
   if (scanning) {
-    return <QrScanner onResult={handleScan} onCancel={() => setScanning(false)} />
+    return (
+      <Suspense fallback={<div className="camera-overlay"><div className="camera-body"><div className="spinner" /></div></div>}>
+        <QrScanner onResult={handleScan} onCancel={() => setScanning(false)} />
+      </Suspense>
+    )
   }
 
   const checkedIn = !!today?.checkin

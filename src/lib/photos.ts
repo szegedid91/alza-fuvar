@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { compressImage } from './image'
 
 const BUCKET = 'photos'
 
@@ -21,8 +22,14 @@ export async function recordPhotoProof(workspaceId: string, storagePath: string,
   if (error) throw error
 }
 
+// Bélyegkép útvonala a teljes kép mellett: {id}_t.jpg (~320 px, pár kB).
+// A vezetői galéria ezt tölti a teljes 1600 px-es kép helyett; régi
+// fotóknál nincs bélyegkép — a megjelenítő ilyenkor a teljes képre vált.
+export const thumbPath = (path: string): string => path.replace(/\.jpg$/, '_t.jpg')
+export const THUMB_MAX_DIM = 320
+
 // Feltölti a blobot a workspace-scoped útvonalra, visszaadja a storage path-t.
-// path: {workspace_id}/{folder}/{id}.jpg
+// path: {workspace_id}/{folder}/{id}.jpg (+ a bélyegkép: {id}_t.jpg)
 export async function uploadPhoto(
   workspaceId: string,
   folder: string,
@@ -35,6 +42,12 @@ export async function uploadPhoto(
     upsert: true,
   })
   if (error) throw error
+  // Bélyegkép: best effort — ha nem sikerül, a teljes kép attól még megvan,
+  // és a galéria arra esik vissza. (A hash-bizonyíték a TELJES képről készül.)
+  try {
+    const thumb = await compressImage(blob, THUMB_MAX_DIM, 0.6)
+    await supabase.storage.from(BUCKET).upload(thumbPath(path), thumb, { contentType: 'image/jpeg', upsert: true })
+  } catch { /* nincs bélyegkép — fallback a teljes képre */ }
   return path
 }
 

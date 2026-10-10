@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent,
@@ -17,6 +17,7 @@ import { resolveNames } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
 import { formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Car } from '../lib/checkin'
+import { routeUploadQuery, routeStopsQuery } from '../lib/routeQueries'
 import type { Tables } from '../lib/database.types'
 
 const RouteMapLazy = lazy(() => import('../components/RouteMap'))
@@ -39,18 +40,11 @@ function RouteInner({ car, date }: { car: Car; date: string }) {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
 
+  // Közös lekérdezés a becsekkolás utáni előtöltéssel (routeQueries) — ha a
+  // sofőr a beolvasás után jön ide, a terv már a cache-ben van.
   const { data: upload, isLoading } = useQuery({
-    queryKey: ['route-upload', currentWorkspaceId, car.id, date],
+    ...routeUploadQuery(currentWorkspaceId ?? '', car.id, date),
     enabled: !!currentWorkspaceId,
-    queryFn: async () => {
-      const { data, error } = await supabase.from('route_uploads').select('*')
-        .eq('workspace_id', currentWorkspaceId!).eq('car_id', car.id).eq('work_date', date)
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
-      // Hiba esetén dobni kell — különben "nincs fuvarterv"-nek látszana, és
-      // a sofőr duplán importálná a tervet.
-      if (error) throw error
-      return (data as Upload | null) ?? null
-    },
   })
 
   if (isLoading) return <div className="card"><div className="spinner" /></div>
@@ -131,17 +125,10 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
   const [showMap, setShowMap] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }))
 
-  const { data: stops } = useQuery({
-    queryKey: ['route-stops', upload.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('route_stops').select('*').eq('upload_id', upload.id)
-        .order('display_order', { ascending: true, nullsFirst: false })
-      if (error) throw error
-      const rows = (data ?? []) as Stop[]
-      setItems(rows)
-      return rows
-    },
-  })
+  const { data: stops } = useQuery(routeStopsQuery(upload.id))
+  // A szerverről jövő lista minden (újra)letöltés után felülírja a helyi
+  // sorrendet — a cache-ből (előtöltésből) jövő adatnál is.
+  useEffect(() => { if (stops) setItems(stops) }, [stops])
 
   const [orderError, setOrderError] = useState<string | null>(null)
 
@@ -190,7 +177,7 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
 
   return (
     <>
-      <RouteSummary uploadId={upload.id} startPoi={upload.start_poi} endPoi={upload.end_poi} />
+      <RouteSummary stops={list} startPoi={upload.start_poi} endPoi={upload.end_poi} />
 
       <div className="btn-grid">
         <button className="btn secondary sm" onClick={() => void sortByTime()}>🕒 Idősáv szerint</button>
@@ -282,7 +269,6 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
       setBusy(false)
     }
     await qc.invalidateQueries({ queryKey: ['route-stops', uploadId] })
-    await qc.invalidateQueries({ queryKey: ['route-summary', uploadId] })
   }
 
   async function skip(reason: string) {
@@ -301,7 +287,6 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
       setBusy(false)
     }
     await qc.invalidateQueries({ queryKey: ['route-stops', uploadId] })
-    await qc.invalidateQueries({ queryKey: ['route-summary', uploadId] })
   }
 
   const borderColor = stop.status === 'done' ? 'var(--success)' : stop.status === 'skipped' ? 'var(--danger)' : undefined
@@ -386,19 +371,16 @@ function StopCard({ stop, index, uploadId, dragHandle }: { stop: Stop; index: nu
   )
 }
 
-function RouteSummary({ uploadId, startPoi, endPoi }: { uploadId: string; startPoi: string | null; endPoi: string | null }) {
-  const { data } = useQuery({
-    queryKey: ['route-summary', uploadId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('route_stops').select('*').eq('upload_id', uploadId)
-      if (error) throw error
-      const stops = (data ?? []) as Stop[]
-      const names = await resolveNames(stops.map((s) => s.recorded_by))
-      return { stops, names }
-    },
+function RouteSummary({ stops, startPoi, endPoi }: { stops: Stop[]; startPoi: string | null; endPoi: string | null }) {
+  // Az összesítő a már letöltött stop-listából számol — nem kéri le még
+  // egyszer ugyanazt a táblát. Csak a rögzítők nevét oldjuk fel (kötegelve).
+  const recordedIds = [...new Set(stops.map((s) => s.recorded_by).filter((x): x is string => !!x))].sort()
+  const { data: names } = useQuery({
+    queryKey: ['stop-names', recordedIds],
+    enabled: recordedIds.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: () => resolveNames(recordedIds),
   })
-  if (!data) return null
-  const { stops, names } = data
   // A sikertelen (skipped) stopokból nincs beszedett pénz — nem is leadandó
   const cashToHandOver = stops
     .filter((s) => s.is_cash && s.status !== 'skipped')
@@ -438,7 +420,7 @@ function RouteSummary({ uploadId, startPoi, endPoi }: { uploadId: string; startP
           <div className="list">
             {recorded.map((s) => (
               <div key={s.id} className="between">
-                <span className="small">{s.city ?? s.street ?? 'Stop'} — {s.recorded_by ? names[s.recorded_by] ?? 'Ismeretlen' : ''}</span>
+                <span className="small">{s.city ?? s.street ?? 'Stop'} — {s.recorded_by ? names?.[s.recorded_by] ?? 'Ismeretlen' : ''}</span>
                 <span className="tiny muted">{s.is_cash ? formatHuf(Number(s.received_amount ?? 0)) : 'előre fiz.'} · {formatDateTime(s.recorded_at)}</span>
               </div>
             ))}

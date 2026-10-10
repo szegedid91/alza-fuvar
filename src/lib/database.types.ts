@@ -385,6 +385,7 @@ export type Database = {
           gps_lat: number | null
           gps_lng: number | null
           id: string
+          manual_checkin: boolean
           out_gps_lat: number | null
           out_gps_lng: number | null
           out_outside_geofence: boolean
@@ -404,6 +405,7 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          manual_checkin?: boolean
           out_gps_lat?: number | null
           out_gps_lng?: number | null
           out_outside_geofence?: boolean
@@ -423,6 +425,7 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          manual_checkin?: boolean
           out_gps_lat?: number | null
           out_gps_lng?: number | null
           out_outside_geofence?: boolean
@@ -518,6 +521,50 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_errors: {
+        Row: {
+          build: string | null
+          created_at: string
+          id: string
+          message: string
+          path: string | null
+          stack: string | null
+          user_agent: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          build?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          path?: string | null
+          stack?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          build?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          path?: string | null
+          stack?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_errors_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
