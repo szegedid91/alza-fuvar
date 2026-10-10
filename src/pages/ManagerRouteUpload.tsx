@@ -7,6 +7,7 @@ import { useCars } from '../hooks/useCars'
 import { parseRouteExcel } from '../lib/excel'
 import { todayISO, formatDate } from '../lib/labels'
 import ConfirmButton from '../components/ConfirmButton'
+import { toast } from '../lib/toast'
 
 export default function ManagerRouteUpload() {
   const { profile } = useAuth()
@@ -78,7 +79,7 @@ export default function ManagerRouteUpload() {
       const { error: sErr } = await supabase.from('route_stops').insert(rows)
       if (sErr) throw sErr
       setPendingOverwrite(null)
-      setMsg(`${stops.length} stop importálva ide: ${cars?.find((c) => c.id === carId)?.plate} / ${formatDate(date)}`)
+      toast.success(`${stops.length} stop importálva: ${cars?.find((c) => c.id === carId)?.plate} / ${formatDate(date)}`)
       await qc.invalidateQueries({ queryKey: ['mgr-uploads'] })
     } catch (e) {
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))

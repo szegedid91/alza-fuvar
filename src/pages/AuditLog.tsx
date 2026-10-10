@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { resolveNames } from '../lib/names'
@@ -201,6 +202,7 @@ export default function AuditLog() {
     <div className="stack">
       <h2>Napló</h2>
       <p className="small muted">A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, bizonyítékok).</p>
+      <ClientErrors />
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico">📜</span>Nincs naplóbejegyzés.</div>}
       {data?.map((r) => {
@@ -222,6 +224,46 @@ export default function AuditLog() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// Telefonokról érkező app-hibák (összeomlás, kezeletlen hiba) — 30 napig
+// tárolódnak. Ha ugyanaz a hiba sok eszközön jön, az programhiba, nem véletlen.
+function ClientErrors() {
+  const { data } = useQuery({
+    queryKey: ['client-errors'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('client_errors')
+        .select('id, user_id, path, message, build, user_agent, created_at')
+        .order('created_at', { ascending: false }).limit(30)
+      if (error) throw error
+      const rows = data ?? []
+      const names = await resolveNames(rows.map((r) => r.user_id))
+      return rows.map((r) => ({ ...r, _name: r.user_id ? names[r.user_id] ?? null : null }))
+    },
+  })
+  const [open, setOpen] = useState(false)
+  if (!data || data.length === 0) return null
+  return (
+    <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+      <div className="between">
+        <div className="card-title" style={{ margin: 0 }}>🐞 App-hibák az eszközökről ({data.length})</div>
+        <button className="btn ghost sm auto" onClick={() => setOpen((v) => !v)}>{open ? 'Elrejt' : 'Mutat'}</button>
+      </div>
+      {open && data.map((r) => (
+        <div key={r.id} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div className="between">
+            <span className="small" style={{ fontWeight: 700 }}>{r._name ?? 'Ismeretlen'} · {r.path ?? '—'}</span>
+            <span className="tiny muted">{formatDateTime(r.created_at)}</span>
+          </div>
+          <div className="tiny" style={{ color: 'var(--error-text)', wordBreak: 'break-word' }}>{r.message}</div>
+          <div className="tiny muted">
+            {r.build ? `build: ${new Date(r.build).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}` : ''}
+            {r.user_agent ? ` · ${r.user_agent.slice(0, 80)}` : ''}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

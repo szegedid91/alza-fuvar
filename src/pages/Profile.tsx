@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { roleLabel, statusLabel } from '../lib/labels'
 import { pushSupported, isPushSubscribed, subscribePush, unsubscribePush } from '../lib/push'
 import { getThemePref, setThemePref, themeLabel, type ThemePref } from '../lib/theme'
+import { toast } from '../lib/toast'
 
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -21,7 +22,7 @@ export default function ProfilePage() {
       .update({ full_name: fullName.trim(), phone: phone.trim() || null })
       .eq('id', profile.id)
     if (error) setMsg('Hiba: ' + error.message)
-    else { setMsg('Mentve.'); await refreshProfile() }
+    else { toast.success('Profil mentve.'); await refreshProfile() }
     setBusy(false)
   }
 

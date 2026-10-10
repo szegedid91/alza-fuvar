@@ -8,6 +8,7 @@ import { submitNow } from '../lib/outbox'
 import { evidenceCategoryLabel, formatDateTime, todayISO, parseHuNumber } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 import PhotoThumb from '../components/PhotoThumb'
+import { toast } from '../lib/toast'
 import { useMembers } from '../hooks/useMembers'
 import { useCars } from '../hooks/useCars'
 
@@ -97,7 +98,7 @@ export default function Evidence() {
         },
         photo: { workspaceId: currentWorkspaceId, folder: 'evidence', id, column: 'photo_path', blob: photo.blob },
       })
-      setPhoto(null); setNote(''); setMsg('Fotó elmentve.')
+      setPhoto(null); setNote(''); toast.success('Bizonyíték-fotó elmentve.')
       await qc.invalidateQueries({ queryKey: ['evidence'] })
     } catch (e) {
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))

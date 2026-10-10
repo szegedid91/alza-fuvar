@@ -9,7 +9,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': az új verzió nem tölti újra magától az oldalt — az app sávot
+      // mutat, és a felhasználó dönt (lásd main.tsx / UpdateBanner)
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Alza Fuvarszervező',

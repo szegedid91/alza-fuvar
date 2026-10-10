@@ -13,9 +13,21 @@ import { AuthProvider } from './context/AuthContext'
 import { WorkspaceProvider } from './context/WorkspaceContext'
 import { queryClient } from './lib/queryClient'
 import { initTheme } from './lib/theme'
+import { installGlobalErrorHandlers } from './lib/errorReport'
+import { setPendingUpdate } from './lib/swUpdate'
+import ErrorBoundary from './components/ErrorBoundary'
+import Toaster from './components/Toaster'
+import UpdateBanner from './components/UpdateBanner'
 
 initTheme()
-registerSW({ immediate: true })
+installGlobalErrorHandlers()
+
+// Új verzió: NEM töltünk újra magunktól (félbehagyott űrlap elveszne) —
+// az UpdateBanner mutatja, és a felhasználó koppint a frissítésre.
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() { setPendingUpdate(updateSW) },
+})
 
 // A query-cache localStorage-be mentése -> offline újratöltés után is elérhető a legutóbbi adat
 // FONTOS: ha egy lekérdezés visszaadott adatszerkezete változik, a buster-t
@@ -24,14 +36,18 @@ const persister = createSyncStoragePersister({ storage: window.localStorage, key
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v4' }}>
-      <BrowserRouter>
-        <AuthProvider>
-          <WorkspaceProvider>
-            <App />
-          </WorkspaceProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </PersistQueryClientProvider>
+    <ErrorBoundary>
+      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v5' }}>
+        <BrowserRouter>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <UpdateBanner />
+              <App />
+              <Toaster />
+            </WorkspaceProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </PersistQueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

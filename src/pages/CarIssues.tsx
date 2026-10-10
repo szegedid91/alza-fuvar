@@ -11,6 +11,7 @@ import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../li
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import PhotoThumb from '../components/PhotoThumb'
 import ConfirmButton from '../components/ConfirmButton'
+import { toast } from '../lib/toast'
 import type { Enums, Tables } from '../lib/database.types'
 
 type Issue = Tables<'car_issues'>
@@ -81,7 +82,7 @@ export default function CarIssues() {
         ...(photo ? { photo: { workspaceId: currentWorkspaceId, folder: 'issues', id, column: 'photo_path', blob: photo.blob } } : {}),
       })
       // a választó visszaáll a mai autóra — a következő bejelentés ne a másik autón ragadjon
-      setNote(''); setPhoto(null); setCarId(''); setMsg('Hiba bejelentve. A menedzser látja és követi.')
+      setNote(''); setPhoto(null); setCarId(''); toast.success('Hiba bejelentve — a menedzser látja és követi.')
       await qc.invalidateQueries({ queryKey: ['car-issues'] })
     } catch (e) {
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))

@@ -10,6 +10,7 @@ import { getCurrentPosition } from '../lib/geo'
 import { checkInspectionRequirement, type Car } from '../lib/checkin'
 import { inspectionViewLabel, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
+import { toast } from '../lib/toast'
 import type { Enums } from '../lib/database.types'
 
 const VIEWS: Enums<'inspection_view'>[] = ['front', 'rear', 'left', 'right', 'interior']
@@ -80,7 +81,7 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
         })
       }
       setPhotos({})
-      setMsg('Ellenőrzés elmentve.')
+      toast.success('Ellenőrzés elmentve.')
       await qc.invalidateQueries({ queryKey: ['inspections', car.id] })
     } catch (e) {
       // Fél-kész ellenőrzés nem maradhat: a kötelező-ellenőrzés kapu hiányos

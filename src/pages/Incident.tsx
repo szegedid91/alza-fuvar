@@ -10,6 +10,7 @@ import { getCurrentPosition } from '../lib/geo'
 import { todayISO, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { signedUrls } from '../lib/photos'
+import { toast } from '../lib/toast'
 
 export default function Incident() {
   const { profile } = useAuth()
@@ -62,7 +63,7 @@ export default function Incident() {
         },
         photo: { workspaceId: currentWorkspaceId, folder: 'incidents', id, column: 'photo_path', blob: photo.blob },
       })
-      setPhoto(null); setNote(''); setMsg('Esemény rögzítve.')
+      setPhoto(null); setNote(''); toast.success('Esemény rögzítve.')
       await qc.invalidateQueries({ queryKey: ['incidents'] })
     } catch (e) {
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))

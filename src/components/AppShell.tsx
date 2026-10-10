@@ -9,6 +9,7 @@ import { listFailed, retryFailed, discardFailed, flushOutbox, type OutboxRecord 
 import { queryClient } from '../lib/queryClient'
 import ConfirmButton from './ConfirmButton'
 import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
+import OfflineHint from './OfflineHint'
 
 interface NavItem { to: string; icon: string; label: string; end?: boolean }
 
@@ -244,7 +245,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         <WorkspaceSwitcher />
       </header>
 
-      <main className={`content${WIDE_ROUTES.includes(pathname) ? ' wide' : ''}`}>{children}</main>
+      <main className={`content${WIDE_ROUTES.includes(pathname) ? ' wide' : ''}`}>
+        <OfflineHint />
+        {children}
+      </main>
 
       <nav className="bottom-nav">
         {nav.map((n) => (
