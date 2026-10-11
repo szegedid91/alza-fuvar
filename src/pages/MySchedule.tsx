@@ -376,10 +376,15 @@ export default function MySchedule() {
                 <div className="stack" style={{ gap: 4 }}>
                   <span className="badge warning" style={{ width: 'fit-content' }}><Icon name="repeat" />Csere: {swapStatusLabel[swap.status]}</span>
                   <span className="tiny muted">
-                    Társ ({partner ?? '?'}):{' '}
-                    {swap.partner_decision === 'approved' ? 'elfogadta'
-                      : swap.partner_decision === 'rejected' ? 'elutasította'
-                      : 'még nem döntött'} · a menedzser hagyja jóvá
+                    {/* A társ nézetéből ő maga a döntő — ne "a társ" néven írjuk ki */}
+                    {swap.partner_id === profile?.id
+                      ? (swap.partner_decision === 'approved' ? 'Elfogadtad'
+                        : swap.partner_decision === 'rejected' ? 'Elutasítottad'
+                        : 'Még nem döntöttél')
+                      : `Társ (${partner ?? '?'}): ${swap.partner_decision === 'approved' ? 'elfogadta'
+                        : swap.partner_decision === 'rejected' ? 'elutasította'
+                        : 'még nem döntött'}`}
+                    {' '}· a menedzser hagyja jóvá
                   </span>
                 </div>
               ) : (
