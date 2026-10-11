@@ -4,7 +4,10 @@ import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { resolveNames } from '../lib/names'
-import { formatHuf, formatHours, todayISO } from '../lib/labels'
+import { formatHuf, formatHours, todayISO, formatDate } from '../lib/labels'
+import { addDays } from '../lib/calendar'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { exportRowsToXlsx } from '../lib/export'
 
 type PresetKey = 'this-month' | 'prev-month' | 'm3' | 'm6' | 'ytd' | 'm12'
@@ -303,39 +306,38 @@ export default function Statistics() {
     <div className="stack">
       <h2>Statisztika — {currentWorkspace?.name}</h2>
 
-      <div className="card stack">
-        <div className="field">
-          <label>Időszak</label>
-          <select className="select" value={preset} onChange={(e) => setPreset(e.target.value as PresetKey)}>
-            {PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-          </select>
+      <div className="card stack primary">
+        <div className="card-title" style={{ margin: 0 }}><Icon name="target" />Időszak</div>
+        {/* Időszak-chipek: egy koppintás, a kiválasztott kiemelve */}
+        <div className="chips">
+          {PRESETS.map((p) => (
+            <button key={p.key} type="button" className={`badge ${preset === p.key ? 'primary' : ''}`}
+              style={{ cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700, minHeight: 36, padding: '6px 12px' }}
+              onClick={() => setPreset(p.key)}>{p.label}</button>
+          ))}
         </div>
-        <div className="tiny muted">{range.start} – {range.endExclusive} (a záró nap nélkül)</div>
-        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
+        <div className="tiny muted">{formatDate(range.start)} – {formatDate(addDays(range.endExclusive, -1))}</div>
+        {totals && (totals.days > 0 || totals.fuel > 0) && (
+          <div className="grid-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+            <div><div className="tiny muted">Munkanap (fő×nap)</div><div className="num num-lg">{totals.days}</div></div>
+            <div><div className="tiny muted">Borravaló</div><div className="num num-lg" style={{ color: totals.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(totals.tips)}</div></div>
+            <div><div className="tiny muted">Esemény / baleset</div><div className="num num-lg" style={{ color: totals.incidents > 0 ? 'var(--warning)' : undefined }}>{totals.incidents}</div></div>
+            <div><div className="tiny muted">Üzemanyag</div><div className="num num-lg">{formatHuf(totals.fuel)}</div></div>
+          </div>
+        )}
+        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}><Icon name="file-text" />Exportálás Excelbe</button>
       </div>
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <><Skeleton rows={3} /><Skeleton rows={4} /></>}
       {isError && (
         <div className="alert error">
           A statisztika betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
         </div>
       )}
 
-      {totals && (totals.days > 0 || totals.fuel > 0) && (
-        <div className="card">
-          <div className="card-title">Összesen az időszakban</div>
-          <div className="grid-2 small">
-            <div className="between"><span className="muted">Munkanap (fő×nap)</span><span style={{ fontWeight: 700 }}>{totals.days}</span></div>
-            <div className="between"><span className="muted">Borravaló</span><span style={{ fontWeight: 700, color: 'var(--success)' }}>{formatHuf(totals.tips)}</span></div>
-            <div className="between"><span className="muted">Esemény / baleset</span><span style={{ fontWeight: 700, color: totals.incidents > 0 ? 'var(--warning)' : 'inherit' }}>{totals.incidents}</span></div>
-            <div className="between"><span className="muted">Üzemanyag</span><span style={{ fontWeight: 700 }}>{formatHuf(totals.fuel)}</span></div>
-          </div>
-        </div>
-      )}
-
       {highlights && (
         <div className="card stack" style={{ gap: 6 }}>
-          <div className="card-title">🏆 Kiemelések</div>
+          <div className="card-title"><Icon name="star" />Kiemelések</div>
           {highlights.mostDays && (
             <div className="between small">
               <span className="muted">Legtöbbet dolgozott</span>
@@ -369,19 +371,22 @@ export default function Statistics() {
 
       {data && data.userRows.length > 0 && (
         <div className="card stack">
-          <div className="card-title">👥 Munkatársak</div>
+          <div className="card-title"><Icon name="users" />Munkatársak</div>
           {data.userRows.map((r) => (
             <div key={r.id} className="stack" style={{ gap: 4 }}>
-              <div style={{ fontWeight: 700 }}>{r.name}</div>
-              <div className="grid-2 small">
-                <div className="between"><span className="muted">Napok</span><span>{r.days} ({r.driverDays} sofőr / {r.loaderDays} rakodó)</span></div>
+              <div className="between">
+                <div style={{ fontWeight: 700 }}>{r.name}</div>
+                <span className={`badge ${r.days > 0 ? 'primary' : ''}`}>{r.days} nap</span>
+              </div>
+              <div className="grid-2 pay-grid small">
+                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó</span></div>
                 <div className="between">
                   <span className="muted">Átlag munkaidő</span>
                   <span>{r.daysWithHours > 0 ? `${formatHours(Math.round(r.hoursMs / r.daysWithHours))}/nap` : '—'}</span>
                 </div>
                 <div className="between">
                   <span className="muted">Borravaló</span>
-                  <span style={{ color: 'var(--success)' }}>
+                  <span style={{ color: r.tips > 0 ? 'var(--success)' : undefined }}>
                     {formatHuf(r.tips)}{r.days > 0 && r.tips > 0 ? ` (${formatHuf(Math.round(r.tips / r.days))}/nap)` : ''}
                   </span>
                 </div>
@@ -428,13 +433,13 @@ export default function Statistics() {
 
       {data && data.carRows.length > 0 && (
         <div className="card stack">
-          <div className="card-title">🚗 Autók</div>
+          <div className="card-title"><Icon name="truck" />Autók</div>
           {data.carRows.map((c) => (
             <div key={c.id} className="stack" style={{ gap: 4 }}>
-              <div style={{ fontWeight: 700 }}>
-                {c.plate}{c.category ? <span className="muted" style={{ fontWeight: 400 }}> · {c.category}</span> : null}
+              <div className="num" style={{ fontSize: 16 }}>
+                {c.plate}{c.category ? <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}> · {c.category}</span> : null}
               </div>
-              <div className="grid-2 small">
+              <div className="grid-2 pay-grid small">
                 <div className="between"><span className="muted">Használatban</span><span>{c.daysUsed} nap</span></div>
                 <div className="between">
                   <span className="muted">Üzemanyag</span>
@@ -462,7 +467,7 @@ export default function Statistics() {
       )}
 
       {data && data.userRows.length === 0 && data.carRows.length === 0 && (
-        <div className="empty"><span className="ico">🎯</span>Nincs adat ebben az időszakban.</div>
+        <div className="empty"><span className="ico"><Icon name="target" size={40} /></span>Nincs adat ebben az időszakban.</div>
       )}
     </div>
   )
