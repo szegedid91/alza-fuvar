@@ -26,6 +26,8 @@ export default function CarIssues() {
   const isManagerOrAdmin = profile?.role === 'manager' || profile?.role === 'admin'
 
   const [carId, setCarId] = useState('')
+  // Vezetői lista-szűrő: alapból a még nem megoldott hibák
+  const [statusFilter, setStatusFilter] = useState<'active' | 'resolved' | 'all'>('active')
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null)
   const [busy, setBusy] = useState(false)
@@ -94,6 +96,16 @@ export default function CarIssues() {
 
   const statusBadge = (s: Enums<'car_issue_status'>) =>
     s === 'open' ? 'danger' : s === 'in_progress' ? 'warning' : 'success'
+  const statusColor = (s: Enums<'car_issue_status'>) =>
+    s === 'open' ? 'var(--danger)' : s === 'in_progress' ? 'var(--warning)' : undefined
+
+  const activeCount = (issues ?? []).filter((i) => i.status !== 'resolved').length
+  const resolvedCount = (issues ?? []).length - activeCount
+  // Crew csak a sajátját (mai) látja — ott nincs szűrő; vezetőnél a nyitottak elöl
+  const shown = !isManagerOrAdmin ? (issues ?? []) : (issues ?? [])
+    .filter((i) => statusFilter === 'all' ? true : statusFilter === 'resolved' ? i.status === 'resolved' : i.status !== 'resolved')
+    .slice()
+    .sort((a, b) => (a.status === 'resolved' ? 1 : 0) - (b.status === 'resolved' ? 1 : 0))
 
   return (
     <div className="stack">
@@ -153,25 +165,37 @@ export default function CarIssues() {
 
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}>
-          {isCrew && !isManagerOrAdmin ? 'Mai bejelentéseim' : 'Bejelentések'}
+          <Icon name="wrench" />{isCrew && !isManagerOrAdmin ? 'Mai bejelentéseim' : 'Bejelentések'}
         </div>
         {isCrew && !isManagerOrAdmin && (
           <span className="tiny muted">Csak a mai saját bejelentéseid</span>
         )}
       </div>
 
-      {(issues?.length ?? 0) === 0 && (
-        <div className="empty">
-          <span className="ico"><Icon name="wrench" size={40} /></span>
-          {isCrew && !isManagerOrAdmin ? 'Ma még nem jelentettél be hibát.' : 'Nincs bejelentett hiba.'}
+      {isManagerOrAdmin && (issues?.length ?? 0) > 0 && (
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+          {([['active', `Nyitott · ${activeCount}`], ['resolved', `Megoldva · ${resolvedCount}`], ['all', `Mind · ${issues!.length}`]] as const).map(([key, label]) => (
+            <button key={key} type="button" className={`badge ${statusFilter === key ? 'primary' : ''}`}
+              style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
+              onClick={() => setStatusFilter(key)}>{label}</button>
+          ))}
         </div>
       )}
 
-      {issues?.map((i) => (
-        <div key={i.id} className="card stack">
+      {shown.length === 0 && (
+        <div className="empty">
+          <span className="ico"><Icon name={statusFilter === 'active' && isManagerOrAdmin ? 'check-circle' : 'wrench'} size={40} /></span>
+          {isCrew && !isManagerOrAdmin
+            ? 'Ma még nem jelentettél be hibát.'
+            : statusFilter === 'active' ? 'Nincs nyitott hiba — minden rendben.' : 'Nincs bejelentett hiba.'}
+        </div>
+      )}
+
+      {shown.map((i) => (
+        <div key={i.id} className="card stack" style={{ borderColor: statusColor(i.status) }}>
           <div className="between">
             <div className="row" style={{ gap: 8 }}>
-              <span className="badge primary">{i.car?.plate ?? '?'}</span>
+              <span className="badge num">{i.car?.plate ?? '?'}</span>
               <span className={`badge ${statusBadge(i.status)}`}>{carIssueStatusLabel[i.status]}</span>
             </div>
             <span className="tiny muted">{formatDateTime(i.created_at)}</span>

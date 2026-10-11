@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { signedUrl, thumbPath } from '../lib/photos'
 
@@ -9,12 +9,17 @@ import { signedUrl, thumbPath } from '../lib/photos'
 export default function PhotoThumb({ path, alt = '', src }: { path: string | null; alt?: string; src?: string }) {
   const [useFull, setUseFull] = useState(false)
   const want = path ? (useFull ? path : thumbPath(path)) : null
-  const { data: fetched } = useQuery({
+  const { data: fetched, isSuccess } = useQuery({
     queryKey: ['signed', want],
     enabled: !!want && src === undefined,
     staleTime: 50 * 60 * 1000,
     queryFn: () => signedUrl(want!),
   })
+  // Régi fotónál nincs bélyegkép: az aláírás null → azonnal a teljes képre
+  // váltunk (az <img onError> csak akkor futna, ha lenne mit betölteni).
+  useEffect(() => {
+    if (isSuccess && fetched === null && !useFull && src === undefined) setUseFull(true)
+  }, [isSuccess, fetched, useFull, src])
   const url = src ?? fetched
   if (!path) return <div className="thumb thumb-empty"><span className="tiny">nincs kép</span></div>
   if (!url) return <div className="thumb thumb-empty"><div className="spinner" style={{ width: 20, height: 20 }} /></div>
