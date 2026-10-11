@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { roleLabel } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 
 interface InviteInfo {
   email: string
@@ -22,6 +24,8 @@ export default function InvitePage({ token }: { token: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'form' | 'signing-in'>('form')
+  // Telefonon a gépelt jelszó megmutatása kevesebb elgépelést jelent
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -84,51 +88,63 @@ export default function InvitePage({ token }: { token: string }) {
         <img src="/pwa-192.png" alt="" />
         <h1>Alza Fuvarszervező</h1>
       </div>
-      <div className="card auth-card stack">
+      <div className="card auth-card stack primary">
         {loadError && (
           <>
-            <div className="card-title">Meghívó</div>
-            <div className="alert error">{loadError}</div>
-            <a className="btn secondary sm" href="/">Belépési oldal</a>
+            <div className="card-title"><Icon name="mail" />Meghívó</div>
+            <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{loadError}</span></div>
+            <p className="tiny muted" style={{ margin: 0 }}>Ha a link lejárt vagy már felhasználták, kérj újat a menedzseredtől.</p>
+            <a className="btn secondary" href="/" style={{ textDecoration: 'none' }}><Icon name="log-in" />Belépési oldal</a>
           </>
         )}
 
-        {!loadError && !info && <div className="spinner" style={{ margin: '20px auto' }} />}
+        {!loadError && !info && <Skeleton rows={4} card={false} />}
 
         {info && session && (
           <>
-            <div className="card-title">Meghívó</div>
-            <div className="alert info">
-              Jelenleg be vagy jelentkezve. A meghívó elfogadásához előbb jelentkezz ki.
+            <div className="card-title"><Icon name="mail" />Meghívó</div>
+            <div className="alert info row" style={{ gap: 8, alignItems: 'flex-start' }}>
+              <Icon name="info" style={{ flexShrink: 0 }} />
+              <span>Jelenleg be vagy jelentkezve. A meghívó elfogadásához előbb jelentkezz ki.</span>
             </div>
             <button className="btn secondary" onClick={() => { void signOut().then(() => window.location.reload()) }}>
-              Kijelentkezés és folytatás
+              <Icon name="log-out" />Kijelentkezés és folytatás
             </button>
           </>
         )}
 
         {info && !session && (
           <>
-            <div className="card-title">🎉 Meghívtak az Alza appba</div>
-            <p className="small">
+            <div className="card-title"><Icon name="sparkles" />Meghívtak az Alza appba</div>
+            <p className="small" style={{ margin: 0 }}>
               <strong>{info.full_name || info.email}</strong>, csatlakozol a(z){' '}
               <strong>{info.workspace}</strong> munkaterülethez mint{' '}
               <strong>{roleLabel[info.role]}</strong>.
             </p>
-            <div className="between">
-              <span className="muted small">Email</span>
-              <span className="small">{info.email}</span>
+            <div className="between" style={{ gap: 10 }}>
+              <span className="muted small" style={{ flexShrink: 0 }}>Email</span>
+              <span className="small" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={info.email}>{info.email}</span>
             </div>
             <div className="field">
-              <label>Jelszó (legalább 8 karakter)</label>
-              <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <label htmlFor="ip">Jelszó</label>
+              <div className="input-icon input-icon-right">
+                <input id="ip" className="input" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
+                  placeholder="legalább 8 karakter" autoComplete="new-password" />
+                <button type="button" className="icon-btn" aria-label={show ? 'Jelszó elrejtése' : 'Jelszó mutatása'} onClick={() => setShow((v) => !v)}>
+                  <Icon name={show ? 'eye-off' : 'eye'} size={18} />
+                </button>
+              </div>
             </div>
             <div className="field">
-              <label>Jelszó még egyszer</label>
-              <input className="input" type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} autoComplete="new-password" />
+              <label htmlFor="ip2">Jelszó még egyszer</label>
+              <input id="ip2" className="input" type={show ? 'text' : 'password'} value={password2} onChange={(e) => setPassword2(e.target.value)}
+                placeholder="ugyanaz még egyszer" autoComplete="new-password" />
+              {password2 && password !== password2 && <div className="tiny" style={{ color: 'var(--error-text)' }}>A két jelszó még nem egyezik.</div>}
+              {password2 && password === password2 && password.length >= 8 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
             </div>
-            {error && <div className="alert error">{error}</div>}
+            {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
             <button className="btn" disabled={busy || !password || !password2} onClick={() => void redeem()}>
+              <Icon name="log-in" />
               {phase === 'signing-in' ? 'Belépés…' : busy ? 'Fiók létrehozása…' : 'Jelszó beállítása és belépés'}
             </button>
             <p className="tiny muted" style={{ margin: 0 }}>
