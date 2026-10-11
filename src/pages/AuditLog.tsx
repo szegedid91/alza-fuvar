@@ -7,6 +7,9 @@ import {
   roleLabel, statusLabel, adjustmentTypeLabel, carIssueStatusLabel, evidenceCategoryLabel,
 } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
+import Icon, { type IconName } from '../components/Icon'
+import Skeleton from '../components/Skeleton'
+import { localDateOf } from '../lib/calendar'
 
 const ENTITY_LABEL: Record<string, string> = {
   adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
@@ -14,6 +17,10 @@ const ENTITY_LABEL: Record<string, string> = {
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
+const ENTITY_ICON: Record<string, IconName> = {
+  adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
+  fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
+}
 
 type Row = Record<string, unknown> | null | undefined
 type Detail = { old?: Row; new?: Row } | null
@@ -168,7 +175,8 @@ export default function AuditLog() {
   const { data: cars } = useQuery({
     queryKey: ['audit-cars'],
     queryFn: async () => {
-      const { data } = await supabase.from('cars').select('id, plate')
+      const { data, error } = await supabase.from('cars').select('id, plate')
+      if (error) throw error
       return data ?? []
     },
   })
@@ -176,7 +184,8 @@ export default function AuditLog() {
   const { data, isLoading } = useQuery({
     queryKey: ['audit'],
     queryFn: async () => {
-      const { data } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(100)
+      const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(100)
+      if (error) throw error
       const rows = data ?? []
       const ids = new Set<string>()
       for (const r of rows) {
@@ -198,32 +207,69 @@ export default function AuditLog() {
 
   const plateOf = (id: string | null) => (id ? cars?.find((c) => c.id === id)?.plate ?? null : null)
 
+  // Szűrő: típus szerint (a chipeken a darabszám), alapból minden
+  const [entityFilter, setEntityFilter] = useState('')
+  const counts = new Map<string, number>()
+  for (const r of data ?? []) counts.set(r.entity, (counts.get(r.entity) ?? 0) + 1)
+  const shown = (data ?? []).filter((r) => !entityFilter || r.entity === entityFilter)
+  // Napok szerint csoportosítva: a dátum egyszer, a sorokon csak az idő
+  const byDay = new Map<string, typeof shown>()
+  for (const r of shown) {
+    const d = localDateOf(r.created_at)
+    if (!byDay.has(d)) byDay.set(d, [])
+    byDay.get(d)!.push(r)
+  }
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+
   return (
     <div className="stack">
       <h2>Napló</h2>
-      <p className="small muted">A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, bizonyítékok).</p>
+      <p className="small muted" style={{ margin: 0 }}>A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, bizonyítékok) — az utolsó 100 bejegyzés.</p>
       <ClientErrors />
-      {isLoading && <div className="card"><div className="spinner" /></div>}
-      {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico">📜</span>Nincs naplóbejegyzés.</div>}
-      {data?.map((r) => {
-        const names = (r._names ?? {}) as Record<string, string>
-        const nm = (id: string | null) => (id ? names[id] ?? null : null)
-        const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
-        const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
-        return (
-          <div key={r.id} className="card" style={{ padding: 12 }}>
-            <div className="between">
-              <div className="row" style={{ gap: 6 }}>
-                <span className="badge primary">{ENTITY_LABEL[r.entity] ?? r.entity}</span>
-                <span className={`badge ${r.action === 'DELETE' ? 'danger' : r.action === 'INSERT' ? 'success' : ''}`}>{ACTION_LABEL[r.action] ?? r.action}</span>
-              </div>
-              <span className="tiny muted">{formatDateTime(r.created_at)}</span>
-            </div>
-            {text && <div className="small" style={{ marginTop: 6 }}>{text}</div>}
-            <div className="tiny muted" style={{ marginTop: 4 }}>Végezte: {actorName}</div>
+      {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
+      {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
+
+      {(data?.length ?? 0) > 0 && (
+        <div className="chips">
+          <button type="button" className={`badge ${entityFilter === '' ? 'primary' : ''}`}
+            style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
+            onClick={() => setEntityFilter('')}>Mind · {data!.length}</button>
+          {[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([ent, n]) => (
+            <button key={ent} type="button" className={`badge ${entityFilter === ent ? 'primary' : ''}`}
+              style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
+              onClick={() => setEntityFilter(ent)}>
+              <Icon name={ENTITY_ICON[ent] ?? 'file-text'} />{ENTITY_LABEL[ent] ?? ent} · {n}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {[...byDay.entries()].map(([day, rows]) => (
+        <div key={day} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="tiny muted" style={{ padding: '8px 12px', background: 'var(--bg-elev-2)', fontWeight: 700 }}>
+            {formatDate(day)} · {new Date(`${day}T12:00:00`).toLocaleDateString('hu-HU', { weekday: 'long' })}
           </div>
-        )
-      })}
+          {rows.map((r) => {
+            const names = (r._names ?? {}) as Record<string, string>
+            const nm = (id: string | null) => (id ? names[id] ?? null : null)
+            const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
+            const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
+            const tone = r.action === 'DELETE' ? 'var(--danger)' : r.action === 'INSERT' ? 'var(--success)' : 'var(--text-dim)'
+            return (
+              <div key={r.id} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
+                <Icon name={ENTITY_ICON[r.entity] ?? 'file-text'} size={18} style={{ color: tone, marginTop: 2 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="small">{text ?? `${ENTITY_LABEL[r.entity] ?? r.entity} — ${ACTION_LABEL[r.action] ?? r.action}`}</div>
+                  <div className="tiny muted">
+                    <span style={{ color: tone, fontWeight: 700 }}>{ACTION_LABEL[r.action] ?? r.action}</span> · {actorName}
+                  </div>
+                </div>
+                <span className="tiny muted" style={{ flexShrink: 0 }}>{hhmm(r.created_at)}</span>
+              </div>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -248,7 +294,7 @@ function ClientErrors() {
   return (
     <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>🐞 App-hibák az eszközökről ({data.length})</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--warning)' }} />App-hibák az eszközökről ({data.length})</div>
         <button className="btn ghost sm auto" onClick={() => setOpen((v) => !v)}>{open ? 'Elrejt' : 'Mutat'}</button>
       </div>
       {open && data.map((r) => (
