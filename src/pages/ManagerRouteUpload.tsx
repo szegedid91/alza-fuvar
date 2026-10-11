@@ -8,6 +8,7 @@ import { parseRouteExcel } from '../lib/excel'
 import { todayISO, formatDate } from '../lib/labels'
 import ConfirmButton from '../components/ConfirmButton'
 import { toast } from '../lib/toast'
+import Icon from '../components/Icon'
 
 export default function ManagerRouteUpload() {
   const { profile } = useAuth()
@@ -91,7 +92,7 @@ export default function ManagerRouteUpload() {
   return (
     <div className="stack">
       <h2>Fuvarterv feltöltés — {currentWorkspace?.name}</h2>
-      <div className="card stack">
+      <div className="card stack primary">
         <p className="small muted">Tölts fel egy fuvarterv Excelt egy adott autóhoz és naphoz. A sofőr a saját eszközén látja majd.</p>
         <div className="grid-2">
           <div className="field">
@@ -132,15 +133,18 @@ export default function ManagerRouteUpload() {
             </div>
           </div>
         )}
-        <button className="btn" disabled={busy || !carId} onClick={() => fileRef.current?.click()}>{busy ? 'Feldolgozás…' : '📄 Excel kiválasztása'}</button>
+        <button className="btn" disabled={busy || !carId} onClick={() => fileRef.current?.click()}>
+          <Icon name="upload" />{busy ? 'Feldolgozás…' : 'Excel kiválasztása'}
+        </button>
+        {!carId && <div className="tiny muted" style={{ textAlign: 'center' }}>Előbb válassz autót, utána tölthető fel a fájl.</div>}
       </div>
 
       {(uploads?.length ?? 0) > 0 && (
         <div className="card stack">
-          <div className="card-title">Feltöltött fuvartervek</div>
+          <div className="card-title"><Icon name="file-text" />Feltöltött fuvartervek</div>
           {uploads!.map((u) => (
             <div key={u.id} className="between">
-              <span className="small">{(u.car as unknown as { plate: string } | null)?.plate ?? '—'} · {formatDate(u.work_date)}</span>
+              <span className="small"><strong className="num">{(u.car as unknown as { plate: string } | null)?.plate ?? '—'}</strong> · {formatDate(u.work_date)}</span>
               <span className="tiny muted">{u.file_name}</span>
             </div>
           ))}
