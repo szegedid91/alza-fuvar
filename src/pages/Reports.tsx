@@ -159,10 +159,10 @@ export default function Reports() {
                 <span className="badge primary">{r.days} nap</span>
               </div>
               <div className="grid-2 small">
-                <div className="between"><span className="muted">Napok</span><span>{r.days} ({r.driverDays} sofőr / {r.loaderDays} rakodó)</span></div>
+                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó</span></div>
                 <div className="between"><span className="muted">Órák</span><span>{r.hoursMs > 0 ? formatHours(r.hoursMs) : '—'}</span></div>
                 <div className="between"><span className="muted">Stopok</span><span>{r.stops}</span></div>
-                <div className="between"><span className="muted">Borravaló</span><span style={{ color: 'var(--success)' }}>{formatHuf(r.tips)}</span></div>
+                <div className="between"><span className="muted">Borravaló</span><span style={{ color: r.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(r.tips)}</span></div>
                 {r.shortfall > 0 && (
                   <div className="between"><span className="muted">Kp-hiány</span><span style={{ color: 'var(--danger)' }}>{formatHuf(r.shortfall)}</span></div>
                 )}
