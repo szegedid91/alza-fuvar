@@ -7,6 +7,8 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO, formatDate, formatHuf, swapStatusLabel } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
+import { weekLabel } from '../lib/calendar'
 import type { Tables } from '../lib/database.types'
 
 type SwapRequest = Tables<'swap_requests'>
@@ -128,12 +130,13 @@ export default function MySchedule() {
     queryKey: ['my-car-timeline', currentWorkspaceId, profile?.id, today],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
-      const { data } = await supabase.from('check_ins')
+      const { data, error } = await supabase.from('check_ins')
         .select('checked_in_at, checked_out_at, switch_reason, car:cars!check_ins_car_id_fkey(plate)')
         .eq('workspace_id', currentWorkspaceId!)
         .eq('user_id', profile!.id)
         .eq('work_date', today)
         .order('checked_in_at')
+      if (error) throw error
       return (data ?? []).map((r) => ({
         plate: (r.car as unknown as { plate: string } | null)?.plate ?? '?',
         from: r.checked_in_at,
@@ -194,10 +197,11 @@ export default function MySchedule() {
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
       // A munkatárs csak az előlegeit látja — a levonás a vezetőség/bérlap dolga
-      const { data } = await supabase.from('adjustments').select('*')
+      const { data, error } = await supabase.from('adjustments').select('*')
         .eq('workspace_id', currentWorkspaceId!)
         .eq('user_id', profile!.id).eq('work_date', today)
         .eq('type', 'advance').order('created_at')
+      if (error) throw error
       return data ?? []
     },
   })
@@ -215,8 +219,8 @@ export default function MySchedule() {
       {actionError && <div className="alert error">{actionError}</div>}
 
       {incoming.length > 0 && (
-        <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-          <div className="card-title"><Icon name="repeat" />Cserekérés vár a döntésedre</div>
+        <div className="card stack primary" style={{ borderColor: 'var(--warning)' }}>
+          <div className="card-title"><Icon name="repeat" style={{ color: 'var(--warning)' }} />Cserekérés vár a döntésedre</div>
           {incoming.map((r) => {
             const sh = shifts?.find((s) => s.id === r.shift_id)
             return (
@@ -225,11 +229,11 @@ export default function MySchedule() {
                   <strong>{anyContacts[r.requested_by]?.name ?? 'Egy munkatárs'}</strong> cserélne veled
                   {sh ? ` (${formatDate(sh.work_date)} — sofőr ↔ rakodó)` : ' (sofőr ↔ rakodó)'}.
                 </div>
-                <div className="btn-grid">
-                  <button className="btn danger sm" disabled={partnerDecide.isPending}
+                <div className="stop-actions">
+                  <button className="btn ghost" disabled={partnerDecide.isPending}
                     onClick={() => partnerDecide.mutate({ id: r.id, accept: false })}>Elutasítom</button>
-                  <button className="btn sm" disabled={partnerDecide.isPending}
-                    onClick={() => partnerDecide.mutate({ id: r.id, accept: true })}>Elfogadom</button>
+                  <button className="btn" disabled={partnerDecide.isPending}
+                    onClick={() => partnerDecide.mutate({ id: r.id, accept: true })}><Icon name="check" />Elfogadom</button>
                 </div>
               </div>
             )
@@ -238,18 +242,17 @@ export default function MySchedule() {
         </div>
       )}
 
-      <div className="card stack" style={{ gap: 8 }}>
+      <div className={`card stack${incoming.length === 0 ? ' primary' : ''}`} style={{ gap: 8 }}>
         <div className="between">
-          <div className="card-title" style={{ marginBottom: 0 }}><Icon name="calendar" />Heti nézet</div>
-          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-            <button className="btn ghost sm" onClick={() => setWeekOffset((o) => o - 1)} aria-label="Előző hét">‹</button>
+          <div className="card-title" style={{ marginBottom: 0 }}><Icon name="calendar" />{weekLabel(weekDays[0], weekDays[6])}</div>
+          <div className="row" style={{ gap: 2, alignItems: 'center' }}>
+            <button className="icon-btn" onClick={() => setWeekOffset((o) => o - 1)} aria-label="Előző hét"><Icon name="chevron-left" /></button>
             {weekOffset !== 0 && (
               <button className="btn ghost sm" onClick={() => setWeekOffset(0)}>Ma</button>
             )}
-            <button className="btn ghost sm" onClick={() => setWeekOffset((o) => o + 1)} aria-label="Következő hét">›</button>
+            <button className="icon-btn" onClick={() => setWeekOffset((o) => o + 1)} aria-label="Következő hét"><Icon name="chevron-right" /></button>
           </div>
         </div>
-        <div className="tiny muted">{formatDate(weekDays[0])} – {formatDate(weekDays[6])}</div>
         <div className="stack" style={{ gap: 0 }}>
           {weekDays.map((dISO, i) => {
             const sh = (weekShifts ?? []).find((s) => s.work_date === dISO)
@@ -276,7 +279,7 @@ export default function MySchedule() {
                   </span>
                   {sh ? (
                     <span className="small">
-                      {car?.category?.name ? `${car.category.name} · ` : ''}{car?.plate ?? '–'}
+                      {car?.category?.name ? <span className="muted">{car.category.name} · </span> : ''}<span className="num">{car?.plate ?? '–'}</span>
                       {partnerId && contacts[partnerId]?.name ? (
                         <span className="muted"> · {contacts[partnerId]!.name}</span>
                       ) : null}
@@ -295,9 +298,11 @@ export default function MySchedule() {
         </div>
       </div>
 
+      {/* Csak ha ma volt előleg — üresen csak zaj lenne */}
+      {advances > 0 && (
       <div className="card">
-        <div className="card-title">Mai előleg</div>
-        <div className="between"><span className="muted small">Előleg</span><span className="badge warning">{formatHuf(advances)}</span></div>
+        <div className="card-title"><Icon name="banknote" />Mai előleg</div>
+        <div className="between"><span className="muted small">Ma felvett előleg</span><span className="badge money">{formatHuf(advances)}</span></div>
         {(todayAdj?.length ?? 0) > 0 && (
           <div className="list" style={{ marginTop: 10 }}>
             {todayAdj!.map((a) => (
@@ -309,10 +314,15 @@ export default function MySchedule() {
           </div>
         )}
       </div>
+      )}
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <Skeleton rows={3} />}
       {!isLoading && (shifts?.length ?? 0) === 0 && (
-        <div className="empty"><span className="ico">📅</span>Nincs közelgő beosztásod.</div>
+        <div className="empty">
+          <span className="ico"><Icon name="calendar" size={40} /></span>
+          Nincs közelgő beosztásod.
+          <div className="tiny muted" style={{ marginTop: 6 }}>Ha a menedzser beoszt, értesítést kapsz, és itt megjelenik.</div>
+        </div>
       )}
 
       {((myTimeline?.length ?? 0) > 1 || myTimeline?.some((e) => e.reason)) && (
@@ -336,17 +346,20 @@ export default function MySchedule() {
           <div key={s.id} className="card stack">
             <div className="between">
               <div>
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{formatDate(s.work_date)}</div>
-                <div className="muted small">{car?.plate ?? '–'}{car?.label ? ` · ${car.label}` : ''}</div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>
+                  {formatDate(s.work_date)}
+                  <span className="muted" style={{ fontWeight: 500, fontSize: 13 }}> · {new Date(`${s.work_date}T12:00:00`).toLocaleDateString('hu-HU', { weekday: 'long' })}</span>
+                </div>
+                <div className="muted small"><span className="num">{car?.plate ?? '–'}</span>{car?.label ? ` · ${car.label}` : ''}</div>
               </div>
-              <span className="badge primary">{myRole}</span>
+              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : 'package'} />{myRole}</span>
             </div>
             <div className="between">
               <span className="muted small">Társ</span>
               {partnerTel ? (
                 // Egy koppintás = hívás (a telefon tárcsázója nyílik meg)
                 <a className="btn secondary sm auto" href={partnerTel} style={{ textDecoration: 'none' }}>
-                  📞 {partner || 'Társ'}
+                  <Icon name="phone" />{partner || 'Társ'}
                 </a>
               ) : (
                 <span className="small">
@@ -356,16 +369,16 @@ export default function MySchedule() {
               )}
             </div>
             {partnerId && !swapWindowOpen(s.work_date) && (
-              <span className="tiny muted">🔄 Cserét legfeljebb egy héttel előre lehet kérni.</span>
+              <span className="tiny muted">Cserét legfeljebb egy héttel előre lehet kérni.</span>
             )}
             {partnerId && swapWindowOpen(s.work_date) && (
               swap && swap.status === 'pending' ? (
                 <div className="stack" style={{ gap: 4 }}>
-                  <span className="badge warning" style={{ width: 'fit-content' }}>🔄 Csere: {swapStatusLabel[swap.status]}</span>
+                  <span className="badge warning" style={{ width: 'fit-content' }}><Icon name="repeat" />Csere: {swapStatusLabel[swap.status]}</span>
                   <span className="tiny muted">
                     Társ ({partner ?? '?'}):{' '}
-                    {swap.partner_decision === 'approved' ? '✔ elfogadta'
-                      : swap.partner_decision === 'rejected' ? '✖ elutasította'
+                    {swap.partner_decision === 'approved' ? 'elfogadta'
+                      : swap.partner_decision === 'rejected' ? 'elutasította'
                       : 'még nem döntött'} · a menedzser hagyja jóvá
                   </span>
                 </div>
@@ -377,9 +390,10 @@ export default function MySchedule() {
                     disabled={requestSwap.isPending || cooldownLeftMin > 0}
                     onClick={() => requestSwap.mutate({ shiftId: s.id, partnerId, workspaceId: s.workspace_id })}
                   >
+                    <Icon name={cooldownLeftMin > 0 ? 'clock' : 'repeat'} />
                     {cooldownLeftMin > 0
-                      ? `⏳ Új csere kérése ${cooldownLeftMin} perc múlva lehetséges`
-                      : '🔄 Csere kérése (sofőr ↔ rakodó)'}
+                      ? `Új csere kérése ${cooldownLeftMin} perc múlva lehetséges`
+                      : 'Csere kérése (sofőr ↔ rakodó)'}
                   </button>
                 </>
               )
