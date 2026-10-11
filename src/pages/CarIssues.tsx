@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useCars } from '../hooks/useCars'
+import { useCarCategories } from '../hooks/useCarCategories'
+import { groupByCategory } from '../lib/calendar'
 import { submitNow } from '../lib/outbox'
 import { resolveNames } from '../lib/names'
 import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../lib/labels'
@@ -34,6 +36,7 @@ export default function CarIssues() {
   const [msg, setMsg] = useState<string | null>(null)
 
   const { data: cars } = useCars()
+  const { data: categories } = useCarCategories()
 
   const { data: issues } = useQuery({
     queryKey: ['car-issues', currentWorkspaceId, profile?.id, todayISO()],
@@ -112,16 +115,21 @@ export default function CarIssues() {
       <h2>Autó-hibák — {currentWorkspace?.name}</h2>
 
       {isCrew && (
-        <div className="card stack">
-          <div className="card-title"><Icon name="wrench" />Hiba bejelentése</div>
+        <div className="card stack primary">
+          <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Hiba bejelentése</div>
+          <p className="tiny muted" style={{ margin: 0 }}>A menedzser azonnal látja, és követi a javítást — a fotó segít, de nem kötelező.</p>
           <div className="field">
             <label>Autó</label>
             <select className="select" value={effectiveCarId} onChange={(e) => setCarId(e.target.value)}>
               <option value="">— válassz —</option>
-              {cars?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.plate}{c.label ? ` (${c.label})` : ''}{today?.car?.id === c.id ? ' — mai autóm' : ''}
-                </option>
+              {groupByCategory(cars ?? [], categories).map((g) => (
+                <optgroup key={g.name} label={g.name}>
+                  {g.cars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.plate}{c.label ? ` · ${c.label}` : ''}{today?.car?.id === c.id ? ' — mai autóm' : ''}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             {!today?.car && <div className="tiny muted" style={{ marginTop: 4 }}>Nincs mai becsekkolás — válaszd ki, melyik autóról van szó.</div>}
@@ -131,8 +139,11 @@ export default function CarIssues() {
             <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="pl. bal első gumi ereszt, fék nyikorog…" />
           </div>
-          <div style={{ maxWidth: 220 }}>
-            <PhotoSlot label="Fotó (opcionális)" photo={photo} onCapture={setPhoto} />
+          <div className="field">
+            <label>Fotó (opcionális)</label>
+            <div style={{ width: 160 }}>
+              <PhotoSlot label="Fotó készítése" photo={photo} onCapture={setPhoto} />
+            </div>
           </div>
           {msg && <div className={`alert ${msg.startsWith('Hiba:') ? 'error' : 'success'}`}>{msg}</div>}
           {otherCar && (
@@ -159,6 +170,11 @@ export default function CarIssues() {
             <button className="btn" disabled={!effectiveCarId || !note.trim() || busy} onClick={() => void submit()}>
               <Icon name="send" />{busy ? 'Mentés…' : 'Bejelentés'}
             </button>
+          )}
+          {(!effectiveCarId || !note.trim()) && !busy && (
+            <div className="tiny muted" style={{ textAlign: 'center' }}>
+              {!effectiveCarId ? 'Előbb válaszd ki az autót.' : 'Írd le röviden a problémát.'}
+            </div>
           )}
         </div>
       )}
