@@ -16,11 +16,20 @@ export default function OfflineHint() {
         q.state.fetchStatus === 'paused' && q.state.data === undefined && q.getObserversCount() > 0)
       setShow(stuck)
     }
+    // A cache-esemény egy MÁSIK komponens renderelése közben is jöhet (a
+    // useQuery feliratkozásakor) — a setState-et a render után futtatjuk,
+    // különben React "Cannot update a component while rendering" hibát ad.
+    let queued = false
+    const schedule = () => {
+      if (queued) return
+      queued = true
+      queueMicrotask(() => { queued = false; check() })
+    }
     check()
-    const unsub = qc.getQueryCache().subscribe(check)
-    window.addEventListener('online', check)
-    window.addEventListener('offline', check)
-    return () => { unsub(); window.removeEventListener('online', check); window.removeEventListener('offline', check) }
+    const unsub = qc.getQueryCache().subscribe(schedule)
+    window.addEventListener('online', schedule)
+    window.addEventListener('offline', schedule)
+    return () => { unsub(); window.removeEventListener('online', schedule); window.removeEventListener('offline', schedule) }
   }, [qc])
 
   if (!show) return null
