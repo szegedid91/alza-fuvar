@@ -146,7 +146,7 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
                           background: cat.crew_size === n ? 'var(--primary-ghost)' : 'transparent',
                           color: cat.crew_size === n ? 'var(--primary)' : 'var(--text-dim)',
                         }}>
-                        {n === 1 ? '👤 1 fő' : '👥 2 fő'}
+                        {n === 1 ? '<><Icon name="user" size={14} />1 fő</>' : '<><Icon name="users" size={14} />2 fő</>'}
                       </button>
                     ))}
                   </div>
