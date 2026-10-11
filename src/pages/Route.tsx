@@ -99,9 +99,12 @@ function ImportCard({ car, date, onDone }: { car: Car; date: string; onDone: () 
   }
 
   return (
-    <div className="card stack">
-      <div className="card-title">Fuvarterv importálása — {car.plate}</div>
-      <p className="small muted">Tölts fel egy Excel fájlt a mai útvonaladdal. Több munkalap (XL/RPL/AB) is lehet benne.</p>
+    <div className="card stack primary">
+      <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Fuvarterv importálása — {car.plate}</div>
+      <p className="small muted" style={{ margin: 0 }}>
+        Ma még nincs fuvarterved ehhez az autóhoz. Tölts fel egy Excel fájlt (több munkalap — XL/RPL/AB — is lehet benne),
+        vagy várd meg, amíg a menedzser feltölti: akkor itt magától megjelenik.
+      </p>
       <div className="field">
         <label>Kezdő POI (depó címe)</label>
         <input className="input" value={startPoi} onChange={(e) => setStartPoi(e.target.value)} placeholder="pl. Budapest, Depó u. 1." />
@@ -113,7 +116,7 @@ function ImportCard({ car, date, onDone }: { car: Car; date: string; onDone: () 
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }} />
       {error && <div className="alert error">{error}</div>}
-      {count != null && <div className="alert success">{count} stop importálva.</div>}
+      {count != null && <div className="alert success row" style={{ gap: 8 }}><Icon name="check-circle" />{count} stop importálva.</div>}
       <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
         <Icon name="file-text" />{busy ? 'Feldolgozás…' : 'Excel kiválasztása'}
       </button>
