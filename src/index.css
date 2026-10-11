@@ -203,6 +203,12 @@ a { color: var(--primary); }
 .btn.secondary { background: var(--bg-elev-2); color: var(--text); border-color: var(--border); }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
 .btn.danger { background: var(--danger); color: #fff; }
+/* Körvonalas piros: végleges, ritka műveletre (törlés) — nem kiabál, de jelez */
+.btn.danger-outline { background: transparent; color: var(--danger); border-color: var(--danger); }
+/* Keresőmező ikonnal */
+.input-icon { position: relative; }
+.input-icon .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
+.input-icon .input { padding-left: 40px; }
 .btn.sm { min-height: 40px; padding: 8px 14px; font-size: 14px; width: auto; }
 .btn.auto { width: auto; }
 

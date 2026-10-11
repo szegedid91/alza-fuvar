@@ -7,6 +7,7 @@ import type { Enums, Tables } from '../lib/database.types'
 import { roleLabel, statusLabel, formatDateTime } from '../lib/labels'
 import { qrDataUrl } from '../lib/qr'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
 
 type Profile = Tables<'profiles'>
 type Invite = Tables<'invites'>
@@ -106,10 +107,10 @@ function InviteCard() {
       <div className="card">
         <div className="between">
           <div>
-            <div className="card-title" style={{ margin: 0 }}>✉️ Meghívók</div>
+            <div className="card-title" style={{ margin: 0 }}><Icon name="send" />Meghívók</div>
             <div className="tiny muted">{activeCount > 0 ? `${activeCount} aktív meghívó` : 'Hívj meg új munkatársat linkkel vagy QR-kóddal'}</div>
           </div>
-          <button className="btn sm auto" onClick={() => setExpanded(true)}>➕ Új meghívó</button>
+          <button className="btn sm auto" onClick={() => setExpanded(true)}><Icon name="plus" />Új meghívó</button>
         </div>
       </div>
     )
@@ -118,7 +119,7 @@ function InviteCard() {
   return (
     <div className="card stack">
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>✉️ Meghívó küldése</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="send" />Meghívó küldése</div>
         <button className="btn ghost sm auto" onClick={() => setExpanded(false)}>Bezárás</button>
       </div>
       <p className="tiny muted" style={{ margin: 0 }}>
@@ -163,12 +164,12 @@ function InviteCard() {
             {!inv.used_at && (
               <div className="grid-3">
                 <button className="btn secondary sm" onClick={() => void copyLink(inv.id)}>
-                  {copiedId === inv.id ? '✔ Másolva' : '🔗 Link'}
+                  {copiedId === inv.id ? <><Icon name="check" />Másolva</> : 'Link'}
                 </button>
                 <button className="btn secondary sm" onClick={() => void toggleQr(inv.id)}>
-                  {qrFor === inv.id ? '✕ QR' : '📱 QR-kód'}
+                  {qrFor === inv.id ? <><Icon name="x" />QR</> : <><Icon name="qr-code" />QR-kód</>}
                 </button>
-                <button className="btn secondary sm" onClick={() => void shareLink(inv)}>📤 Megosztás</button>
+                <button className="btn secondary sm" onClick={() => void shareLink(inv)}><Icon name="upload" />Megosztás</button>
               </div>
             )}
             {showLinkFor === inv.id && (
@@ -183,7 +184,7 @@ function InviteCard() {
               </div>
             )}
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés" disabled={remove.isPending} onConfirm={() => remove.mutate(inv.id)}>
-              🗑 Törlés
+              Törlés
             </ConfirmButton>
             <div className="divider" />
           </div>
@@ -318,26 +319,29 @@ export default function Members() {
 
   return (
     <div className="stack">
-      <div className="between">
-        <h2>Tagok — {currentWorkspace?.name ?? ''}</h2>
-        <span className="badge">{all.length} tag</span>
-      </div>
 
       {(pendingCount ?? 0) > 0 && (
         <a href="/jovahagyas" className="alert info" style={{ textDecoration: 'none', display: 'block' }}>
-          ⏳ {pendingCount} regisztráció vár jóváhagyásra → Jóváhagyás
+          {pendingCount} regisztráció vár jóváhagyásra → Jóváhagyás
         </a>
       )}
 
       <InviteCard />
 
       <div className="card stack" style={{ gap: 10 }}>
-        <input
-          className="input"
-          placeholder="🔍 Keresés név vagy email alapján…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="between">
+          <div className="card-title" style={{ margin: 0 }}><Icon name="users" />{currentWorkspace?.name ?? 'Tagok'}</div>
+          <span className="badge">{all.length} tag</span>
+        </div>
+        <div className="input-icon">
+          <Icon name="search" size={18} />
+          <input
+            className="input"
+            placeholder="Keresés név vagy email alapján…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {chip('all', 'Mind', all.length)}
           {chip('crew', roleLabel.crew, counts.crew)}
@@ -423,7 +427,7 @@ export default function Members() {
                   </div>
                   {role !== 'crew' && <span className={`badge ${role === 'admin' ? 'warning' : 'primary'}`}>{role === 'admin' ? 'Admin' : roleLabel[role]}</span>}
                   {disabled && <span className="badge danger">{statusLabel[m.status]}</span>}
-                  <span className="muted" style={{ fontSize: 12, transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }}>›</span>
+                  <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
                 {open && (
                   <div className="grid-2" style={{ padding: '4px 10px 12px' }}>
@@ -442,13 +446,13 @@ export default function Members() {
                     <div className="field">
                       <label>Hozzáférés</label>
                       {m.status === 'active' ? (
-                        <ConfirmButton className="btn danger sm" confirmLabel="Igen, letiltom" disabled={isSelf || setStatus.isPending}
+                        <ConfirmButton className="btn secondary sm" confirmLabel="Igen, letiltom" disabled={isSelf || setStatus.isPending}
                           onConfirm={() => setStatus.mutate({ id: m.id, status: 'disabled' })}>
-                          🚫 Letiltás
+                          <Icon name="ban" />Letiltás
                         </ConfirmButton>
                       ) : (
                         <button className="btn sm" disabled={setStatus.isPending}
-                          onClick={() => setStatus.mutate({ id: m.id, status: 'active' })}>✅ Aktiválás</button>
+                          onClick={() => setStatus.mutate({ id: m.id, status: 'active' })}><Icon name="check" />Aktiválás</button>
                       )}
                     </div>
                     {/* Törlés: admin bárkit, menedzser csak munkatársat (a szerver is ellenőrzi) */}
@@ -456,12 +460,12 @@ export default function Members() {
                       <div className="field" style={{ gridColumn: '1 / -1' }}>
                         <label>Végleges törlés</label>
                         <ConfirmButton
-                          className="btn danger sm"
+                          className="btn danger-outline sm"
                           confirmLabel="Igen, törlöm a tagot"
                           disabled={removeMember.isPending}
                           onConfirm={() => removeMember.mutate({ id: m.id, force: false })}
                         >
-                          🗑 Tag törlése
+                          Tag törlése
                         </ConfirmButton>
                         <div className="tiny muted">
                           A fiók megszűnik, a munkatárs nem tud belépni. Ha van hozzá munka- vagy
