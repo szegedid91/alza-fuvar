@@ -8,6 +8,9 @@ import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber } from
 import { exportRowsToXlsx } from '../lib/export'
 import { openPayslip } from '../lib/payslip'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
+import { shiftMonth, monthTitle } from '../lib/calendar'
 import type { Tables } from '../lib/database.types'
 
 interface WorkspaceRate { id: string; name: string; driver: number; loader: number }
@@ -44,7 +47,7 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
 
   return (
     <div className="card stack">
-      <div className="card-title">🔒 Havi zárás — {ym}</div>
+      <div className="card-title"><Icon name="lock" />Havi zárás — {monthTitle(ym)}</div>
       <p className="tiny muted" style={{ margin: 0 }}>
         Zárolt hónapban nem módosítható előleg/levonás, beosztás, becsekkolás és tankolás — a bér nem változhat utólag.
       </p>
@@ -62,7 +65,7 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
               disabled={toggle.isPending}
               onClick={() => toggle.mutate({ wsId: w.id, locked: !!lock })}
             >
-              {lock ? '🔓 Feloldás' : '🔒 Hónap zárolása'}
+              {lock ? <><Icon name="unlock" />Feloldás</> : <><Icon name="lock" />Hónap zárolása</>}
             </button>
           </div>
         )
@@ -212,18 +215,42 @@ export default function Payroll() {
     })))
   }
 
+  // Alapból csak azok, akiknél van mit elszámolni (nap, előleg vagy levonás) —
+  // 20+ nullás sor elrejtené a lényeget. Az export mindig az összes sort viszi.
+  const [onlyWorked, setOnlyWorked] = useState(true)
+  const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0 || r.tips > 0
+  const shownRows = (data?.rows ?? []).filter((r) => !onlyWorked || relevant(r))
+  const workedCount = (data?.rows ?? []).filter(relevant).length
+  const totals = (data?.rows ?? []).reduce(
+    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, tips: a.tips + r.tips, advances: a.advances + r.advances }),
+    { pay: 0, days: 0, tips: 0, advances: 0 },
+  )
+
   return (
     <div className="stack">
       <h2>Bér / kimutatás</h2>
-      <div className="card stack">
-        <div className="field">
-          <label>Hónap</label>
-          <input className="input" type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
+      <div className="card stack primary">
+        {/* Hónap-léptető magyar hónapnévvel (a natív month-mező a böngésző nyelvén írna) */}
+        <div className="between">
+          <button className="icon-btn" aria-label="Előző hónap" onClick={() => setYm(shiftMonth(ym, -1))}><Icon name="chevron-left" /></button>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />{monthTitle(ym)}</div>
+          <button className="icon-btn" aria-label="Következő hónap" onClick={() => setYm(shiftMonth(ym, 1))}><Icon name="chevron-right" /></button>
         </div>
-        <button className="btn secondary sm" disabled={!data || data.rows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
+        {data && (
+          <div className="grid-2">
+            <div><div className="tiny muted">Kifizetendő összesen</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
+            <div><div className="tiny muted">Ledolgozott napok</div><div className="num num-lg">{totals.days}</div></div>
+            <div><div className="tiny muted">Borravaló</div><div className="num" style={{ color: totals.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(totals.tips)}</div></div>
+            <div><div className="tiny muted">Felvett előleg</div><div className="num">{formatHuf(totals.advances)}</div></div>
+          </div>
+        )}
+        <div className="btn-grid">
+          <button className="btn ghost sm" disabled={ym === currentYm()} onClick={() => setYm(currentYm())}>Ez a hónap</button>
+          <button className="btn secondary sm" disabled={!data || data.rows.length === 0} onClick={() => void exportXlsx()}><Icon name="file-text" />Exportálás Excelbe</button>
+        </div>
       </div>
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <><Skeleton rows={3} /><Skeleton rows={4} /></>}
       {isError && (
         <div className="alert error">
           A béradatok betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
@@ -236,9 +263,25 @@ export default function Payroll() {
 
       {data && <MonthLockCard ym={ym} workspaces={data.workspaces} />}
 
-      {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico">🧮</span>Nincs adat a munkatársakról.</div>}
+      {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Nincs adat a munkatársakról.</div>}
 
-      {data?.rows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} />)}
+      {data && data.rows.length > 0 && (
+        <div className="between">
+          <div className="card-title" style={{ margin: 0 }}><Icon name="users" />Munkatársak</div>
+          <div className="row" style={{ gap: 6 }}>
+            {([[true, `Elszámolás · ${workedCount}`], [false, `Mind · ${data.rows.length}`]] as const).map(([v, label]) => (
+              <button key={String(v)} type="button" className={`badge ${onlyWorked === v ? 'primary' : ''}`}
+                style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
+                onClick={() => setOnlyWorked(v)}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {data && data.rows.length > 0 && shownRows.length === 0 && (
+        <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Ebben a hónapban még nincs elszámolandó tétel.</div>
+      )}
+
+      {shownRows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} />)}
     </div>
   )
 }
@@ -328,18 +371,19 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   return (
     <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>💶 Napidíjak — {ws.name}</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="banknote" />Napidíjak — {ws.name}</div>
         {isAdmin && (
           <button className="btn ghost sm" onClick={() => { setOpen((o) => !o); setError(null) }}>
-            {open ? 'Bezárás' : '➕ Új díj hónaptól'}
+            {open ? 'Bezárás' : <><Icon name="plus" />Új díj hónaptól</>}
           </button>
         )}
       </div>
 
       <div className="grid-2 small">
-        <div className="between"><span className="muted">Sofőr / nap ({nowYm})</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.driver)}</span></div>
-        <div className="between"><span className="muted">Rakodó / nap ({nowYm})</span><span style={{ fontWeight: 700 }}>{formatHuf(ws.loader)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4 }}><Icon name="truck" size={14} />Sofőr / nap</span><span className="num">{formatHuf(ws.driver)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4 }}><Icon name="package" size={14} />Rakodó / nap</span><span className="num">{formatHuf(ws.loader)}</span></div>
       </div>
+      <div className="tiny muted" style={{ marginTop: -6 }}>Érvényes: {monthTitle(nowYm)}</div>
 
       {open && isAdmin && (
         <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
@@ -393,10 +437,10 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                       {month}
                     </span>
                     <span className="small">
-                      🚚 {formatHuf(Number(r.driver_day_rate))}
+                      <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(r.driver_day_rate))}
                       {dPct && <span style={{ color: dPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({dPct})</span>}
                       <span className="muted"> · </span>
-                      📦 {formatHuf(Number(r.loader_day_rate))}
+                      <Icon name="package" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(r.loader_day_rate))}
                       {lPct && <span style={{ color: lPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({lPct})</span>}
                     </span>
                     {isActive && <span className="badge primary">ekkor érvényes</span>}
@@ -404,7 +448,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                   </div>
                   {isAdmin && (
                     <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés" disabled={remove.isPending}
-                      onConfirm={() => remove.mutate(r.id)}>🗑</ConfirmButton>
+                      onConfirm={() => remove.mutate(r.id)} aria-label="Díj törlése"><Icon name="trash" size={16} /></ConfirmButton>
                   )}
                 </div>
               )
@@ -418,7 +462,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
           }}>
             <span className="small">
               <span className="muted" style={{ minWidth: 86, display: 'inline-block' }}>kezdettől</span>
-              🚚 {formatHuf(Number(base.driver_day_rate))}<span className="muted"> · </span>📦 {formatHuf(Number(base.loader_day_rate))}
+              <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.driver_day_rate))}<span className="muted"> · </span><Icon name="package" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.loader_day_rate))}
             </span>
             {activeRow?.id === base.id && <span className="badge primary">ekkor érvényes</span>}
           </div>
@@ -442,7 +486,7 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="muted tiny">Fizetés</div>
-          <div style={{ fontWeight: 800, fontSize: 18, color: row.total >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatHuf(row.total)}</div>
+          <div className="num num-lg" style={{ color: row.total < 0 ? 'var(--danger)' : row.total > 0 ? 'var(--success)' : 'var(--text-dim)' }}>{formatHuf(row.total)}</div>
         </div>
       </div>
 
@@ -451,12 +495,12 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         <div className="between"><span className="muted">Rakodó nap</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
         <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
-        <div className="between"><span className="muted">Borravaló</span><span style={{ color: 'var(--success)' }}>{formatHuf(row.tips)}</span></div>
+        <div className="between"><span className="muted">Borravaló</span><span style={{ color: row.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(row.tips)}</span></div>
         {row.shortfall > 0 && (
           <div className="between"><span className="muted">Kp-hiány</span><span style={{ color: 'var(--danger)' }}>−{formatHuf(row.shortfall)}</span></div>
         )}
-        <div className="between"><span className="muted">Előleg</span><span style={{ color: 'var(--warning)' }}>−{formatHuf(row.advances)}</span></div>
-        <div className="between"><span className="muted">Levonás</span><span style={{ color: 'var(--danger)' }}>−{formatHuf(row.deductions)}</span></div>
+        <div className="between"><span className="muted">Előleg</span><span style={{ color: row.advances > 0 ? 'var(--warning)' : undefined }}>{row.advances > 0 ? '−' : ''}{formatHuf(row.advances)}</span></div>
+        <div className="between"><span className="muted">Levonás</span><span style={{ color: row.deductions > 0 ? 'var(--danger)' : undefined }}>{row.deductions > 0 ? '−' : ''}{formatHuf(row.deductions)}</span></div>
       </div>
 
       {row.advanceItems.length > 0 && (
@@ -471,7 +515,7 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         </div>
       )}
 
-      <button className="btn secondary sm" onClick={() => openPayslip(row, ym)}>📄 Bérlap (nyomtatás / PDF)</button>
+      <button className="btn secondary sm" onClick={() => openPayslip(row, ym)}><Icon name="file-text" />Bérlap (nyomtatás / PDF)</button>
     </div>
   )
 }
