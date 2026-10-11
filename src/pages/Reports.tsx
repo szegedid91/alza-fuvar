@@ -7,6 +7,9 @@ import { monthRange, currentYm } from '../lib/payroll'
 import { resolveNames } from '../lib/names'
 import { formatHuf, formatHours } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
+import { shiftMonth, monthTitle } from '../lib/calendar'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 
 interface UserRow {
   id: string; name: string; days: number; hoursMs: number
@@ -126,15 +129,20 @@ export default function Reports() {
   return (
     <div className="stack">
       <h2>Riportok — {currentWorkspace?.name}</h2>
-      <div className="card stack">
-        <div className="field">
-          <label>Hónap</label>
-          <input className="input" type="month" value={ym} onChange={(e) => setYm(e.target.value)} />
+      <div className="card stack primary">
+        {/* Hónap-léptető magyar hónapnévvel (a natív month-mező a böngésző nyelvén írna) */}
+        <div className="between">
+          <button className="icon-btn" aria-label="Előző hónap" onClick={() => setYm(shiftMonth(ym, -1))}><Icon name="chevron-left" /></button>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="calendar" />{monthTitle(ym)}</div>
+          <button className="icon-btn" aria-label="Következő hónap" disabled={ym >= currentYm()} style={{ opacity: ym >= currentYm() ? 0.35 : 1 }} onClick={() => setYm(shiftMonth(ym, 1))}><Icon name="chevron-right" /></button>
         </div>
-        <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}>📊 Exportálás Excelbe</button>
+        <div className="btn-grid">
+          <button className="btn ghost sm" disabled={ym === currentYm()} onClick={() => setYm(currentYm())}>Ez a hónap</button>
+          <button className="btn secondary sm" disabled={!data || data.userRows.length === 0} onClick={() => void exportXlsx()}><Icon name="file-text" />Exportálás Excelbe</button>
+        </div>
       </div>
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {isError && (
         <div className="alert error">
           A riport betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
@@ -143,10 +151,13 @@ export default function Reports() {
 
       {data && data.userRows.length > 0 && (
         <div className="card stack">
-          <div className="card-title">👥 Munkatársak</div>
+          <div className="card-title"><Icon name="users" />Munkatársak</div>
           {data.userRows.map((r) => (
             <div key={r.id} className="stack" style={{ gap: 4 }}>
-              <div style={{ fontWeight: 700 }}>{r.name}</div>
+              <div className="between">
+                <div style={{ fontWeight: 700 }}>{r.name}</div>
+                <span className="badge primary">{r.days} nap</span>
+              </div>
               <div className="grid-2 small">
                 <div className="between"><span className="muted">Napok</span><span>{r.days} ({r.driverDays} sofőr / {r.loaderDays} rakodó)</span></div>
                 <div className="between"><span className="muted">Órák</span><span>{r.hoursMs > 0 ? formatHours(r.hoursMs) : '—'}</span></div>
@@ -164,10 +175,10 @@ export default function Reports() {
 
       {data && data.carRows.length > 0 && (
         <div className="card stack">
-          <div className="card-title">🚗 Autók — üzemanyag</div>
+          <div className="card-title"><Icon name="fuel" />Autók — üzemanyag</div>
           {data.carRows.map((c) => (
             <div key={c.id} className="stack" style={{ gap: 4 }}>
-              <div style={{ fontWeight: 700 }}>{c.plate}</div>
+              <div className="num" style={{ fontSize: 16 }}>{c.plate}</div>
               <div className="grid-2 small">
                 <div className="between"><span className="muted">Tankolás</span><span>{c.fuelCount}×</span></div>
                 <div className="between"><span className="muted">Üzemanyag</span><span>{Math.round(c.liters * 10) / 10} l · {formatHuf(c.cost)}</span></div>
@@ -181,7 +192,13 @@ export default function Reports() {
       )}
 
       {data && data.userRows.length === 0 && data.carRows.length === 0 && (
-        <div className="empty"><span className="ico">📈</span>Nincs adat ebben a hónapban.</div>
+        <div className="empty">
+          <span className="ico"><Icon name="trending-up" size={40} /></span>
+          Nincs adat ebben a hónapban.
+          <div style={{ marginTop: 14 }}>
+            <button className="btn ghost sm auto" onClick={() => setYm(shiftMonth(ym, -1))}><Icon name="chevron-left" />Előző hónap</button>
+          </div>
+        </div>
       )}
     </div>
   )
