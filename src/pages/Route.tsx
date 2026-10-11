@@ -474,7 +474,7 @@ function RouteSummary({ stops, startPoi, endPoi }: { stops: Stop[]; startPoi: st
       {(startPoi || endPoi) && (
         <div className="tiny muted">{startPoi && `Kezdő: ${startPoi}`}{startPoi && endPoi ? ' · ' : ''}{endPoi && `Vég: ${endPoi}`}</div>
       )}
-      <div className="grid-2">
+      <div className="grid-2 pay-grid">
         <div className="between"><span className="muted small">Stopok</span><span className="badge">{done}/{stops.length} kész{skipped ? ` · ${skipped} sikertelen` : ''}</span></div>
         <div className="between"><span className="muted small">Leadandó készpénz</span><span className="badge money"><Icon name="banknote" />{formatHuf(cashToHandOver)}</span></div>
         <div className="between"><span className="muted small">Beszedve</span><span className="badge">{formatHuf(collected)}</span></div>
