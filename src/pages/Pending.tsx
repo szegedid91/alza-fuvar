@@ -1,10 +1,26 @@
+import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { statusLabel } from '../lib/labels'
+import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import Icon from '../components/Icon'
 
 export default function Pending() {
   const { profile, signOut, refreshProfile } = useAuth()
   const disabled = profile?.status === 'disabled'
+
+  // Várakozás közben is feliratkozhat az értesítésre: a jóváhagyásról így
+  // azonnal pusht kap, nem kell az appot nyitogatnia. (A push_subscriptions
+  // RLS-e csak a saját sort kéri, aktív státuszt nem.)
+  const [pushState, setPushState] = useState<'unknown' | 'off' | 'on' | 'busy' | 'unsupported'>('unknown')
+  useEffect(() => {
+    if (!pushSupported()) { setPushState('unsupported'); return }
+    void isPushSubscribed().then((on) => setPushState(on ? 'on' : 'off'))
+  }, [])
+  async function enablePush() {
+    if (!profile) return
+    setPushState('busy')
+    try { await subscribePush(profile.id); setPushState('on') } catch { setPushState('off') }
+  }
 
   return (
     <div className="auth-wrap">
@@ -14,7 +30,7 @@ export default function Pending() {
       </div>
 
       <div className="card auth-card stack primary" style={{ borderColor: disabled ? 'var(--danger)' : undefined }}>
-        <div className={`alert ${disabled ? 'error' : 'info'} row`} style={{ gap: 10, alignItems: 'flex-start' }}>
+        <div className={`alert ${disabled ? 'error' : 'info'} row`} style={{ gap: 10, alignItems: 'flex-start', fontWeight: 500 }}>
           <Icon name={disabled ? 'ban' : 'clock'} style={{ flexShrink: 0, marginTop: 2 }} />
           <span>{disabled
             ? 'A fiókodat letiltották. Vedd fel a kapcsolatot a menedzsereddel.'
@@ -30,6 +46,13 @@ export default function Pending() {
           <span className="badge warning">{statusLabel[profile?.status ?? 'pending']}</span>
         </div>
 
+        {!disabled && pushState === 'off' && (
+          <button className="btn" onClick={() => void enablePush()}><Icon name="bell" />Értesítést kérek a jóváhagyásról</button>
+        )}
+        {!disabled && pushState === 'busy' && <button className="btn" disabled><Icon name="bell" />Bekapcsolás…</button>}
+        {!disabled && pushState === 'on' && (
+          <div className="alert success row" style={{ gap: 8 }}><Icon name="check-circle" />Értesítést kapsz, amint jóváhagyták a fiókod.</div>
+        )}
         <button className="btn secondary" onClick={() => void refreshProfile()}><Icon name="refresh" />Állapot frissítése</button>
         <button className="link-btn" onClick={() => void signOut()}><Icon name="log-out" size={16} />Kilépés</button>
       </div>
