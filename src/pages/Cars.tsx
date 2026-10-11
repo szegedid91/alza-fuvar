@@ -5,6 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useCars, type Car } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
 import { carQrPayload, qrDataUrl } from '../lib/qr'
 
 // Kategóriák kezelése: előbb a kategória, aztán rendeled hozzá az autókat
@@ -106,13 +107,13 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
   return (
     <div className="card stack" style={{ gap: 8, padding: 12 }}>
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>🗂️ Kategóriák</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="folder" />Kategóriák</div>
         <span className="tiny muted">sorrend = beosztás sorrendje</span>
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         <input className="input" style={{ minHeight: 38, padding: '6px 10px', fontSize: 14 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Új kategória neve…"
           onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) add.mutate() }} />
-        <button className="btn sm auto" style={{ minHeight: 38 }} disabled={!name.trim() || add.isPending} onClick={() => add.mutate()}>➕</button>
+        <button className="btn sm auto" style={{ minHeight: 38 }} disabled={!name.trim() || add.isPending} onClick={() => add.mutate()} aria-label="Kategória hozzáadása"><Icon name="plus" size={16} /></button>
       </div>
       {error && <div className="alert error">{error}</div>}
 
@@ -126,8 +127,8 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
                 <div style={{ display: 'flex', gap: 4, flex: 1 }}>
                   <input className="input" style={{ minHeight: 32, padding: '4px 8px', fontSize: 14 }} value={renameVal} autoFocus onChange={(e) => setRenameVal(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') rename.mutate({ id: cat.id, value: renameVal }); if (e.key === 'Escape') setRenaming(null) }} />
-                  <button className="btn sm auto" style={iconBtn} onClick={() => rename.mutate({ id: cat.id, value: renameVal })}>✔</button>
-                  <button className="btn ghost sm auto" style={iconBtn} aria-label="Mégse" onClick={() => setRenaming(null)}>✕</button>
+                  <button className="btn sm auto" style={iconBtn} onClick={() => rename.mutate({ id: cat.id, value: renameVal })} aria-label="Mentés"><Icon name="check" size={16} /></button>
+                  <button className="btn ghost sm auto" style={iconBtn} aria-label="Mégse" onClick={() => setRenaming(null)}><Icon name="x" size={16} /></button>
                 </div>
               ) : (
                 <div style={{ fontWeight: 800, fontSize: 14, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -149,11 +150,11 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
                       </button>
                     ))}
                   </div>
-                  <button className="btn ghost sm auto" style={iconBtn} title="Feljebb" disabled={idx === 0 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: -1 })}>↑</button>
-                  <button className="btn ghost sm auto" style={iconBtn} title="Lejjebb" disabled={idx === (categories?.length ?? 0) - 1 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: 1 })}>↓</button>
-                  <button className="btn ghost sm auto" style={iconBtn} title="Átnevezés" onClick={() => { setRenaming(cat.id); setRenameVal(cat.name) }}>✏️</button>
+                  <button className="btn ghost sm auto" style={iconBtn} title="Feljebb" disabled={idx === 0 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: -1 })} aria-label="Feljebb"><Icon name="arrow-up" size={16} /></button>
+                  <button className="btn ghost sm auto" style={iconBtn} title="Lejjebb" disabled={idx === (categories?.length ?? 0) - 1 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: 1 })} aria-label="Lejjebb"><Icon name="arrow-down" size={16} /></button>
+                  <button className="btn ghost sm auto" style={iconBtn} title="Átnevezés" onClick={() => { setRenaming(cat.id); setRenameVal(cat.name) }} aria-label="Átnevezés"><Icon name="pencil" size={16} /></button>
                   <ConfirmButton style={iconBtn} title="Törlés" disabled={remove.isPending} confirmLabel="Törlés"
-                    onConfirm={() => remove.mutate(cat.id)}>🗑️</ConfirmButton>
+                    onConfirm={() => remove.mutate(cat.id)}><Icon name="trash" size={16} /></ConfirmButton>
                 </div>
               )}
             </div>
@@ -322,22 +323,17 @@ export default function Cars() {
 
   return (
     <div className="stack">
-      <div className="between">
-        <h2>Autók — {currentWorkspace?.name ?? ''}</h2>
-        <span className="badge">{all.length} autó</span>
-      </div>
-
       <div className="btn-grid">
-        <button className={`btn sm ${panel === 'add' ? '' : 'secondary'}`} onClick={() => setPanel(panel === 'add' ? 'none' : 'add')}>➕ Új autó</button>
+        <button className={`btn sm ${panel === 'add' ? '' : 'secondary'}`} onClick={() => setPanel(panel === 'add' ? 'none' : 'add')}><Icon name="plus" />Új autó</button>
         <button className={`btn sm ${panel === 'categories' ? '' : 'secondary'}`} onClick={() => setPanel(panel === 'categories' ? 'none' : 'categories')}>
-          🗂️ Kategóriák{(categories?.length ?? 0) > 0 ? ` (${categories!.length})` : ''}
+          <Icon name="folder" />Kategóriák{(categories?.length ?? 0) > 0 ? ` (${categories!.length})` : ''}
         </button>
       </div>
 
       {deleteWarn && (
         <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
           <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
-            ⚠️ {deleteWarn.plate} törlése adatvesztéssel jár
+            <Icon name="alert-triangle" />{deleteWarn.plate} törlése adatvesztéssel jár
           </div>
           <p className="small" style={{ margin: 0 }}>
             Az autóhoz tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
@@ -358,7 +354,7 @@ export default function Cars() {
           </div>
           <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés az adatokkal együtt"
             disabled={removeCar.isPending} onConfirm={() => removeCar.mutate({ id: deleteWarn.id, force: true })}>
-            🗑 Végleges törlés az adataival együtt
+            Végleges törlés az adataival együtt
           </ConfirmButton>
         </div>
       )}
@@ -408,7 +404,14 @@ export default function Cars() {
 
       {all.length > 0 && (
         <div className="card stack" style={{ gap: 10 }}>
-          <input className="input" placeholder="🔍 Keresés rendszám, megnevezés, kategória…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="between">
+            <div className="card-title" style={{ margin: 0 }}><Icon name="truck" />{currentWorkspace?.name ?? 'Autók'}</div>
+            <span className="badge">{all.length} autó</span>
+          </div>
+          <div className="input-icon">
+            <Icon name="search" size={18} />
+            <input className="input" placeholder="Keresés rendszám, megnevezés, kategória…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {chip('all', 'Mind', all.length)}
             {chip('active', 'Aktív', counts.active)}
@@ -421,17 +424,17 @@ export default function Cars() {
 
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
-        <div className="empty"><span className="ico">🚗</span>Még nincs autó. Koppints az „➕ Új autó” gombra.</div>
+        <div className="empty"><span className="ico"><Icon name="truck" size={40} /></span>Még nincs autó. Koppints az „Új autó” gombra.</div>
       )}
       {!isLoading && all.length > 0 && visible.length === 0 && (
-        <div className="empty"><span className="ico">🔍</span>Nincs találat a szűrésre.</div>
+        <div className="empty"><span className="ico"><Icon name="search" size={40} /></span>Nincs találat a szűrésre.</div>
       )}
 
       {sections.map((sec) => sec.cars.length > 0 && (
         <div key={sec.title ?? '_all'} className="card" style={{ padding: 6 }}>
           {sec.title && (
             <div className="tiny muted" style={{ padding: '6px 10px 2px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>
-              🗂️ {sec.title} · {sec.cars.length}
+              {sec.title} · {sec.cars.length}
             </div>
           )}
           {sec.cars.map((car) => {
@@ -445,16 +448,16 @@ export default function Cars() {
                     background: open ? 'var(--primary-ghost)' : 'transparent', border: 'none', color: 'inherit',
                     cursor: 'pointer', textAlign: 'left', borderRadius: 10, opacity: car.active ? 1 : 0.55,
                   }}>
-                  <div style={{ fontSize: 22, flexShrink: 0 }}>🚚</div>
+                  <Icon name="truck" size={24} style={{ color: car.active ? 'var(--primary)' : 'var(--text-dim)' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: '0.02em' }}>{car.plate}</div>
+                    <div className="num" style={{ fontSize: 16 }}>{car.plate}</div>
                     <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {car.label || 'Nincs megnevezés'}
                     </div>
                   </div>
-                  {cat && !grouped && <span className="badge primary">🗂️ {cat}</span>}
+                  {cat && !grouped && <span className="badge primary">{cat}</span>}
                   {!car.active && <span className="badge danger">Inaktív</span>}
-                  <span className="muted" style={{ fontSize: 12, transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }}>›</span>
+                  <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
                 {open && (
                   <div className="stack" style={{ padding: '4px 10px 12px', gap: 10 }}>
@@ -470,7 +473,7 @@ export default function Cars() {
                     </div>
                     {(editPlate.trim() !== car.plate || editLabel.trim() !== (car.label ?? '')) && (
                       <button className="btn sm" disabled={editCar.isPending || !editPlate.trim()} onClick={() => editCar.mutate(car)}>
-                        💾 Módosítások mentése
+                        <Icon name="save" />Módosítások mentése
                       </button>
                     )}
                     {(categories?.length ?? 0) > 0 && (
@@ -484,17 +487,17 @@ export default function Cars() {
                       </div>
                     )}
                     <div className="btn-grid">
-                      <button className="btn secondary sm" onClick={() => setQrCar(car)}>📱 QR-kód</button>
+                      <button className="btn secondary sm" onClick={() => setQrCar(car)}><Icon name="qr-code" />QR-kód</button>
                       {car.active ? (
                         <ConfirmButton className="btn ghost sm" confirmLabel="Igen, inaktiválom" disabled={toggleActive.isPending} onConfirm={() => toggleActive.mutate(car)}>
-                          ⏸ Inaktiválás
+                          <Icon name="pause" />Inaktiválás
                         </ConfirmButton>
                       ) : (
-                        <button className="btn sm" disabled={toggleActive.isPending} onClick={() => toggleActive.mutate(car)}>▶️ Aktiválás</button>
+                        <button className="btn sm" disabled={toggleActive.isPending} onClick={() => toggleActive.mutate(car)}><Icon name="play" />Aktiválás</button>
                       )}
-                      <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlöm az autót"
+                      <ConfirmButton className="btn danger-outline sm" confirmLabel="Igen, törlöm az autót"
                         disabled={removeCar.isPending} onConfirm={() => removeCar.mutate({ id: car.id, force: false })}>
-                        🗑 Törlés
+                        Törlés
                       </ConfirmButton>
                     </div>
                   </div>
@@ -506,7 +509,7 @@ export default function Cars() {
       ))}
 
       {all.some((c) => c.active) && (
-        <button className="btn ghost sm" onClick={() => setPrintAll(true)}>🖨️ Összes aktív autó QR-kódja egy lapon</button>
+        <button className="btn ghost sm" onClick={() => setPrintAll(true)}><Icon name="printer" />Összes aktív autó QR-kódja egy lapon</button>
       )}
     </div>
   )
@@ -527,8 +530,8 @@ function QrSheet({ cars, onBack }: { cars: Car[]; onBack: () => void }) {
   return (
     <div className="stack">
       <div className="btn-grid no-print">
-        <button className="btn ghost" onClick={onBack}>← Vissza</button>
-        <button className="btn" onClick={() => window.print()}>🖨️ Nyomtatás</button>
+        <button className="btn ghost" onClick={onBack}><Icon name="arrow-left" />Vissza</button>
+        <button className="btn" onClick={() => window.print()}><Icon name="printer" />Nyomtatás</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {cars.map((c) => <QrCell key={c.id} car={c} />)}
@@ -544,14 +547,14 @@ function QrView({ car, onBack }: { car: Car; onBack: () => void }) {
   })
   return (
     <div className="stack">
-      <button className="btn ghost auto no-print" onClick={onBack}>← Vissza</button>
+      <button className="btn ghost auto no-print" onClick={onBack}><Icon name="arrow-left" />Vissza</button>
       <div className="qr-card">
         {dataUrl ? <img src={dataUrl} alt="QR" /> : <div className="spinner" />}
         <div className="plate">{car.plate}</div>
         {car.label && <div style={{ color: '#555' }}>{car.label}</div>}
         <div style={{ color: '#777', fontSize: 12, marginTop: 6 }}>Alza — becsekkoláshoz olvasd be</div>
       </div>
-      <button className="btn no-print" onClick={() => window.print()}>🖨️ Nyomtatás</button>
+      <button className="btn no-print" onClick={() => window.print()}><Icon name="printer" />Nyomtatás</button>
       <p className="tiny muted no-print">Nyomtasd ki és ragaszd az autóra. A QR-kód fix, nem változik.</p>
     </div>
   )
