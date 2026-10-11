@@ -165,6 +165,8 @@ a { color: var(--primary); }
 /* Oldalanként EGY kiemelt kártya (a fő cselekvés) kap árnyékot és színes keretet */
 .card.primary { box-shadow: var(--shadow); border-color: var(--primary); }
 .card + .card { margin-top: 14px; }
+/* Rácsban egymás mellett álló kártyák ne csússzanak el (a szomszéd-margó csak oszlopban kell) */
+.grid-2 > .card, .grid-3 > .card, .hub > .card { margin-top: 0; }
 .card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
 .card-title .icon { color: var(--primary); }
 
