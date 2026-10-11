@@ -8,6 +8,8 @@ import { useMembers } from '../hooks/useMembers'
 import { useCars } from '../hooks/useCars'
 import { resolveNames } from '../lib/names'
 import { signedUrl, signedUrls, sha256Hex, thumbPath } from '../lib/photos'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 
@@ -65,10 +67,10 @@ function VerifyBadge({ path }: { path: string | null }) {
   }
 
   if (!path) return null
-  if (state === 'idle') return <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => void verify()}>🔎 Hitelesség</button>
+  if (state === 'idle') return <button className="btn ghost sm" style={{ marginTop: 6 }} onClick={() => void verify()}><Icon name="shield-check" />Hitelesség</button>
   if (state === 'busy') return <span className="tiny muted">Ellenőrzés…</span>
-  if (state === 'ok') return <span className="badge success" style={{ marginTop: 6 }}>✔ Hiteles</span>
-  if (state === 'tampered') return <span className="badge danger" style={{ marginTop: 6 }}>⚠ Eltérés — manipulált!</span>
+  if (state === 'ok') return <span className="badge success" style={{ marginTop: 6 }}><Icon name="shield-check" />Hiteles</span>
+  if (state === 'tampered') return <span className="badge danger" style={{ marginTop: 6 }}><Icon name="alert-triangle" />Eltérés — manipulált!</span>
   if (state === 'noproof') return <span className="badge warning" style={{ marginTop: 6 }}>Nincs hash (régi fotó)</span>
   return <span className="badge danger" style={{ marginTop: 6 }}>Hiba az ellenőrzésnél</span>
 }
@@ -99,7 +101,7 @@ function RetentionCard() {
   return (
     <div className="card stack">
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>🗑️ Kép-megőrzés — {currentWorkspace?.name}</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="trash" />Kép-megőrzés — {currentWorkspace?.name}</div>
         {!edit && <button className="btn ghost sm auto" onClick={() => { setDays(String(current)); setEdit(true) }}>Módosítás</button>}
       </div>
       {!edit ? (
@@ -178,7 +180,7 @@ export default function PhotoReview() {
 
       <RetentionCard />
 
-      <div className="tabs">
+      <div className="tabs scroll">
         {TABS.map((t) => (
           <button key={t.key} className={type === t.key ? 'active' : ''} onClick={() => setType(t.key)}>{t.label}</button>
         ))}
@@ -228,7 +230,7 @@ export default function PhotoReview() {
             className={`btn sm ${compare ? '' : 'secondary'}`}
             onClick={() => { setCompare((v) => !v); setPicked([]) }}
           >
-            {compare ? `⚖️ Összehasonlítás (${picked.length}/2)` : '⚖️ Összehasonlítás'}
+            <Icon name="image" />{compare ? `Összehasonlítás (${picked.length}/2)` : 'Összehasonlítás'}
           </button>
         </div>
         {compare && picked.length < 2 && (
@@ -239,8 +241,8 @@ export default function PhotoReview() {
       {compare && pickedItems.length === 2 && (
         <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
           <div className="between">
-            <div className="card-title" style={{ margin: 0 }}>⚖️ Összehasonlítás</div>
-            <button className="btn ghost sm auto" aria-label="Összehasonlítás bezárása" onClick={() => setPicked([])}>✕ Bezárás</button>
+            <div className="card-title" style={{ margin: 0 }}><Icon name="image" />Összehasonlítás</div>
+            <button className="icon-btn" aria-label="Összehasonlítás bezárása" onClick={() => setPicked([])}><Icon name="x" /></button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {pickedItems.map((it, idx) => (
@@ -264,9 +266,9 @@ export default function PhotoReview() {
         </div>
       )}
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <div className="grid-2"><Skeleton rows={3} /><Skeleton rows={3} /></div>}
       {isError && <div className="alert error">A képek betöltése nem sikerült. Frissítsd az oldalt.</div>}
-      {!isLoading && !isError && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico">📷</span>Nincs kép a szűrésnek megfelelően.</div>}
+      {!isLoading && !isError && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="image" size={40} /></span>Nincs kép a szűrésnek megfelelően.</div>}
       {!isLoading && (data?.length ?? 0) > 0 && <div className="tiny muted">{data!.length} kép</div>}
 
       <div className="grid-2">
@@ -284,7 +286,13 @@ export default function PhotoReview() {
               onClick={compare ? () => togglePick(it.id) : undefined}
             >
               {pickIdx > -1 && <span className="badge primary" style={{ marginBottom: 6 }}>{pickIdx + 1}. kiválasztva</span>}
-              <PhotoThumb path={it.path} src={it.thumb ?? it.url} />
+              {/* Normál módban a képre koppintva a teljes méret nyílik */}
+              <div
+                style={{ cursor: !compare && it.url ? 'zoom-in' : undefined }}
+                onClick={!compare && it.url ? () => window.open(it.url, '_blank') : undefined}
+              >
+                <PhotoThumb path={it.path} src={it.thumb ?? it.url} />
+              </div>
               <div style={{ marginTop: 8 }}>
                 <div className="small" style={{ fontWeight: 700 }}>{it.title}</div>
                 <div className="tiny muted">{it.subtitle}</div>
