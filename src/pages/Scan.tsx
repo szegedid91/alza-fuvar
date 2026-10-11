@@ -238,6 +238,34 @@ export default function Scan() {
   }
 
   const checkedIn = !!today?.checkin
+
+  // Kézi autóválasztás panel — becsekkolásnál és napközbeni cserénél is ugyanaz
+  const manualPanel = (
+    <div className="stack" style={checkedIn ? undefined : { borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+      <div className="tiny muted">
+        {checkedIn
+          ? 'Sérült matrica vagy tiltott kamera esetén válaszd ki az új autót — a csere okát a következő lépésben kérjük. A kézi választást a vezetők jelzésként látják.'
+          : 'Sérült matrica vagy tiltott kamera esetén válaszd ki az autót. A kézi becsekkolást a vezetők jelzésként látják.'}
+      </div>
+      <div className="field">
+        <label>Autó</label>
+        <select className="select" value={manualCarId} onChange={(e) => setManualCarId(e.target.value)}>
+          <option value="">— válassz —</option>
+          {groupByCategory((cars ?? []).filter((c) => !checkedIn || c.id !== today?.car?.id), categories).map((g) => (
+            <optgroup key={g.name} label={g.name}>
+              {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+      <div className="btn-grid">
+        <button className="btn ghost sm" type="button" onClick={() => { setManualOpen(false); setManualCarId('') }}>Mégse</button>
+        <ConfirmButton className="btn sm" confirmLabel={checkedIn ? 'Igen, erre váltok' : 'Igen, becsekkolok'} disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
+          {busy ? 'Feldolgozás…' : checkedIn ? 'Váltás erre az autóra' : 'Becsekkolás kézzel'}
+        </ConfirmButton>
+      </div>
+    </div>
+  )
   // Mai eseményeknél elég az óra:perc — a dátum csak zaj
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
@@ -346,37 +374,23 @@ export default function Scan() {
               Nem megy a beolvasás? Kézi választás
             </button>
           )}
-          {manualOpen && (
-            <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-              <div className="tiny muted">
-                Sérült matrica vagy tiltott kamera esetén válaszd ki az autót. A kézi becsekkolást a vezetők jelzésként látják.
-              </div>
-              <div className="field">
-                <label>Autó</label>
-                <select className="select" value={manualCarId} onChange={(e) => setManualCarId(e.target.value)}>
-                  <option value="">— válassz —</option>
-                  {groupByCategory(cars ?? [], categories).map((g) => (
-                    <optgroup key={g.name} label={g.name}>
-                      {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div className="btn-grid">
-                <button className="btn ghost sm" type="button" onClick={() => { setManualOpen(false); setManualCarId('') }}>Mégse</button>
-                <ConfirmButton className="btn sm" confirmLabel="Igen, becsekkolok" disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
-                  {busy ? 'Feldolgozás…' : 'Becsekkolás kézzel'}
-                </ConfirmButton>
-              </div>
-            </div>
-          )}
+          {manualOpen && manualPanel}
         </div>
       )}
 
-      {checkedIn && (
-        <button className="btn secondary" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
-          <Icon name="qr-code" />Másik autó beolvasása
-        </button>
+      {checkedIn && !pendingSwitch && (
+        <div className="stack">
+          <button className="btn secondary" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
+            <Icon name="qr-code" />Másik autó beolvasása
+          </button>
+          {/* Autócsere kézi választással is — ha az új autó matricája sérült */}
+          {!manualOpen && (
+            <button className="btn ghost sm" type="button" onClick={() => { setError(null); setManualOpen(true) }} disabled={busy}>
+              Nem megy a beolvasás? Másik autó kézi választása
+            </button>
+          )}
+          {manualOpen && <div className="card">{manualPanel}</div>}
+        </div>
       )}
     </div>
   )
