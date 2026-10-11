@@ -237,6 +237,7 @@ a { color: var(--primary); }
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap; /* "0 nap" ne törjön két sorba szűk rácsban */
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
   color: var(--text-dim);
