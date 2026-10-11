@@ -352,6 +352,8 @@ a { color: var(--primary); }
 /* A grid-cellák ne nőjenek a tartalmuk (pl. iOS dátummező) beépített
    minimum-szélessége miatt — enélkül a mezők egymásra csúsznak mobilon. */
 .grid-2 > *, .grid-3 > * { min-width: 0; }
+/* Bérkártya részletei: keskeny telefonon egy oszlop, hogy a címkék ne törjenek */
+@media (max-width: 480px) { .pay-grid { grid-template-columns: 1fr; gap: 6px; } }
 input[type='date'].input {
   min-width: 0;
   -webkit-appearance: none;

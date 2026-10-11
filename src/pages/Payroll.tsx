@@ -490,9 +490,9 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         </div>
       </div>
 
-      <div className="grid-2 small">
-        <div className="between"><span className="muted">Sofőr nap</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>
-        <div className="between"><span className="muted">Rakodó nap</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
+      <div className="grid-2 pay-grid small">
+        <div className="between"><span className="muted">Sofőrként</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>
+        <div className="between"><span className="muted">Rakodóként</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
         <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
         <div className="between"><span className="muted">Borravaló</span><span style={{ color: row.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(row.tips)}</span></div>
