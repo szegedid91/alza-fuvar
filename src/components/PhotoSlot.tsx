@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CameraCapture from './CameraCapture'
+import Icon from './Icon'
 
 export interface CapturedPhoto {
   blob: Blob
@@ -30,12 +31,12 @@ export default function PhotoSlot({
         ) : (
           <div className="thumb thumb-empty">
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 26 }}>📷</div>
-              <div className="tiny">{label}</div>
+              <Icon name="camera" size={28} />
+              <div className="tiny" style={{ marginTop: 4 }}>{label}</div>
             </div>
           </div>
         )}
-        {photo && <span className="cap">✔ {label}</span>}
+        {photo && <span className="cap"><Icon name="check" size={12} style={{ verticalAlign: -2 }} /> {label}</span>}
       </button>
       {open && (
         <CameraCapture
