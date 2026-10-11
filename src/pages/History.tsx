@@ -6,6 +6,8 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { resolveNames } from '../lib/names'
 import { todayISO, formatDate, formatDateTime, carIssueStatusLabel } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import type { Enums } from '../lib/database.types'
 
 type CheckIn = {
@@ -224,60 +226,65 @@ export default function History() {
       <h2>Előzmények</h2>
       <p className="small muted">Visszamenőleg: melyik napon melyik autók mentek, autócserék és okaik, események, hibák.</p>
 
-      <div className="card stack" style={{ gap: 8 }}>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <div className="field" style={{ flex: '1 1 130px' }}>
+      <div className="card stack" style={{ gap: 10 }}>
+        <div className="grid-2">
+          <div className="field">
             <label>Ettől</label>
             <input className="input" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
           </div>
-          <div className="field" style={{ flex: '1 1 130px' }}>
+          <div className="field">
             <label>Eddig</label>
             <input className="input" type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)} />
           </div>
         </div>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn ghost sm" onClick={() => { setFrom(isoDaysAgo(30)); setTo(today) }}>30 nap</button>
-          <button className="btn ghost sm" onClick={() => { setFrom(isoDaysAgo(90)); setTo(today) }}>3 hónap</button>
-          <button className="btn ghost sm" onClick={() => { setFrom(isoDaysAgo(365)); setTo(today) }}>1 év</button>
-          <button className="btn ghost sm" onClick={() => { setFrom(isoDaysAgo(365 * 3)); setTo(today) }}>3 év</button>
+        {/* Gyors időszakok chipként — a kiválasztott kiemelve */}
+        <div className="chips">
+          {([[30, '30 nap'], [90, '3 hónap'], [365, '1 év'], [365 * 3, '3 év']] as const).map(([d, label]) => {
+            const active = from === isoDaysAgo(d) && to === today
+            return (
+              <button key={d} type="button" className={`badge ${active ? 'primary' : ''}`}
+                style={{ cursor: 'pointer', font: 'inherit', fontSize: 13, fontWeight: 700, minHeight: 36, padding: '6px 12px' }}
+                onClick={() => { setFrom(isoDaysAgo(d)); setTo(today) }}>{label}</button>
+            )
+          })}
         </div>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterCar} onChange={(e) => setFilterCar(e.target.value)}>
-            <option value="">🚚 Minden autó</option>
+        <div className="map-filters">
+          <select className="select" aria-label="Autó" style={{ minHeight: 40, padding: '6px 10px' }} value={filterCar} onChange={(e) => setFilterCar(e.target.value)}>
+            <option value="">Minden autó</option>
             {(data?.cars ?? []).map((c) => {
               const cat = (c.category as unknown as { name: string } | null)?.name
               return <option key={c.id} value={c.id}>{cat ? `${cat} · ` : ''}{c.plate}</option>
             })}
           </select>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
-            <option value="">👤 Minden munkatárs</option>
+          <select className="select" aria-label="Munkatárs" style={{ minHeight: 40, padding: '6px 10px' }} value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
+            <option value="">Minden munkatárs</option>
             {(view?.people ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-            <option value="">📋 Minden típus</option>
-            <option value="usage">🚚 Autóhasználat</option>
-            <option value="switch">🔁 Autócserék</option>
-            <option value="roleswap">🔄 Sofőr ↔ rakodó cserék</option>
-            <option value="incident">⚠️ Események / balesetek</option>
-            <option value="issue">🔧 Autó-hibák</option>
+          <select className="select" aria-label="Típus" style={{ minHeight: 40, padding: '6px 10px' }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <option value="">Minden típus</option>
+            <option value="usage">Autóhasználat</option>
+            <option value="switch">Autócserék</option>
+            <option value="roleswap">Sofőr ↔ rakodó cserék</option>
+            <option value="incident">Események / balesetek</option>
+            <option value="issue">Autó-hibák</option>
           </select>
           {(filterCar || filterPerson || filterType) && (
-            <button className="btn ghost sm" onClick={() => { setFilterCar(''); setFilterPerson(''); setFilterType('') }}>✕ Szűrők törlése</button>
+            <button className="btn ghost sm" onClick={() => { setFilterCar(''); setFilterPerson(''); setFilterType('') }}><Icon name="x" />Szűrők törlése</button>
           )}
         </div>
       </div>
 
       {isError && <div className="alert error">Az előzmények betöltése nem sikerült. Frissítsd az oldalt.</div>}
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <><Skeleton rows={2} /><Skeleton rows={4} /></>}
 
       {view && (
         <div className="card stack" style={{ gap: 8 }}>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-            <span className="badge">{view.stats.dayCount} munkanap</span>
-            <span className="badge primary">🔁 {view.stats.switchCount} autócsere</span>
-            <span className="badge primary">🔄 {view.stats.roleSwapCount} szerepcsere</span>
-            <span className="badge warning">⚠️ {view.stats.incidentCount} esemény</span>
-            <span className="badge">🔧 {view.stats.issueCount} hiba</span>
+            <span className="badge"><Icon name="calendar" />{view.stats.dayCount} munkanap</span>
+            <span className={`badge ${view.stats.switchCount ? 'primary' : ''}`}><Icon name="repeat" />{view.stats.switchCount} autócsere</span>
+            <span className={`badge ${view.stats.roleSwapCount ? 'primary' : ''}`}><Icon name="users" />{view.stats.roleSwapCount} szerepcsere</span>
+            <span className={`badge ${view.stats.incidentCount ? 'warning' : ''}`}><Icon name="alert-triangle" />{view.stats.incidentCount} esemény</span>
+            <span className="badge"><Icon name="wrench" />{view.stats.issueCount} hiba</span>
           </div>
           {view.stats.reasons.length > 0 && (
             <div className="tiny muted">
@@ -288,7 +295,13 @@ export default function History() {
       )}
 
       {view && view.days.length === 0 && !isLoading && (
-        <div className="empty"><span className="ico">🕓</span>Nincs adat a kiválasztott időszakban / szűrőkkel.</div>
+        <div className="empty">
+          <span className="ico"><Icon name="history" size={40} /></span>
+          Nincs adat a kiválasztott időszakban / szűrőkkel.
+          <div style={{ marginTop: 14 }}>
+            <button className="btn ghost sm auto" onClick={() => { setFrom(isoDaysAgo(365)); setTo(today) }}>Utolsó 1 év mutatása</button>
+          </div>
+        </div>
       )}
 
       {view?.days.map((g) => {
@@ -312,7 +325,7 @@ export default function History() {
               <div key={u.carId} className="row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
                 <span className="small" style={{ fontWeight: 700, minWidth: 76 }}>
                   {catOf.get(u.carId) && <span className="tiny muted" style={{ fontWeight: 400 }}>{catOf.get(u.carId)} · </span>}
-                  🚚 {u.plate}
+                  <span className="num">{u.plate}</span>
                 </span>
                 <span className="small muted">
                   {u.segments.map((sg, i) => (
@@ -324,7 +337,7 @@ export default function History() {
 
             {show('switch') && g.timelines.map((tl) => (
               <div key={tl.userId} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--warning)', paddingLeft: 10 }}>
-                <span className="tiny" style={{ fontWeight: 700 }}>🔁 Autócsere — {tl.who}</span>
+                <span className="tiny row" style={{ fontWeight: 700, gap: 4 }}><Icon name="repeat" size={14} />Autócsere — {tl.who}</span>
                 <CarTimeline entries={tl.entries} />
               </div>
             ))}
@@ -332,7 +345,7 @@ export default function History() {
             {show('roleswap') && g.roleSwaps.map((s) => (
               <div key={s.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  🔄 Sofőr ↔ rakodó csere{s.carId ? ` — ${carLabel(s.carId)}` : ''} · {t(s.at)}
+                  <Icon name="users" size={14} style={{ verticalAlign: -2 }} /> Sofőr ↔ rakodó csere{s.carId ? ` — ${carLabel(s.carId)}` : ''} · {t(s.at)}
                 </span>
                 <span className="small">
                   {s.who}{s.partner ? ` ↔ ${s.partner}` : ''} — a menedzser jóváhagyta, a szerepek cserélődtek
@@ -343,7 +356,7 @@ export default function History() {
             {show('incident') && g.incidents.map((i) => (
               <div key={i.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--danger)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  ⚠️ Esemény / baleset — {nm(i.user_id)}{i.car_id ? ` · ${carLabel(i.car_id)}` : ''} · {t(i.created_at)}
+                  <Icon name="alert-triangle" size={14} style={{ verticalAlign: -2, color: 'var(--danger)' }} /> Esemény / baleset — {nm(i.user_id)}{i.car_id ? ` · ${carLabel(i.car_id)}` : ''} · {t(i.created_at)}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
@@ -352,7 +365,7 @@ export default function History() {
             {show('issue') && g.issues.map((i) => (
               <div key={i.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--border)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  🔧 Autó-hiba — {carLabel(i.car_id)} · {nm(i.user_id)} · {formatDateTime(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
+                  <Icon name="wrench" size={14} style={{ verticalAlign: -2 }} /> Autó-hiba — {carLabel(i.car_id)} · {nm(i.user_id)} · {formatDateTime(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
