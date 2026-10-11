@@ -6,6 +6,8 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import type { Enums, Tables } from '../lib/database.types'
 import { roleLabel, formatDateTime } from '../lib/labels'
 import { sendPush } from '../lib/push'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 
 type Profile = Tables<'profiles'>
 type AssignRole = Enums<'user_role'>
@@ -32,9 +34,16 @@ export default function Approvals() {
   return (
     <div className="stack">
       <h2>Jóváhagyásra váró regisztrációk</h2>
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      <p className="small muted" style={{ margin: 0 }}>
+        Az új regisztráció itt jelenik meg; a szerep és a munkaterület megadása után a munkatárs azonnal beléphet.
+      </p>
+      {isLoading && <Skeleton rows={4} />}
       {!isLoading && (pending?.length ?? 0) === 0 && (
-        <div className="empty"><span className="ico">🎉</span>Nincs függőben lévő regisztráció.</div>
+        <div className="empty">
+          <span className="ico"><Icon name="user-check" size={40} /></span>
+          Nincs függőben lévő regisztráció.
+          <div className="tiny muted" style={{ marginTop: 6 }}>Új regisztrációról értesítést kapsz.</div>
+        </div>
       )}
       {pending?.map((u) => (
         <PendingCard
@@ -96,13 +105,23 @@ function PendingCard({
   const busy = approve.isPending || reject.isPending
 
   return (
-    <div className="card stack">
+    <div className="card stack primary">
       <div className="between">
-        <div>
-          <div className="name" style={{ fontSize: 16, fontWeight: 700 }}>{user.full_name || user.email}</div>
-          <div className="muted small">{user.email}</div>
+        <div className="row" style={{ gap: 12, minWidth: 0 }}>
+          <div
+            style={{
+              width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
+              background: 'var(--primary-ghost)', color: 'var(--primary)',
+            }}
+          >
+            <Icon name="user" size={20} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div className="name" style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.full_name || user.email}</div>
+            <div className="muted small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
+          </div>
         </div>
-        <span className="tiny muted">{formatDateTime(user.created_at)}</span>
+        <span className="tiny muted" style={{ flexShrink: 0 }}>{formatDateTime(user.created_at)}</span>
       </div>
 
       <div className="grid-2">
@@ -122,9 +141,12 @@ function PendingCard({
 
       {error && <div className="alert error">{error}</div>}
 
-      <div className="btn-grid">
-        <button className="btn danger" disabled={busy} onClick={() => reject.mutate()}>Elutasítás</button>
-        <button className="btn" disabled={busy || !workspaceId} onClick={() => { setError(null); approve.mutate() }}>Jóváhagyás</button>
+      {/* Az elutasítás letiltott állapotba teszi (a Tagok oldalon visszafordítható) — ezért nem piros */}
+      <div className="stop-actions">
+        <button className="btn ghost" disabled={busy} onClick={() => reject.mutate()}>Elutasítás</button>
+        <button className="btn" disabled={busy || !workspaceId} onClick={() => { setError(null); approve.mutate() }}>
+          <Icon name="check" />{approve.isPending ? 'Jóváhagyás…' : 'Jóváhagyás'}
+        </button>
       </div>
     </div>
   )
