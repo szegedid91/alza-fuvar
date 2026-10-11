@@ -37,9 +37,9 @@ export default function Pending() {
             : 'A fiókod regisztrálva van, de még jóváhagyásra vár. Egy menedzsernek engedélyeznie kell, szerepet és munkaterületet kell adnia, mielőtt használhatod az alkalmazást.'}</span>
         </div>
 
-        <div className="between">
-          <span className="muted small">Bejelentkezve mint</span>
-          <span className="small">{profile?.email}</span>
+        <div className="between" style={{ gap: 10 }}>
+          <span className="muted small" style={{ flexShrink: 0 }}>Bejelentkezve mint</span>
+          <span className="small" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={profile?.email ?? ''}>{profile?.email}</span>
         </div>
         <div className="between">
           <span className="muted small">Állapot</span>
