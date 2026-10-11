@@ -16,7 +16,7 @@ import { resolveCarByToken, checkInspectionRequirement, type Car, type Inspectio
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
-import { todayISO, formatDateTime, formatHours } from '../lib/labels'
+import { todayISO, formatHours } from '../lib/labels'
 
 // A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
 const QrScanner = lazy(() => import('../components/QrScanner'))
