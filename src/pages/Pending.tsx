@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { statusLabel } from '../lib/labels'
+import Icon from '../components/Icon'
 
 export default function Pending() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -12,11 +13,12 @@ export default function Pending() {
         <h1>{disabled ? 'Fiók letiltva' : 'Várj a jóváhagyásra'}</h1>
       </div>
 
-      <div className="card auth-card stack">
-        <div className={`alert ${disabled ? 'error' : 'info'}`}>
-          {disabled
+      <div className="card auth-card stack primary" style={{ borderColor: disabled ? 'var(--danger)' : undefined }}>
+        <div className={`alert ${disabled ? 'error' : 'info'} row`} style={{ gap: 10, alignItems: 'flex-start' }}>
+          <Icon name={disabled ? 'ban' : 'clock'} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>{disabled
             ? 'A fiókodat letiltották. Vedd fel a kapcsolatot a menedzsereddel.'
-            : 'A fiókod regisztrálva van, de még jóváhagyásra vár. Egy menedzsernek engedélyeznie kell, szerepet és munkaterületet kell adnia, mielőtt használhatod az alkalmazást.'}
+            : 'A fiókod regisztrálva van, de még jóváhagyásra vár. Egy menedzsernek engedélyeznie kell, szerepet és munkaterületet kell adnia, mielőtt használhatod az alkalmazást.'}</span>
         </div>
 
         <div className="between">
@@ -28,8 +30,8 @@ export default function Pending() {
           <span className="badge warning">{statusLabel[profile?.status ?? 'pending']}</span>
         </div>
 
-        <button className="btn secondary" onClick={() => void refreshProfile()}>Állapot frissítése</button>
-        <button className="btn ghost" onClick={() => void signOut()}>Kilépés</button>
+        <button className="btn secondary" onClick={() => void refreshProfile()}><Icon name="refresh" />Állapot frissítése</button>
+        <button className="link-btn" onClick={() => void signOut()}><Icon name="log-out" size={16} />Kilépés</button>
       </div>
     </div>
   )

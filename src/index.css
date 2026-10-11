@@ -324,6 +324,13 @@ a { color: var(--primary); }
   background: none; border: 1px solid transparent; color: var(--text-dim); cursor: pointer;
 }
 .icon-btn:hover { background: var(--bg-elev-2); color: var(--text); }
+/* Szöveges, másodlagos gomb (pl. "Elfelejtettem a jelszavam") — nem versenyez a fő gombbal */
+.link-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: none; border: none; color: var(--primary); font: inherit; font-size: 14px; font-weight: 600;
+  padding: 10px; min-height: 40px; cursor: pointer; border-radius: var(--radius-sm); width: 100%;
+}
+.link-btn:hover { background: var(--primary-ghost); }
 
 /* Kezdőlap: gyorslinkek sora (a lépéssor a főszereplő, ezek másodlagosak) */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { RECOVERY_URL_ERROR, clearRecoveryPending } from '../lib/recovery'
+import Icon from '../components/Icon'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
@@ -46,9 +47,9 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
           <img src="/pwa-192.png" alt="Alza" />
           <h1>Alza Fuvarszervező</h1>
         </div>
-        <div className="card auth-card stack">
-          <div className="alert success">✅ A jelszavad frissítve. Mostantól az új jelszóval tudsz belépni.</div>
-          <button className="btn" onClick={onDone}>Tovább az appba</button>
+        <div className="card auth-card stack primary">
+          <div className="alert success row" style={{ gap: 8 }}><Icon name="check-circle" />A jelszavad frissítve. Mostantól az új jelszóval tudsz belépni.</div>
+          <button className="btn" onClick={onDone}><Icon name="arrow-right" />Tovább az appba</button>
         </div>
       </div>
     )
@@ -62,7 +63,7 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
         <p className="muted small">Új jelszó beállítása</p>
       </div>
 
-      <div className="card auth-card">
+      <div className="card auth-card primary">
         <form className="stack" onSubmit={submit}>
           <div className="field">
             <label htmlFor="np">Új jelszó</label>
@@ -77,8 +78,8 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
 
           {error && <div className="alert error">{error}</div>}
 
-          <button className="btn" type="submit" disabled={busy}>{busy ? 'Mentés…' : 'Jelszó mentése'}</button>
-          <button className="btn ghost sm" type="button" onClick={() => void supabase.auth.signOut().then(onDone)}>
+          <button className="btn" type="submit" disabled={busy}><Icon name="key" />{busy ? 'Mentés…' : 'Jelszó mentése'}</button>
+          <button className="link-btn" type="button" onClick={() => void supabase.auth.signOut().then(onDone)}>
             Mégse — vissza a belépéshez
           </button>
         </form>

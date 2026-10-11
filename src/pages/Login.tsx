@@ -2,6 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { RECOVERY_PATH } from '../lib/recovery'
+import Icon, { type IconName } from '../components/Icon'
+
+// Fejlesztői fiókok ikonja a szerepkör (sub) alapján — az .env-beli emoji helyett
+const DEV_ICON: Record<string, IconName> = { crew: 'user', manager: 'users', admin: 'shield-check' }
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -97,7 +101,7 @@ export default function Login() {
           )}
           <div className="field">
             <label htmlFor="email">Email cím</label>
-            <input id="email" className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pelda@email.hu" autoComplete="email" required />
+            <input id="email" className="input" type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="pelda@email.hu" autoComplete="email" required />
           </div>
           {mode !== 'forgot' && (
             <div className="field">
@@ -115,17 +119,19 @@ export default function Login() {
           {info && <div className="alert success">{info}</div>}
 
           <button className="btn" type="submit" disabled={busy}>
+            <Icon name={mode === 'login' ? 'log-in' : mode === 'register' ? 'user-check' : 'mail'} />
             {busy ? 'Folyamatban…' : mode === 'login' ? 'Belépés' : mode === 'register' ? 'Regisztráció' : 'Visszaállító link kérése'}
           </button>
 
+          {/* Másodlagos műveletek szöveges linkként — a nagy gomb maradjon az egyetlen hangsúly */}
           {mode === 'login' && (
-            <button className="btn ghost sm" type="button" onClick={() => { setMode('forgot'); setError(null); setInfo(null) }}>
+            <button className="link-btn" type="button" onClick={() => { setMode('forgot'); setError(null); setInfo(null) }}>
               Elfelejtettem a jelszavam
             </button>
           )}
           {mode === 'forgot' && (
-            <button className="btn ghost sm" type="button" onClick={() => { setMode('login'); setError(null); setInfo(null) }}>
-              ← Vissza a belépéshez
+            <button className="link-btn" type="button" onClick={() => { setMode('login'); setError(null); setInfo(null) }}>
+              <Icon name="arrow-left" size={16} />Vissza a belépéshez
             </button>
           )}
         </form>
@@ -134,7 +140,7 @@ export default function Login() {
 
       {DEV_LOGIN_SETUP_HINT && (
         <div className="card auth-card" style={{ borderColor: 'var(--warning)', borderStyle: 'dashed' }}>
-          <div className="card-title" style={{ color: 'var(--warning)' }}>🧪 Gyors belépés — nincs beállítva</div>
+          <div className="card-title" style={{ color: 'var(--warning)' }}><Icon name="flask" />Gyors belépés — nincs beállítva</div>
           <p className="tiny muted" style={{ marginTop: 0 }}>
             Helyben futsz, de nincs fejlesztői fiók megadva. Vedd fel őket a projekt
             <strong> .env.local</strong> fájljába egy sorban (a fájl nincs verziókövetve, éles buildbe nem kerül):
@@ -153,11 +159,10 @@ export default function Login() {
 
       {DEV_LOGIN_ENABLED && (
         <div className="card auth-card" style={{ borderColor: 'var(--warning)', borderStyle: 'dashed' }}>
-          <div className="card-title" style={{ color: 'var(--warning)' }}>🧪 Gyors belépés (fejlesztői)</div>
+          <div className="card-title" style={{ color: 'var(--warning)' }}><Icon name="flask" />Gyors belépés (fejlesztői)</div>
           <p className="tiny muted" style={{ marginTop: 0 }}>
-            Csak helyi futtatásnál látszik (éles oldalon soha). Válaszd ki, melyik fiókkal szeretnél belépni.
-            A munkatársak napi szerepe (sofőr/rakodó) a menedzser beosztásából derül ki, nem itt — ezért van
-            két munkatárs-fiók: velük a páros is tesztelhető.
+            Csak helyi futtatásnál látszik. Két munkatárs-fiók van, hogy a páros is tesztelhető legyen
+            (a napi sofőr/rakodó szerep a beosztásból jön).
           </p>
           <div className="grid-2">
             {DEV_ACCOUNTS.map((acc) => (
@@ -169,7 +174,7 @@ export default function Login() {
                 disabled={devBusy !== null}
                 onClick={() => handleDevLogin(acc)}
               >
-                <div style={{ fontSize: 24 }}>{acc.icon}</div>
+                <Icon name={DEV_ICON[acc.sub] ?? 'user'} size={24} style={{ color: 'var(--primary)' }} />
                 <div className="name" style={{ fontSize: 15, marginTop: 4 }}>{acc.label}</div>
                 <div className="tiny muted">{devBusy === acc.key ? 'Belépés…' : acc.sub}</div>
               </button>
