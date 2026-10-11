@@ -264,7 +264,7 @@ a { color: var(--primary); }
 .auth-logo h1 { font-size: 24px; }
 
 .tabs { display: flex; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px; margin-bottom: 16px; }
-.tabs button { flex: 1; border: none; background: transparent; color: var(--text-dim); padding: 11px; border-radius: 10px; font-weight: 700; cursor: pointer; }
+.tabs button { flex: 1; border: none; background: transparent; color: var(--text-dim); padding: 11px; border-radius: 10px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .tabs button.active { background: var(--primary-ghost); color: var(--primary); }
 
 .alert { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 14px; font-weight: 600; }

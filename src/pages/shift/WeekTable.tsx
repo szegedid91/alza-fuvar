@@ -12,7 +12,8 @@ import CarTimeline, { type TimelineEntry } from '../../components/CarTimeline'
 import { resolveNames } from '../../lib/names'
 import { sendPush } from '../../lib/push'
 import { todayISO, formatDate } from '../../lib/labels'
-import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG } from '../../lib/calendar'
+import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG, weekLabel } from '../../lib/calendar'
+import Icon from '../../components/Icon'
 import type { Tables } from '../../lib/database.types'
 
 type Car = Tables<'cars'>
@@ -308,13 +309,13 @@ export default function WeekTable() {
     <>
       <div className="card stack">
         <div className="between">
-          <button className="btn ghost sm auto" aria-label="Előző hét" onClick={() => setWeekStart(addDays(weekStart, -7))}>←</button>
-          <div className="card-title" style={{ margin: 0 }}>{formatDate(weekStart)} – {formatDate(days[6])}</div>
-          <button className="btn ghost sm auto" aria-label="Következő hét" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
+          <button className="icon-btn" aria-label="Előző hét" onClick={() => setWeekStart(addDays(weekStart, -7))}><Icon name="chevron-left" /></button>
+          <div className="card-title" style={{ margin: 0, textAlign: 'center' }}>{weekLabel(weekStart, days[6])}</div>
+          <button className="icon-btn" aria-label="Következő hét" onClick={() => setWeekStart(addDays(weekStart, 7))}><Icon name="chevron-right" /></button>
         </div>
         <div className="btn-grid">
-          <button className="btn secondary sm" onClick={() => setWeekStart(mondayOf(todayISO()))}>📆 Ez a hét</button>
-          <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (felülír)" onConfirm={() => void copyPrevWeek()}>📋 Előző hét másolása</ConfirmButton>
+          <button className="btn secondary sm" onClick={() => setWeekStart(mondayOf(todayISO()))}><Icon name="calendar" />Ez a hét</button>
+          <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (felülír)" onConfirm={() => void copyPrevWeek()}><Icon name="clipboard" />Előző hét másolása</ConfirmButton>
         </div>
         <ConfirmButton
           className="btn sm"
@@ -322,7 +323,7 @@ export default function WeekTable() {
           disabled={publishBusy || weekPeople.size === 0}
           onConfirm={() => void publishWeek()}
         >
-          {publishBusy ? 'Küldés…' : '📣 Beosztás kiküldése értesítésben'}
+          <Icon name="send" />{publishBusy ? 'Küldés…' : 'Beosztás kiküldése értesítésben'}
         </ConfirmButton>
         {error && <div className="alert error">{error}</div>}
         {copyMsg && <div className="alert info">{copyMsg}</div>}
@@ -447,11 +448,11 @@ export default function WeekTable() {
                 style={{ position: 'fixed', top: rowMenu.top, left: Math.max(8, Math.min(rowMenu.left, window.innerWidth - 300)), width: 290, zIndex: 300, gap: 8, padding: 12 }}
               >
                 <div className="between">
-                  <div style={{ fontWeight: 800 }}>🚚 {car?.plate}</div>
+                  <div className="row" style={{ fontWeight: 800, gap: 6 }}><Icon name="truck" size={18} />{car?.plate}</div>
                   <span className="tiny muted">{n} beosztás a héten</span>
                 </div>
                 <div className="field">
-                  <label>🔁 Csere másik autóra (a heti beosztás átkerül)</label>
+                  <label>Csere másik autóra (a heti beosztás átkerül)</label>
                   <select className="select" style={selStyle} value="" disabled={rowBusy || freeCars.length === 0}
                     onChange={(e) => { if (e.target.value) void swapCar(rowMenu.carId, e.target.value) }}>
                     <option value="">{freeCars.length === 0 ? 'Nincs szabad autó ezen a héten' : '— válassz autót —'}</option>
@@ -464,7 +465,7 @@ export default function WeekTable() {
                 </div>
                 <ConfirmButton className="btn danger sm" confirmLabel={n > 0 ? `Igen, ${n} beosztás törlése` : 'Igen, kiveszem'} disabled={rowBusy}
                   onConfirm={() => void removeCarFromWeek(rowMenu.carId)}>
-                  ➖ Kivétel a hétből{n > 0 ? ` (${n} beosztás törlődik)` : ''}
+                  Kivétel a hétből{n > 0 ? ` (${n} beosztás törlődik)` : ''}
                 </ConfirmButton>
                 <button className="btn ghost sm" onClick={() => setRowMenu(null)}>Mégse</button>
               </div>
@@ -478,7 +479,7 @@ export default function WeekTable() {
           value=""
           onChange={(e) => { if (e.target.value) setAddedCars((p) => [...p, e.target.value]) }}
         >
-          <option value="">＋ Autó (rendszám) hozzáadása a heti táblázathoz…</option>
+          <option value="">+ Autó hozzáadása a heti táblázathoz…</option>
           {groupByCategory(activeCars.filter((c) => !rowCarIds.includes(c.id)), categories).map((g) => (
             <optgroup key={g.name} label={g.name}>
               {g.cars.map((c) => (
@@ -495,7 +496,7 @@ export default function WeekTable() {
 
       {(weekSwitches?.length ?? 0) > 0 && (
         <div className="card stack">
-          <div className="card-title">🔁 Napközbeni autócserék ezen a héten</div>
+          <div className="card-title"><Icon name="repeat" />Napközbeni autócserék ezen a héten</div>
           {weekSwitches!.map((g) => (
             <div key={`${g.userId}|${g.date}`} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
               <div className="small" style={{ fontWeight: 700 }}>{formatDate(g.date)} · {g.name}</div>
@@ -506,7 +507,7 @@ export default function WeekTable() {
       )}
 
       <div className="card stack">
-        <div className="card-title">👥 Napok ezen a héten</div>
+        <div className="card-title"><Icon name="users" />Napok ezen a héten</div>
         {weekCounts.length === 0 && <div className="tiny muted">Nincs munkatárs ezen a munkaterületen.</div>}
         <div className="grid-2">
           {weekCounts.map((r) => (

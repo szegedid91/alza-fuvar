@@ -11,6 +11,7 @@ import { todayISO, formatDate, carIssueStatusLabel } from '../lib/labels'
 import { monthGrid, shiftMonth, localDateOf, monthTitle, shortName, crewSizeFor, groupByCategory } from '../lib/calendar'
 import SwapApprovals from './shift/SwapApprovals'
 import WeekTable from './shift/WeekTable'
+import Icon from '../components/Icon'
 import type { Tables } from '../lib/database.types'
 
 type Shift = Tables<'shifts'>
@@ -201,8 +202,8 @@ export default function ShiftEditor() {
       <SwapApprovals workspaceId={currentWorkspaceId} />
 
       <div className="tabs" style={{ marginBottom: 0 }}>
-        <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>📋 Heti táblázat</button>
-        <button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}>🗓️ Naptár</button>
+        <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><Icon name="clipboard" size={18} />Heti táblázat</button>
+        <button className={view === 'calendar' ? 'active' : ''} onClick={() => setView('calendar')}><Icon name="calendar" size={18} />Naptár</button>
       </div>
 
       {view === 'table' && <WeekTable />}
@@ -211,9 +212,9 @@ export default function ShiftEditor() {
       {/* ---- Havi naptár ---- */}
       <div className="card stack">
         <div className="between">
-          <button className="btn ghost sm auto" aria-label="Előző hónap" onClick={() => setMonth(shiftMonth(month, -1))}>←</button>
+          <button className="icon-btn" aria-label="Előző hónap" onClick={() => setMonth(shiftMonth(month, -1))}><Icon name="chevron-left" /></button>
           <div className="card-title" style={{ margin: 0 }}>{monthTitle(month)}</div>
-          <button className="btn ghost sm auto" aria-label="Következő hónap" onClick={() => setMonth(shiftMonth(month, 1))}>→</button>
+          <button className="icon-btn" aria-label="Következő hónap" onClick={() => setMonth(shiftMonth(month, 1))}><Icon name="chevron-right" /></button>
         </div>
 
         <div className="field">
@@ -325,8 +326,8 @@ export default function ShiftEditor() {
         return (
           <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
             <div className="between">
-              <div className="card-title" style={{ margin: 0 }}>📅 {formatDate(d)} — mi történt aznap</div>
-              <button className="btn ghost sm auto" title="Kijelölés megszüntetése" aria-label="Kijelölés megszüntetése" onClick={() => setSelectedDate('')}>✕</button>
+              <div className="card-title" style={{ margin: 0 }}><Icon name="calendar" />{formatDate(d)} — mi történt aznap</div>
+              <button className="icon-btn" title="Kijelölés megszüntetése" aria-label="Kijelölés megszüntetése" onClick={() => setSelectedDate('')}><Icon name="x" /></button>
             </div>
             {empty && <div className="tiny muted">Ezen a napon nincs beosztás és esemény. Koppints egy másik napra a naptárban.</div>}
             {dShifts.length > 0 && (() => {
@@ -414,7 +415,7 @@ export default function ShiftEditor() {
       })()}
 
       <div className="card stack">
-        <div className="card-title">👥 Napok ebben a hónapban — {monthTitle(month)}</div>
+        <div className="card-title"><Icon name="users" />Napok ebben a hónapban — {monthTitle(month)}</div>
         {monthCounts.length === 0 && <div className="tiny muted">Nincs munkatárs ezen a munkaterületen.</div>}
         <div className="grid-2">
           {monthCounts.map((r) => (
@@ -429,7 +430,7 @@ export default function ShiftEditor() {
       {/* ---- Autó havi történet (szűrt nézetben) ---- */}
       {carFilter && (
         <div className="card stack">
-          <div className="card-title">📜 {carOf(carFilter)?.plate} — {monthTitle(month)} történet</div>
+          <div className="card-title"><Icon name="history" />{carOf(carFilter)?.plate} — {monthTitle(month)} történet</div>
           {carHistory.length === 0 && <div className="tiny muted">Ebben a hónapban nincs esemény ennél az autónál.</div>}
           {carHistory.map((e, i) => (
             <div key={i} className="between" style={{ gap: 8, alignItems: 'flex-start' }}>

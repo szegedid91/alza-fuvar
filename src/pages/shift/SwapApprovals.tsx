@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { resolveNames } from '../../lib/names'
 import { formatDate, formatDateTime } from '../../lib/labels'
+import Icon from '../../components/Icon'
 
 // Függő műszakcsere-kérések — a menedzser dönt, akár aznap
 export default function SwapApprovals({ workspaceId }: { workspaceId: string | null }) {
@@ -42,7 +43,7 @@ export default function SwapApprovals({ workspaceId }: { workspaceId: string | n
   if ((pending?.length ?? 0) === 0) return null
   return (
     <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-      <div className="card-title">🔄 Függő cserekérések ({pending!.length})</div>
+      <div className="card-title"><Icon name="repeat" style={{ color: 'var(--warning)' }} />Függő cserekérések ({pending!.length})</div>
       {error && <div className="alert error">{error}</div>}
       {pending!.map((r) => {
         const s = r._shift

@@ -82,3 +82,13 @@ export function groupByCategory<T extends { id: string; category_id: string | nu
   if (rest.length > 0) groups.push({ name: 'Egyéb', cars: rest })
   return groups
 }
+
+// Heti címke a táblázat fejlécébe — telefonon is egy sor:
+// "2026. október 5–11." / hónaphatáron "2026. szeptember 29. – október 5."
+export function weekLabel(startISO: string, endISO: string): string {
+  const [y1, m1, d1] = startISO.split('-').map(Number)
+  const [y2, m2, d2] = endISO.split('-').map(Number)
+  if (y1 === y2 && m1 === m2) return `${y1}. ${MONTH_NAMES[m1 - 1]} ${d1}–${d2}.`
+  if (y1 === y2) return `${y1}. ${MONTH_NAMES[m1 - 1]} ${d1}. – ${MONTH_NAMES[m2 - 1]} ${d2}.`
+  return `${y1}. ${MONTH_NAMES[m1 - 1]} ${d1}. – ${y2}. ${MONTH_NAMES[m2 - 1]} ${d2}.`
+}
