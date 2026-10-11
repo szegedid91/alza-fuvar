@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO, formatDate, formatHuf, swapStatusLabel } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
+import Icon from '../components/Icon'
 import type { Tables } from '../lib/database.types'
 
 type SwapRequest = Tables<'swap_requests'>
@@ -215,7 +216,7 @@ export default function MySchedule() {
 
       {incoming.length > 0 && (
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-          <div className="card-title">🔄 Cserekérés vár a döntésedre</div>
+          <div className="card-title"><Icon name="repeat" />Cserekérés vár a döntésedre</div>
           {incoming.map((r) => {
             const sh = shifts?.find((s) => s.id === r.shift_id)
             return (
@@ -239,7 +240,7 @@ export default function MySchedule() {
 
       <div className="card stack" style={{ gap: 8 }}>
         <div className="between">
-          <div className="card-title" style={{ marginBottom: 0 }}>📆 Heti nézet</div>
+          <div className="card-title" style={{ marginBottom: 0 }}><Icon name="calendar" />Heti nézet</div>
           <div className="row" style={{ gap: 6, alignItems: 'center' }}>
             <button className="btn ghost sm" onClick={() => setWeekOffset((o) => o - 1)} aria-label="Előző hét">‹</button>
             {weekOffset !== 0 && (
@@ -316,7 +317,7 @@ export default function MySchedule() {
 
       {((myTimeline?.length ?? 0) > 1 || myTimeline?.some((e) => e.reason)) && (
         <div className="card stack">
-          <div className="card-title">🕓 Mai autóhasználat</div>
+          <div className="card-title"><Icon name="history" />Mai autóhasználat</div>
           <CarTimeline entries={myTimeline!} />
         </div>
       )}

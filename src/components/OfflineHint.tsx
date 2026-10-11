@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import Icon from './Icon'
 
 // Offline, és az aktuális oldalhoz nincs mentett adat: a react-query ilyenkor
 // "szünetelteti" a lekérdezést (fetchStatus: paused), a spinner pedig örökké
@@ -24,8 +25,8 @@ export default function OfflineHint() {
 
   if (!show) return null
   return (
-    <div className="alert error" style={{ margin: '0 0 12px' }}>
-      📵 Nincs kapcsolat — ehhez az oldalhoz még nincs letöltött adat. Amint visszajön a hálózat, magától betölt.
+    <div className="alert error row" style={{ margin: '0 0 12px', gap: 10 }}>
+      <Icon name="wifi-off" />Nincs kapcsolat — ehhez az oldalhoz még nincs letöltött adat. Amint visszajön a hálózat, magától betölt.
     </div>
   )
 }

@@ -9,6 +9,8 @@ import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
 import { resolveCarByToken, checkInspectionRequirement, type Car, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
@@ -241,17 +243,17 @@ export default function Scan() {
     <div className="stack">
       <h2>Becsekkolás</h2>
 
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <Skeleton rows={4} />}
 
       {!isLoading && checkedIn && today?.car && (
-        <div className="card stack">
+        <div className="card stack primary" style={{ borderColor: 'var(--success)' }}>
           <div className="between">
-            <span className="badge success">✔ Ma becsekkolva</span>
+            <span className="badge success"><Icon name="check" />Ma becsekkolva</span>
             <span className="tiny muted">{formatDateTime(today.checkin!.checked_in_at)}</span>
           </div>
           <div>
             <div className="muted small">Autó</div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{today.car.plate}</div>
+            <div className="num num-xl">{today.car.plate}</div>
             {today.car.label && <div className="muted small">{today.car.label}</div>}
           </div>
           <div className="divider" />
@@ -275,7 +277,7 @@ export default function Scan() {
           <div className="divider" />
           {today.checkin!.checked_out_at ? (
             <div className="between">
-              <span className="badge success">🏁 Kijelentkezve</span>
+              <span className="badge success"><Icon name="flag" />Kijelentkezve</span>
               <span className="small">
                 {formatDateTime(today.checkin!.checked_out_at)} ·{' '}
                 {formatHours(new Date(today.checkin!.checked_out_at).getTime() - new Date(today.checkin!.checked_in_at).getTime())}
@@ -283,7 +285,7 @@ export default function Scan() {
             </div>
           ) : (
             <button className="btn secondary" disabled={outBusy} onClick={() => void checkout()}>
-              {outBusy ? 'Mentés…' : '🏁 Kijelentkezés (nap vége)'}
+              <Icon name="flag" />{outBusy ? 'Mentés…' : 'Kijelentkezés (nap vége)'}
             </button>
           )}
         </div>
@@ -291,19 +293,19 @@ export default function Scan() {
 
       {inspection?.required && (
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-          <div className="row"><span style={{ fontSize: 24 }}>📷</span><strong>Kötelező autó-ellenőrző fotó</strong></div>
+          <div className="row"><Icon name="camera" size={24} style={{ color: 'var(--warning)' }} /><strong>Kötelező autó-ellenőrző fotó</strong></div>
           <p className="small muted">
             {inspection.reasons.includes('day9') && 'A hónap 9-e van. '}
             {inspection.reasons.includes('driver_change') && `Előző nap más ült az autóban${inspection.lastDriverName ? ` (${inspection.lastDriverName})` : ''}. `}
             Készíts ellenőrző fotókat (elöl/hátul/bal/jobb/beltér).
           </p>
-          <button className="btn" onClick={() => navigate('/ellenorzes')}>Ellenőrzés indítása</button>
+          <button className="btn" onClick={() => navigate('/ellenorzes')}><Icon name="camera" />Ellenőrzés indítása</button>
         </div>
       )}
 
       {pendingSwitch && (
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-          <div className="row"><span style={{ fontSize: 24 }}>🔁</span><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.car.plate}</strong></div>
+          <div className="row"><Icon name="repeat" size={24} style={{ color: 'var(--warning)' }} /><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.car.plate}</strong></div>
           <p className="small muted" style={{ margin: 0 }}>
             Ma már a(z) {today?.car?.plate} autóra vagy becsekkolva. Add meg, miért váltasz — az előző autót lezárjuk, és a vezetők értesítést kapnak.
           </p>
@@ -322,7 +324,7 @@ export default function Scan() {
           </div>
           <div className="btn-grid">
             <button className="btn" disabled={busy} onClick={() => void confirmSwitch()}>
-              {busy ? 'Mentés…' : '🔁 Csere megerősítése'}
+              <Icon name="repeat" />{busy ? 'Mentés…' : 'Csere megerősítése'}
             </button>
             <button className="btn ghost" disabled={busy} onClick={() => { setPendingSwitch(null); setSwitchNote('') }}>Mégse</button>
           </div>
@@ -332,10 +334,10 @@ export default function Scan() {
       {error && <div className="alert error">{error}</div>}
 
       {!checkedIn && !isLoading && (
-        <div className="card stack">
+        <div className="card stack primary">
           <p className="muted small">Olvasd be az autó QR-kódját a nap kezdéséhez. A beolvasás rögzíti a ledolgozott napot (idő + GPS).</p>
           <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
-            {busy ? 'Feldolgozás…' : '📷 QR beolvasása'}
+            <Icon name="qr-code" />{busy ? 'Feldolgozás…' : 'QR beolvasása'}
           </button>
           {!manualOpen && (
             <button className="btn ghost sm" type="button" onClick={() => { setError(null); setManualOpen(true) }} disabled={busy}>
@@ -361,7 +363,7 @@ export default function Scan() {
               <div className="btn-grid">
                 <button className="btn ghost sm" type="button" onClick={() => { setManualOpen(false); setManualCarId('') }}>Mégse</button>
                 <ConfirmButton className="btn sm" confirmLabel="Igen, becsekkolok" disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
-                  {busy ? 'Feldolgozás…' : '✍️ Becsekkolás kézzel'}
+                  {busy ? 'Feldolgozás…' : 'Becsekkolás kézzel'}
                 </ConfirmButton>
               </div>
             </div>
@@ -371,7 +373,7 @@ export default function Scan() {
 
       {checkedIn && (
         <button className="btn secondary" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
-          Másik autó beolvasása
+          <Icon name="qr-code" />Másik autó beolvasása
         </button>
       )}
     </div>

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useToday } from '../hooks/useToday'
+import Icon from './Icon'
+import Skeleton from './Skeleton'
 import type { Car } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
 
@@ -12,15 +14,15 @@ export default function RequireCheckin({
 }) {
   const { data: today, isLoading } = useToday()
 
-  if (isLoading) return <div className="card"><div className="spinner" /></div>
+  if (isLoading) return <Skeleton rows={4} />
 
   if (!today?.car || !today.checkin) {
     return (
       <div className="empty">
-        <span className="ico">📷</span>
+        <span className="ico"><Icon name="qr-code" size={40} /></span>
         Előbb csekkolj be az autóra.
         <div style={{ marginTop: 16 }}>
-          <Link to="/beolvasas" className="btn auto" style={{ textDecoration: 'none', display: 'inline-flex' }}>QR beolvasása</Link>
+          <Link to="/beolvasas" className="btn auto" style={{ textDecoration: 'none', display: 'inline-flex' }}><Icon name="qr-code" />QR beolvasása</Link>
         </div>
       </div>
     )

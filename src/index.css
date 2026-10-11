@@ -21,6 +21,7 @@
   --error-text: #fca5a5;
   --success-text: #86efac;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
   color-scheme: dark;
 }
 
@@ -96,6 +97,14 @@ a { color: var(--primary); }
   font-size: 18px;
 }
 .topbar .brand img { width: 28px; height: 28px; border-radius: 7px; }
+.topbar .back {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; margin-left: -8px; border-radius: var(--radius-sm);
+  background: none; border: none; color: var(--text); cursor: pointer;
+}
+.topbar .page-title { font-weight: 800; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* A fejléc viszi az oldal címét — a tartalom első h2-je nem ismétli */
+.content > .stack > h2:first-child, .content > div > h2:first-child { display: none; }
 .topbar .spacer { flex: 1; }
 
 .content {
@@ -142,7 +151,8 @@ a { color: var(--primary); }
   font-size: 11px;
   font-weight: 600;
 }
-.bottom-nav a .ico { font-size: 22px; line-height: 1; }
+.bottom-nav a .ico { font-size: 22px; line-height: 1; display: flex; }
+.bottom-nav a .icon { width: 24px; height: 24px; }
 .bottom-nav a.active { color: var(--primary); background: var(--primary-ghost); }
 
 /* ---------- Cards ---------- */
@@ -151,17 +161,23 @@ a { color: var(--primary); }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow);
 }
+/* Oldalanként EGY kiemelt kártya (a fő cselekvés) kap árnyékot és színes keretet */
+.card.primary { box-shadow: var(--shadow); border-color: var(--primary); }
 .card + .card { margin-top: 14px; }
-.card-title { font-size: 15px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px; }
+.card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.card-title .icon { color: var(--primary); }
 
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; align-items: center; gap: 10px; }
 .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .muted { color: var(--text-dim); }
-.small { font-size: 13px; }
-.tiny { font-size: 11px; }
+/* Terepen (napfény, fél szem) 11 px túl kicsi — 12/14 a minimum */
+.small { font-size: 14px; }
+.tiny { font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: -0.01em; }
+.num-lg { font-size: 22px; }
+.num-xl { font-size: 28px; }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -229,6 +245,8 @@ a { color: var(--primary); }
 .badge.warning { background: rgba(245, 158, 11, 0.14); color: var(--warning); border-color: transparent; }
 .badge.danger { background: var(--danger-ghost); color: var(--danger); border-color: transparent; }
 .badge.success { background: rgba(34, 197, 94, 0.14); color: var(--success); border-color: transparent; }
+.badge.money { background: var(--bg-elev-2); color: var(--text); border-color: var(--border); font-variant-numeric: tabular-nums; }
+.badge .icon { width: 14px; height: 14px; }
 
 /* ---------- Auth screens ---------- */
 .auth-wrap {
@@ -274,6 +292,44 @@ a { color: var(--primary); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+.skeleton { display: flex; flex-direction: column; gap: 10px; }
+.skeleton-line {
+  height: 14px; border-radius: 7px;
+  background: linear-gradient(90deg, var(--bg-elev-2) 25%, var(--border) 50%, var(--bg-elev-2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.2s ease-in-out infinite;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton-line { animation: none; } }
+
+.btn .icon { width: 20px; height: 20px; }
+.btn.sm .icon { width: 16px; height: 16px; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: var(--radius-sm);
+  background: none; border: 1px solid transparent; color: var(--text-dim); cursor: pointer;
+}
+.icon-btn:hover { background: var(--bg-elev-2); color: var(--text); }
+
+/* Kezdőlap: gyorslinkek sora (a lépéssor a főszereplő, ezek másodlagosak) */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 999px; min-height: 40px;
+  background: var(--bg-elev); border: 1px solid var(--border); color: var(--text);
+  text-decoration: none; font-size: 14px; font-weight: 600;
+}
+.chip .icon { color: var(--primary); width: 18px; height: 18px; }
+/* Vezetői csempék: ikon + cím + leírás */
+.hub { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub a {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 64px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
+  color: inherit; text-decoration: none;
+}
+.hub a .icon { color: var(--primary); width: 24px; height: 24px; }
+.hub a .name { font-weight: 700; font-size: 15px; }
+@media (min-width: 720px) { .hub { grid-template-columns: 1fr 1fr 1fr; } }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 /* A grid-cellák ne nőjenek a tartalmuk (pl. iOS dátummező) beépített
@@ -430,4 +486,9 @@ input[type='date'].input {
   background: none; border: none; color: inherit; font: inherit; text-align: left; padding: 6px 0; cursor: pointer;
   min-height: 40px;
 }
-.stop-row-addr { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stop-row-addr { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stop-open { animation: stop-in .16s ease-out; }
+@keyframes stop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .stop-open { animation: none; } }
+.stop-actions { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: stretch; }
+.stop-actions .btn { min-height: 52px; }

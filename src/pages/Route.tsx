@@ -15,6 +15,8 @@ import { parseRouteExcel } from '../lib/excel'
 import { stopAddressText, navUrl, navAppLabel, type NavApp } from '../lib/nav'
 import { resolveNames, telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
+import Skeleton from '../components/Skeleton'
 import { formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Car } from '../lib/checkin'
 import { routeUploadQuery, routeStopsQuery } from '../lib/routeQueries'
@@ -47,7 +49,7 @@ function RouteInner({ car, date }: { car: Car; date: string }) {
     enabled: !!currentWorkspaceId,
   })
 
-  if (isLoading) return <div className="card"><div className="spinner" /></div>
+  if (isLoading) return <Skeleton rows={4} />
   if (!upload) return <ImportCard car={car} date={date} onDone={() => qc.invalidateQueries({ queryKey: ['route-upload'] })} />
   // key: új importnál a lista-állapot (items) ne ragadjon be az előző fuvartervről
   return <StopList key={upload.id} upload={upload} onReimport={() => qc.invalidateQueries({ queryKey: ['route-upload'] })} />
@@ -113,7 +115,7 @@ function ImportCard({ car, date, onDone }: { car: Car; date: string; onDone: () 
       {error && <div className="alert error">{error}</div>}
       {count != null && <div className="alert success">{count} stop importálva.</div>}
       <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
-        {busy ? 'Feldolgozás…' : '📄 Excel kiválasztása'}
+        <Icon name="file-text" />{busy ? 'Feldolgozás…' : 'Excel kiválasztása'}
       </button>
     </div>
   )
@@ -183,8 +185,8 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
       <RouteSummary stops={list} startPoi={upload.start_poi} endPoi={upload.end_poi} />
 
       <div className="btn-grid">
-        <button className="btn secondary sm" onClick={() => void sortByTime()}>🕒 Idősáv szerint</button>
-        <button className="btn secondary sm" onClick={() => setShowMap((v) => !v)}>🗺️ {showMap ? 'Térkép bezárása' : 'Térkép'}</button>
+        <button className="btn secondary sm" onClick={() => void sortByTime()}><Icon name="clock" />Idősáv szerint</button>
+        <button className="btn secondary sm" onClick={() => setShowMap((v) => !v)}><Icon name="map" />{showMap ? 'Térkép bezárása' : 'Térkép'}</button>
       </div>
 
       {orderError && <div className="alert error">{orderError}</div>}
@@ -198,8 +200,8 @@ function StopList({ upload, onReimport }: { upload: Upload; onReimport: () => vo
       {list.length > 0 && (
         <div className="card" style={{ padding: '10px 14px' }}>
           <div className="between">
-            <span className="small" style={{ fontWeight: 700 }}>{doneCount}/{list.length} stop kész</span>
-            <span className="tiny muted">{list.length - doneCount} hátra</span>
+            <span className="num num-lg">{doneCount}<span className="muted" style={{ fontWeight: 600, fontSize: 15 }}>/{list.length} stop kész</span></span>
+            <span className="small muted">{list.length - doneCount} hátra</span>
           </div>
           <div className="progress" aria-hidden="true"><div style={{ width: `${list.length ? Math.round((doneCount / list.length) * 100) : 0}%` }} /></div>
         </div>
@@ -233,7 +235,7 @@ function SortableStop({ stop, index, uploadId, isNext }: { stop: Stop; index: nu
         index={index}
         uploadId={uploadId}
         isNext={isNext}
-        dragHandle={<span className="drag-handle" aria-label="Sorrend módosítása (húzd)" {...attributes} {...listeners}>⠿</span>}
+        dragHandle={<span className="drag-handle" aria-label="Sorrend módosítása (húzd)" {...attributes} {...listeners}><Icon name="grip" /></span>}
       />
     </div>
   )
@@ -328,9 +330,11 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
   // ---- Összecsukott sor ----
   if (!open) {
     const summary = stop.status === 'done'
-      ? (stop.is_cash && stop.received_amount != null ? `✔ ${formatHuf(Number(stop.received_amount))}` : '✔ kész')
-      : stop.status === 'skipped' ? `✖ ${stop.skip_reason ?? 'sikertelen'}`
-      : (stop.time_window || stop.planned_time || (stop.is_cash ? `💵 ${formatHuf(expected)}` : ''))
+      ? <span className="row" style={{ gap: 4, color: 'var(--success)' }}><Icon name="check" size={16} />{stop.is_cash && stop.received_amount != null ? formatHuf(Number(stop.received_amount)) : 'kész'}</span>
+      : stop.status === 'skipped' ? <span className="row" style={{ gap: 4, color: 'var(--danger)' }}><Icon name="x" size={16} />{stop.skip_reason ?? 'sikertelen'}</span>
+      : (stop.time_window || stop.planned_time
+        ? <span>{stop.time_window || stop.planned_time}</span>
+        : stop.is_cash ? <span className="row" style={{ gap: 4 }}><Icon name="banknote" size={16} />{formatHuf(expected)}</span> : null)
     return (
       <div className="card stop-row" style={{ borderColor, padding: '8px 10px' }}>
         <div className="row" style={{ gap: 8, alignItems: 'center' }}>
@@ -343,7 +347,7 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
             aria-label={`${index + 1}. stop megnyitása: ${addrText}`}
           >
             <span className="stop-row-addr" style={{ opacity: stop.status === 'pending' ? 1 : 0.8 }}>{addrText || '(nincs cím)'}</span>
-            <span className="tiny muted" style={{ flexShrink: 0 }}>{summary}</span>
+            <span className="small muted" style={{ flexShrink: 0 }}>{summary}</span>
           </button>
         </div>
       </div>
@@ -352,20 +356,19 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
 
   // ---- Nyitott kártya ----
   return (
-    <div className="card stack" style={{ borderColor, borderWidth: isNext ? 2 : undefined }}>
+    <div className={`card stack stop-open${isNext && stop.status === 'pending' ? ' primary' : ''}`} style={{ borderColor }}>
       <div className="between">
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row" style={{ gap: 8, minWidth: 0 }}>
           {dragHandle}
           <span className="badge">{index + 1}.</span>
           {isNext && stop.status === 'pending' && <span className="badge primary">Következő</span>}
-          {stop.sheet_name && <span className="badge">{stop.sheet_name}</span>}
-          {stop.is_cash && <span className="badge warning">Készpénz</span>}
-          {stop.status === 'done' && <span className="badge success">✔</span>}
-          {stop.status === 'skipped' && <span className="badge danger">Sikertelen</span>}
+          {stop.status === 'done' && <span className="badge success"><Icon name="check" />Kész</span>}
+          {stop.status === 'skipped' && <span className="badge danger"><Icon name="x" />Sikertelen</span>}
+          {stop.sheet_name && <span className="tiny muted">{stop.sheet_name}</span>}
         </div>
         <div className="row" style={{ gap: 6 }}>
-          {stop.time_window && <span className="tiny muted">{stop.time_window}</span>}
-          <button type="button" className="btn ghost sm auto" aria-label="Összecsukás" onClick={() => setOpen(false)}>⌃</button>
+          {stop.time_window && <span className="small muted">{stop.time_window}</span>}
+          <button type="button" className="icon-btn" aria-label="Összecsukás" onClick={() => setOpen(false)}><Icon name="chevron-up" /></button>
         </div>
       </div>
 
@@ -376,17 +379,17 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
         ) : (
           <div className="row between">
             <div style={{ fontWeight: 700 }}>{addrText || '(nincs cím)'}</div>
-            <button className="btn ghost sm auto" aria-label="Cím szerkesztése" onClick={() => setEditAddr(true)}>✎</button>
+            <button className="icon-btn" aria-label="Cím szerkesztése" onClick={() => setEditAddr(true)}><Icon name="pencil" size={18} /></button>
           </div>
         )}
         {stop.planned_time && <div className="tiny muted">Tervezett: {stop.planned_time}</div>}
-        {stop.note && <div className="small muted" style={{ marginTop: 4 }}>📝 {stop.note}</div>}
+        {stop.note && <div className="small muted" style={{ marginTop: 4 }}>{stop.note}</div>}
       </div>
 
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn secondary sm" style={{ flex: 1 }} onClick={() => setShowNav((v) => !v)}>🧭 Navigáció</button>
+        <button className="btn secondary sm" style={{ flex: 1 }} onClick={() => setShowNav((v) => !v)}><Icon name="navigation" />Navigáció</button>
         {phoneHref && (
-          <a className="btn ghost sm" style={{ flex: 1, textDecoration: 'none' }} href={phoneHref}>📞 Hívás</a>
+          <a className="btn ghost sm" style={{ flex: 1, textDecoration: 'none' }} href={phoneHref}><Icon name="phone" />Hívás</a>
         )}
       </div>
       {showNav && (
@@ -399,7 +402,7 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
 
       {stop.is_cash && (
         <div className="field">
-          <label>Kapott összeg (várt: {formatHuf(expected)})</label>
+          <label className="row" style={{ gap: 6 }}><Icon name="banknote" size={16} />Készpénz — kapott összeg (várt: {formatHuf(expected)})</label>
           <input className="input" inputMode="decimal" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={String(expected)} />
           {tip != null && (
             <div className={`small ${tip < 0 ? 'badge danger' : 'badge success'}`} style={{ marginTop: 6, width: 'fit-content' }}>
@@ -420,10 +423,10 @@ function StopCard({ stop, index, uploadId, isNext, dragHandle }: { stop: Stop; i
 
       {saveError && <div className="alert error">{saveError}</div>}
 
-      <div className="btn-grid">
-        <button className="btn ghost sm" disabled={busy} onClick={() => setShowSkip((v) => !v)}>Sikertelen</button>
-        <button className={`btn sm ${saved ? 'secondary' : ''}`} disabled={busy} onClick={() => void save()}>
-          {saved ? '✔ Mentve' : busy ? '…' : stop.status === 'done' ? 'Frissítés' : 'Kész'}
+      <div className="stop-actions">
+        <button className="btn ghost" disabled={busy} onClick={() => setShowSkip((v) => !v)}>Sikertelen</button>
+        <button className={`btn ${saved ? 'secondary' : ''}`} disabled={busy} onClick={() => void save()}>
+          {saved ? <><Icon name="check" />Mentve</> : busy ? '…' : stop.status === 'done' ? 'Frissítés' : <><Icon name="check" />Kész</>}
         </button>
       </div>
       {showSkip && (
@@ -464,20 +467,20 @@ function RouteSummary({ stops, startPoi, endPoi }: { stops: Stop[]; startPoi: st
 
   return (
     <div className="card stack">
-      <div className="card-title">Napi összesítő</div>
+      <div className="card-title"><Icon name="wallet" />Napi összesítő</div>
       {(startPoi || endPoi) && (
         <div className="tiny muted">{startPoi && `Kezdő: ${startPoi}`}{startPoi && endPoi ? ' · ' : ''}{endPoi && `Vég: ${endPoi}`}</div>
       )}
       <div className="grid-2">
         <div className="between"><span className="muted small">Stopok</span><span className="badge">{done}/{stops.length} kész{skipped ? ` · ${skipped} sikertelen` : ''}</span></div>
-        <div className="between"><span className="muted small">Leadandó készpénz</span><span className="badge warning">{formatHuf(cashToHandOver)}</span></div>
+        <div className="between"><span className="muted small">Leadandó készpénz</span><span className="badge money"><Icon name="banknote" />{formatHuf(cashToHandOver)}</span></div>
         <div className="between"><span className="muted small">Beszedve</span><span className="badge">{formatHuf(collected)}</span></div>
         <div className="between"><span className="muted small">Borravaló</span><span className="badge success">{formatHuf(tips)}</span></div>
         {shortfall > 0 && (
           <div className="between"><span className="muted small">Kp-hiány</span><span className="badge danger">−{formatHuf(shortfall)}</span></div>
         )}
         <div className="between"><span className="muted small">Hátralévő kp. stop</span><span className="badge">{pendingCash.length} db</span></div>
-        <div className="between"><span className="muted small">Beszedésre vár</span><span className="badge warning">{formatHuf(pendingCashAmount)}</span></div>
+        <div className="between"><span className="muted small">Beszedésre vár</span><span className="badge money">{formatHuf(pendingCashAmount)}</span></div>
       </div>
       {recorded.length > 0 && (
         <>

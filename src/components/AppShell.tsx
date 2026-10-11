@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import Icon, { type IconName } from './Icon'
 import { useAuth } from '../context/AuthContext'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import { useOutboxStatus } from '../hooks/useOutbox'
@@ -11,7 +12,18 @@ import ConfirmButton from './ConfirmButton'
 import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import OfflineHint from './OfflineHint'
 
-interface NavItem { to: string; icon: string; label: string; end?: boolean }
+interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
+
+// A fejléc a belső oldalakon az oldal címét mutatja (a tartalom első h2-je
+// a CSS-ben rejtve) — görgetés közben is látszik, hol vagy.
+const ROUTE_TITLES: Record<string, string> = {
+  '/profil': 'Profil', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
+  '/esemeny': 'Esemény / baleset', '/fuvar': 'Fuvarterv', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
+  '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
+  '/tagok': 'Tagok', '/autok': 'Autók', '/fuvar-feltoltes': 'Fuvarterv feltöltés', '/beosztas-szerkeszto': 'Beosztás',
+  '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',
+  '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló',
+}
 
 // Lehúzásra frissítés (pull-to-refresh): a lap tetején lefelé húzva minden
 // aktív lekérdezés újratöltődik + az offline sor is szinkronizál.
@@ -186,7 +198,7 @@ function PushPrompt() {
         className="card stack"
         style={{ maxWidth: 440, width: '100%', gap: 8, pointerEvents: 'auto', boxShadow: 'var(--shadow)' }}
       >
-        <div style={{ fontWeight: 700 }}>🔔 Értesítések bekapcsolása</div>
+        <div className="row" style={{ fontWeight: 700, gap: 8 }}><Icon name="bell" />Értesítések bekapcsolása</div>
         <div className="small muted">
           Kapj azonnali értesítést a beosztásról, cserekérésekről és jóváhagyásokról.
         </div>
@@ -215,22 +227,24 @@ function InspectionZoneWatcher() {
 export default function AppShell({ children }: { children: ReactNode }) {
   const { profile } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const role = profile?.role
   const isCrew = isCrewRole(role)
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
+  const pageTitle = ROUTE_TITLES[pathname]
 
-  const nav: NavItem[] = [{ to: '/', icon: '🏠', label: 'Kezdőlap', end: true }]
+  const nav: NavItem[] = [{ to: '/', icon: 'home', label: 'Kezdőlap', end: true }]
   if (isCrew) {
     // A munkatárs napi útja: beolvasás → fuvar → (este) beosztás. A Profil a
     // kezdőlap fejlécéből érhető el — az alsó menüben a Beosztás értékesebb.
-    nav.push({ to: '/beolvasas', icon: '📷', label: 'Beolvasás' })
-    nav.push({ to: '/fuvar', icon: '🗺️', label: 'Fuvar' })
-    nav.push({ to: '/beosztas', icon: '📅', label: 'Beosztás' })
+    nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
+    nav.push({ to: '/fuvar', icon: 'map', label: 'Fuvar' })
+    nav.push({ to: '/beosztas', icon: 'calendar', label: 'Beosztás' })
   }
   if (isManagerOrAdmin) {
-    nav.push({ to: '/jovahagyas', icon: '✅', label: 'Jóváhagyás' })
-    nav.push({ to: '/tagok', icon: '👥', label: 'Tagok' })
-    nav.push({ to: '/profil', icon: '👤', label: 'Profil' })
+    nav.push({ to: '/jovahagyas', icon: 'user-check', label: 'Jóváhagyás' })
+    nav.push({ to: '/tagok', icon: 'users', label: 'Tagok' })
+    nav.push({ to: '/profil', icon: 'user', label: 'Profil' })
   }
 
   return (
@@ -239,10 +253,19 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <PushPrompt />
       {isCrew && <InspectionZoneWatcher />}
       <header className="topbar">
-        <div className="brand">
-          <img src="/pwa-192.png" alt="" />
-          <span>Alza</span>
-        </div>
+        {pageTitle ? (
+          <>
+            <button type="button" className="back" aria-label="Vissza a kezdőlapra" onClick={() => navigate('/')}>
+              <Icon name="arrow-left" size={22} />
+            </button>
+            <span className="page-title">{pageTitle}</span>
+          </>
+        ) : (
+          <div className="brand">
+            <img src="/pwa-192.png" alt="" />
+            <span>Alza</span>
+          </div>
+        )}
         <div className="spacer" />
         <SyncBadge />
         <WorkspaceSwitcher />
@@ -256,7 +279,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <nav className="bottom-nav">
         {nav.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end}>
-            <span className="ico">{n.icon}</span>
+            <span className="ico"><Icon name={n.icon} /></span>
             <span>{n.label}</span>
           </NavLink>
         ))}
@@ -311,8 +334,8 @@ function FailedPanel({ onClose }: { onClose: () => void }) {
     >
       <div className="card stack" style={{ maxWidth: 460, width: '100%', maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
         <div className="between">
-          <div className="card-title" style={{ margin: 0 }}>⚠️ Nem szinkronizált tételek</div>
-          <button className="btn ghost sm" aria-label="Bezárás" onClick={onClose}>✕</button>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--warning)' }} />Nem szinkronizált tételek</div>
+          <button className="icon-btn" aria-label="Bezárás" onClick={onClose}><Icon name="x" /></button>
         </div>
         {items.length === 0 && <p className="muted small">Nincs több hibás tétel. 🎉</p>}
         {items.map((r) => (
@@ -321,9 +344,9 @@ function FailedPanel({ onClose }: { onClose: () => void }) {
             <div className="tiny muted">{new Date(r.createdAt).toLocaleString('hu-HU')}</div>
             {r.lastError && <div className="tiny" style={{ color: 'var(--danger)' }}>{r.lastError}</div>}
             <div className="btn-grid">
-              <button className="btn sm" disabled={busy === r.id} onClick={() => void act(r.id, retryFailed)}>🔄 Újra</button>
+              <button className="btn sm" disabled={busy === r.id} onClick={() => void act(r.id, retryFailed)}><Icon name="refresh" />Újra</button>
               <ConfirmButton className="btn danger sm" confirmLabel="Végleg eldobom" disabled={busy === r.id} onConfirm={() => void act(r.id, discardFailed)}>
-                🗑 Eldobás
+                Eldobás
               </ConfirmButton>
             </div>
           </div>

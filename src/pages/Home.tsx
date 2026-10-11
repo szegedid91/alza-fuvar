@@ -2,10 +2,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
-import { roleLabel, formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
+import { formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
+import Icon, { type IconName } from '../components/Icon'
 
-interface HubItem { to: string; icon: string; title: string; desc: string }
+interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
 export default function Home() {
   const { profile } = useAuth()
@@ -16,46 +17,47 @@ export default function Home() {
   const isAdmin = role === 'admin'
   const { data: today } = useToday()
 
-  const crewHub: HubItem[] = [
-    { to: '/beolvasas', icon: '📷', title: 'Becsekkolás', desc: 'QR beolvasás, nap indítása' },
-    { to: '/ellenorzes', icon: '🚗', title: 'Autó-ellenőrzés', desc: 'Fotók, takarítás' },
-    { to: '/tankolas', icon: '⛽', title: 'Tankolás', desc: 'Blokk + km + fogyasztás' },
-    { to: '/esemeny', icon: '⚠️', title: 'Esemény / baleset', desc: 'Azonnali fotó-dokumentáció' },
-    { to: '/fuvar', icon: '🗺️', title: 'Fuvarterv', desc: 'Stop-lista, navigáció, pénz' },
-    { to: '/beosztas', icon: '📅', title: 'Beosztásom', desc: 'Dátum, autó, társ, csere' },
-    { to: '/hibak', icon: '🔧', title: 'Autó-hiba', desc: 'Probléma bejelentése' },
+  // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek
+  const crewLinks: HubItem[] = [
+    { to: '/beolvasas', icon: 'qr-code', title: 'Becsekkolás', desc: '' },
+    { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
+    { to: '/fuvar', icon: 'map', title: 'Fuvarterv', desc: '' },
+    { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
+    { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
+    { to: '/hibak', icon: 'wrench', title: 'Autó-hiba', desc: '' },
+    { to: '/beosztas', icon: 'calendar', title: 'Beosztásom', desc: '' },
   ]
 
   const managerHub: HubItem[] = [
-    { to: '/attekintes', icon: '📊', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
-    { to: '/riportok', icon: '📈', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },
-    { to: '/terkep', icon: '🗺️', title: 'Térkép', desc: 'Autók és stopok élőben' },
-    { to: '/hibak', icon: '🔧', title: 'Autó-hibák', desc: 'Bejelentések követése' },
-    { to: '/jovahagyas', icon: '✅', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
-    { to: '/tagok', icon: '👥', title: 'Tagok', desc: 'Szerepek, tiltás' },
-    { to: '/autok', icon: '🚗', title: 'Autók', desc: 'QR-kódok kezelése' },
-    { to: '/beosztas-szerkeszto', icon: '📅', title: 'Beosztás', desc: 'Napi párosok, heti nézet' },
-    { to: '/fuvar-feltoltes', icon: '📤', title: 'Fuvarterv feltöltés', desc: 'Excel autóhoz/naphoz' },
-    { to: '/elolegek', icon: '💰', title: 'Előleg / levonás', desc: 'Rögzítés' },
-    { to: '/bizonyitek', icon: '📸', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },
+    { to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
+    { to: '/beosztas-szerkeszto', icon: 'calendar', title: 'Beosztás', desc: 'Napi párosok, heti nézet' },
+    { to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
+    { to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, tiltás' },
+    { to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok kezelése' },
+    { to: '/fuvar-feltoltes', icon: 'upload', title: 'Fuvarterv feltöltés', desc: 'Excel autóhoz/naphoz' },
+    { to: '/riportok', icon: 'trending-up', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },
+    { to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók és stopok élőben' },
+    { to: '/hibak', icon: 'wrench', title: 'Autó-hibák', desc: 'Bejelentések követése' },
+    { to: '/elolegek', icon: 'wallet', title: 'Előleg / levonás', desc: 'Rögzítés' },
+    { to: '/bizonyitek', icon: 'camera', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },
+    { to: '/kepek', icon: 'image', title: 'Képek', desc: 'Autó, nap, ember szerint' },
+    { to: '/tortenet', icon: 'history', title: 'Előzmények', desc: 'Autók, cserék, események' },
   ]
-  managerHub.push({ to: '/kepek', icon: '🖼️', title: 'Képek', desc: 'Fotók: autó, nap, ember szerint' })
-  managerHub.push({ to: '/tortenet', icon: '🕓', title: 'Előzmények', desc: 'Autók, cserék, események visszamenőleg' })
-  if (isAdmin) managerHub.push({ to: '/ber', icon: '🧮', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
-  if (isAdmin) managerHub.push({ to: '/statisztika', icon: '🎯', title: 'Statisztika', desc: 'Átlagok, rangsorok, időszakok' })
-  if (isAdmin) managerHub.push({ to: '/naplo', icon: '📜', title: 'Napló', desc: 'Módosítások nyomon követése' })
+  if (isAdmin) managerHub.push({ to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
+  if (isAdmin) managerHub.push({ to: '/statisztika', icon: 'target', title: 'Statisztika', desc: 'Átlagok, rangsorok' })
+  if (isAdmin) managerHub.push({ to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Módosítások, app-hibák' })
 
   return (
     <div className="stack">
       <div className="card">
-        <div className="between">
-          <Link to="/profil" style={{ textDecoration: 'none', color: 'inherit' }} aria-label="Profil megnyitása">
+        <Link to="/profil" className="between" style={{ textDecoration: 'none', color: 'inherit' }} aria-label="Profil megnyitása">
+          <div style={{ minWidth: 0 }}>
             <div className="muted small">Üdv,</div>
-            <h2>{profile?.full_name ?? profile?.email} <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>›</span></h2>
-            <div className="tiny muted">👤 Profil, értesítések, kilépés</div>
-          </Link>
-          <span className="badge primary">{role ? roleLabel[role] : ''}</span>
-        </div>
+            <h2 style={{ fontSize: 22, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name ?? profile?.email}</h2>
+            <div className="tiny muted">Profil, értesítések, kilépés</div>
+          </div>
+          <Icon name="chevron-right" className="muted" />
+        </Link>
         <div className="divider" style={{ margin: '14px 0' }} />
         <div className="between">
           <span className="muted small">Munkaterület</span>
@@ -73,8 +75,8 @@ export default function Home() {
           <div className="between" style={{ marginTop: 10 }}>
             <span className="muted small">Mai autó</span>
             {today?.car
-              ? <span className="badge success">{today.car.plate}</span>
-              : <span className="badge warning">Nincs becsekkolva</span>}
+              ? <span className="badge success num">{today.car.plate}</span>
+              : <span className="badge">Nincs becsekkolva</span>}
           </div>
         )}
         {isCrew && today?.checkin && (
@@ -83,25 +85,34 @@ export default function Home() {
       </div>
 
       {isCrew && <TodayStepper />}
-      {isCrew && <HubGrid title="Napi munkafolyamat" items={crewHub} />}
-      {isManagerOrAdmin && <HubGrid title="Vezetői eszközök" items={managerHub} />}
-    </div>
-  )
-}
 
-function HubGrid({ title, items }: { title: string; items: HubItem[] }) {
-  return (
-    <div className="card">
-      <div className="card-title">{title}</div>
-      <div className="grid-2">
-        {items.map((i) => (
-          <Link key={i.to} to={i.to} className="list-item" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ fontSize: 26 }}>{i.icon}</div>
-            <div className="name" style={{ fontSize: 15, marginTop: 4 }}>{i.title}</div>
-            <div className="tiny muted">{i.desc}</div>
-          </Link>
-        ))}
-      </div>
+      {isCrew && (
+        <div>
+          <div className="card-title" style={{ marginBottom: 8 }}>Gyorslinkek</div>
+          <div className="chips">
+            {crewLinks.map((i) => (
+              <Link key={i.to} to={i.to} className="chip"><Icon name={i.icon} />{i.title}</Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isManagerOrAdmin && (
+        <div>
+          <div className="card-title" style={{ marginBottom: 8 }}>Vezetői eszközök</div>
+          <div className="hub">
+            {managerHub.map((i) => (
+              <Link key={i.to} to={i.to}>
+                <Icon name={i.icon} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="name">{i.title}</div>
+                  <div className="tiny muted">{i.desc}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

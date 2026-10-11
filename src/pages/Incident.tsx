@@ -11,6 +11,7 @@ import { todayISO, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { signedUrls } from '../lib/photos'
 import { toast } from '../lib/toast'
+import Icon from '../components/Icon'
 
 export default function Incident() {
   const { profile } = useAuth()
@@ -86,13 +87,13 @@ export default function Incident() {
         </div>
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         <button className="btn danger" disabled={!photo || busy} onClick={() => void submit()}>
-          {busy ? 'Mentés…' : 'Esemény rögzítése'}
+          <Icon name="alert-triangle" />{busy ? 'Mentés…' : 'Esemény rögzítése'}
         </button>
       </div>
 
       {(list?.length ?? 0) > 0 && (
         <div className="card stack">
-          <div className="card-title">🕑 Mai bejelentéseim</div>
+          <div className="card-title"><Icon name="clock" />Mai bejelentéseim</div>
           <p className="tiny muted" style={{ margin: 0 }}>
             A ma általad rögzített események. Koppints a képre a teljes mérethez.
           </p>

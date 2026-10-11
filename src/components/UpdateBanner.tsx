@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { usePendingUpdate } from '../lib/swUpdate'
+import Icon from './Icon'
 
 // "Új verzió elérhető" sáv — a frissítés a felhasználó koppintására történik.
 export default function UpdateBanner() {
@@ -8,7 +9,7 @@ export default function UpdateBanner() {
   if (!update) return null
   return (
     <div className="update-banner" role="status">
-      <span>🆕 Új verzió elérhető</span>
+      <span className="row" style={{ gap: 8 }}><Icon name="sparkles" />Új verzió elérhető</span>
       <button
         className="btn sm auto"
         disabled={busy}

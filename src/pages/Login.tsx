@@ -78,7 +78,7 @@ export default function Login() {
         <p className="muted small">Sofőr &amp; rakodó napi munkafolyamat</p>
       </div>
 
-      <div className="card auth-card">
+      <div className="card auth-card primary">
         <div className="tabs">
           <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null) }} type="button">
             Belépés

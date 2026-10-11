@@ -10,6 +10,7 @@ import Home from './pages/Home'
 import ProfilePage from './pages/Profile'
 import ResetPassword from './pages/ResetPassword'
 import { RECOVERY_PATH } from './lib/recovery'
+import Skeleton from './components/Skeleton'
 
 // Útvonalankénti kódfelbontás: minden oldal külön darabban töltődik, csak
 // akkor, amikor először megnyitják. A sofőr így nem hordja magával a
@@ -43,7 +44,7 @@ function FullScreenSpinner() {
 }
 
 function PageSpinner() {
-  return <div className="card"><div className="spinner" /></div>
+  return <div className="stack"><Skeleton rows={2} /><Skeleton rows={4} /></div>
 }
 
 // A profil nem töltődött be (pl. gyenge hálózat) — újrapróbálás örök spinner helyett.

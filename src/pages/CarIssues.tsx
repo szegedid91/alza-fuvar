@@ -11,6 +11,7 @@ import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../li
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import PhotoThumb from '../components/PhotoThumb'
 import ConfirmButton from '../components/ConfirmButton'
+import Icon from '../components/Icon'
 import { toast } from '../lib/toast'
 import type { Enums, Tables } from '../lib/database.types'
 
@@ -100,7 +101,7 @@ export default function CarIssues() {
 
       {isCrew && (
         <div className="card stack">
-          <div className="card-title">Hiba bejelentése</div>
+          <div className="card-title"><Icon name="wrench" />Hiba bejelentése</div>
           <div className="field">
             <label>Autó</label>
             <select className="select" value={effectiveCarId} onChange={(e) => setCarId(e.target.value)}>
@@ -140,11 +141,11 @@ export default function CarIssues() {
               disabled={!effectiveCarId || !note.trim() || busy}
               onConfirm={() => void submit()}
             >
-              {busy ? 'Mentés…' : '🔧 Bejelentés másik autóra'}
+              {busy ? 'Mentés…' : 'Bejelentés másik autóra'}
             </ConfirmButton>
           ) : (
             <button className="btn" disabled={!effectiveCarId || !note.trim() || busy} onClick={() => void submit()}>
-              {busy ? 'Mentés…' : '🔧 Bejelentés'}
+              <Icon name="send" />{busy ? 'Mentés…' : 'Bejelentés'}
             </button>
           )}
         </div>
@@ -161,7 +162,7 @@ export default function CarIssues() {
 
       {(issues?.length ?? 0) === 0 && (
         <div className="empty">
-          <span className="ico">🔧</span>
+          <span className="ico"><Icon name="wrench" size={40} /></span>
           {isCrew && !isManagerOrAdmin ? 'Ma még nem jelentettél be hibát.' : 'Nincs bejelentett hiba.'}
         </div>
       )}
@@ -182,10 +183,10 @@ export default function CarIssues() {
             <div className="btn-grid">
               {i.status === 'open' && (
                 <button className="btn secondary sm" disabled={setStatus.isPending}
-                  onClick={() => setStatus.mutate({ id: i.id, status: 'in_progress' })}>▶ Folyamatban</button>
+                  onClick={() => setStatus.mutate({ id: i.id, status: 'in_progress' })}>Folyamatban</button>
               )}
               <button className="btn sm" disabled={setStatus.isPending}
-                onClick={() => setStatus.mutate({ id: i.id, status: 'resolved' })}>✔ Megoldva</button>
+                onClick={() => setStatus.mutate({ id: i.id, status: 'resolved' })}><Icon name="check" />Megoldva</button>
             </div>
           )}
         </div>

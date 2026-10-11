@@ -12,6 +12,7 @@ import { checkInspectionRequirement, type Car } from '../lib/checkin'
 import { inspectionViewLabel, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { toast } from '../lib/toast'
+import Icon from '../components/Icon'
 import type { Enums } from '../lib/database.types'
 
 const VIEWS: Enums<'inspection_view'>[] = ['front', 'rear', 'left', 'right', 'interior']
@@ -115,13 +116,13 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
     <>
       {reasonText && (
         <div className="card" style={{ borderColor: 'var(--warning)' }}>
-          <div className="row"><span style={{ fontSize: 22 }}>⚠️</span><strong>Kötelező ellenőrzés</strong></div>
+          <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező ellenőrzés</strong></div>
           <p className="small muted" style={{ marginTop: 6 }}>{reasonText}</p>
         </div>
       )}
 
       <div className="card stack">
-        <div className="card-title">Ellenőrző fotók — {car.plate}</div>
+        <div className="card-title"><Icon name="camera" />Ellenőrző fotók — {car.plate}</div>
         <div className="grid-3">
           {VIEWS.map((v) => (
             <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
