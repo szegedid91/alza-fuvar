@@ -12,6 +12,8 @@ import { ocrFuelReceipt, type OcrParsed } from '../lib/ocr'
 import { previousFuelForCar, hasLaterOrEqualKm, computeConsumption, carAverageConsumption } from '../lib/fuel'
 import type { Car } from '../lib/checkin'
 import { formatDate, formatHuf, parseHuNumber, todayISO } from '../lib/labels'
+import { toast } from '../lib/toast'
+import Icon from '../components/Icon'
 
 export default function Fuel() {
   return (
@@ -52,8 +54,9 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
   const { data: history } = useQuery({
     queryKey: ['fuel-history', car.id],
     queryFn: async () => {
-      const { data } = await supabase.from('fuel_logs').select('*').eq('car_id', car.id)
+      const { data, error } = await supabase.from('fuel_logs').select('*').eq('car_id', car.id)
         .order('fuel_date', { ascending: false }).order('created_at', { ascending: false }).limit(1)
+      if (error) throw error
       return data ?? []
     },
   })
@@ -118,7 +121,9 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
         photo: { workspaceId: currentWorkspaceId, folder: 'fuel', id, column: 'photo_path', blob: photo.blob },
       })
 
-      setMsg(backwards ? 'Mentve. Figyelem: a km-óra érték nem nagyobb egy korábbinál!' : 'Tankolás elmentve.')
+      // A sima siker toast; a km-figyelmeztetés az űrlapnál marad, hogy látszódjon
+      if (backwards) setMsg('Mentve. Figyelem: a km-óra érték nem nagyobb egy korábbinál!')
+      else toast.success(`Tankolás elmentve — ${car.plate}`)
       setPhoto(null); setOcr(null); setLocation(''); setAmount(''); setLiters(''); setOdometer(''); setVerified(false)
       await qc.invalidateQueries({ queryKey: ['fuel-history', car.id] })
       await qc.invalidateQueries({ queryKey: ['fuel-avg', car.id] })
@@ -132,18 +137,19 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
   return (
     <>
       <div className="card between">
-        <span className="muted small">Autó átlagfogyasztás (páros)</span>
-        <span className="badge primary">{avg != null ? `${avg} l/100km` : 'nincs adat'}</span>
+        <span className="muted small row" style={{ gap: 6 }}><Icon name="fuel" size={16} />Átlagfogyasztás — {car.plate}</span>
+        <span className="num">{avg != null ? `${avg} l/100km` : <span className="muted" style={{ fontWeight: 500 }}>nincs adat</span>}</span>
       </div>
 
-      <div className="card stack">
-        <div className="card-title">Blokkfotó — {car.plate}</div>
-        <div style={{ maxWidth: 220 }}>
-          <PhotoSlot label="Tankolós blokk" photo={photo} onCapture={handlePhoto} />
+      <div className="card stack primary">
+        <div className="card-title" style={{ margin: 0 }}><Icon name="camera" />Tankolós blokk — {car.plate}</div>
+        <p className="tiny muted" style={{ margin: 0 }}>Fotózd le a blokkot — a hely, dátum, összeg és liter automatikusan kitöltődik, utána ellenőrizd.</p>
+        <div style={{ width: 160 }}>
+          <PhotoSlot label="Blokk fotózása" photo={photo} onCapture={handlePhoto} />
         </div>
-        {ocr?.running && <div className="alert info">OCR feldolgozás…</div>}
-        {ocr && !ocr.running && ocr.error && <div className="alert error">OCR nem sikerült ({ocr.error}). Töltsd ki kézzel.</div>}
-        {ocr && !ocr.running && !ocr.error && <div className="alert info">OCR kész — ellenőrizd és javítsd az adatokat.</div>}
+        {ocr?.running && <div className="alert info row" style={{ gap: 8 }}><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />A blokk felismerése…</div>}
+        {ocr && !ocr.running && ocr.error && <div className="alert error row" style={{ gap: 8 }}><Icon name="alert-circle" />A felismerés nem sikerült — töltsd ki kézzel.</div>}
+        {ocr && !ocr.running && !ocr.error && <div className="alert info row" style={{ gap: 8 }}><Icon name="check-circle" />Felismerve — ellenőrizd és javítsd, ha kell.</div>}
 
         <div className="field">
           <label>Hely (kút)</label>
@@ -156,7 +162,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
           </div>
           <div className="field">
             <label>Összeg (Ft)</label>
-            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="25000" />
+            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="25 000" />
           </div>
         </div>
         <div className="grid-2">
@@ -166,7 +172,10 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
           </div>
           <div className="field">
             <label>Km-óra állás *</label>
-            <input className="input" inputMode="decimal" value={odometer} onChange={(e) => setOdometer(e.target.value)} placeholder="123456" />
+            <input className="input" inputMode="numeric" value={odometer} onChange={(e) => setOdometer(e.target.value)} placeholder="123 456" />
+            {history?.[0]?.odometer_km != null && (
+              <div className="tiny muted">Előző tankolásnál: {Number(history[0].odometer_km).toLocaleString('hu-HU')} km</div>
+            )}
           </div>
         </div>
 
@@ -177,14 +186,19 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
 
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : msg.includes('Figyelem') ? 'warning' : 'success'}`}>{msg}</div>}
         <button className="btn" disabled={!canSave} onClick={() => void submit()}>
-          {busy ? 'Mentés…' : 'Tankolás mentése'}
+          <Icon name="save" />{busy ? 'Mentés…' : 'Tankolás mentése'}
         </button>
-        <p className="tiny muted">A km-óra és a kézi ellenőrzés kötelező. A fogyasztást az előző tankolás alapján számoljuk.</p>
+        {!canSave && !busy && (
+          <p className="tiny muted" style={{ textAlign: 'center', margin: 0 }}>
+            {!photo ? 'Előbb fotózd le a blokkot.' : !odometer || !amount || !liters ? 'Töltsd ki az összeget, a litert és a km-órát.' : !verified ? 'Pipáld be, hogy ellenőrizted az adatokat.' : ''}
+          </p>
+        )}
+        <p className="tiny muted" style={{ margin: 0 }}>A fogyasztást az előző tankolás km-állása alapján számoljuk.</p>
       </div>
 
       {(history?.length ?? 0) > 0 && (
         <div className="card stack">
-          <div className="card-title">Utolsó tankolás</div>
+          <div className="card-title"><Icon name="history" />Utolsó tankolás</div>
           {history!.map((f) => (
             (f.fuel_date ?? '') < todayISO() ? (
               // Korábbi napi tankolásnál csak a dátumot mutatjuk
