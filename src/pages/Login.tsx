@@ -4,8 +4,13 @@ import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount 
 import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
 
-// Fejlesztői fiókok ikonja a szerepkör (sub) alapján — az .env-beli emoji helyett
-const DEV_ICON: Record<string, IconName> = { crew: 'user', manager: 'users', admin: 'shield-check' }
+// Fejlesztői fiókok ikonja a címke/leírás alapján — az .env-beli emoji helyett
+function devIcon(acc: DevAccount): IconName {
+  const t = `${acc.sub} ${acc.label} ${acc.key}`.toLowerCase()
+  if (/admin/.test(t)) return 'shield-check'
+  if (/mened|manag/.test(t)) return 'users'
+  return 'user'
+}
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -174,7 +179,7 @@ export default function Login() {
                 disabled={devBusy !== null}
                 onClick={() => handleDevLogin(acc)}
               >
-                <Icon name={DEV_ICON[acc.sub] ?? 'user'} size={24} style={{ color: 'var(--primary)' }} />
+                <Icon name={devIcon(acc)} size={24} style={{ color: 'var(--primary)' }} />
                 <div className="name" style={{ fontSize: 15, marginTop: 4 }}>{acc.label}</div>
                 <div className="tiny muted">{devBusy === acc.key ? 'Belépés…' : acc.sub}</div>
               </button>
