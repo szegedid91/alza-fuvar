@@ -1,3 +1,5 @@
+import Icon from './Icon'
+
 // Időtartam emberi formában: 1 óra alatt percben, fölötte óra+perc
 function dur(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60000))
@@ -22,12 +24,12 @@ export default function CarTimeline({ entries }: { entries: TimelineEntry[] }) {
           {e.reason && (
             <div className="row" style={{ gap: 8, padding: '2px 0 2px 7px' }}>
               <div style={{ width: 2, alignSelf: 'stretch', background: 'var(--warning)', borderRadius: 1 }} />
-              <span className="tiny" style={{ color: 'var(--warning)' }}>⚠️ Autócsere — {e.reason}</span>
+              <span className="tiny row" style={{ color: 'var(--warning)', gap: 4 }}><Icon name="repeat" size={13} />Autócsere — {e.reason}</span>
             </div>
           )}
           <div className="row" style={{ gap: 10, alignItems: 'center', padding: '4px 0' }}>
-            <span style={{ fontSize: 15 }}>🚚</span>
-            <span className="small" style={{ fontWeight: 700, minWidth: 76 }}>{e.plate}</span>
+            <Icon name="truck" size={16} style={{ color: e.to ? 'var(--text-dim)' : 'var(--primary)' }} />
+            <span className="small num" style={{ minWidth: 76 }}>{e.plate}</span>
             <span className="small muted">
               {t(e.from)} – {e.to ? t(e.to) : 'folyamatban'}
               {e.to && <> · {dur(new Date(e.to).getTime() - new Date(e.from).getTime())}</>}
