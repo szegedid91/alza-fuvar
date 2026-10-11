@@ -343,8 +343,8 @@ export default function FleetMap() {
           )}
         </div>
         <div ref={containerRef} style={{ height: 'clamp(440px, 62vh, 720px)', borderRadius: 12, overflow: 'hidden' }} />
-        <div className="tiny muted row" style={{ marginTop: 8, gap: 4, flexWrap: 'wrap' }}>
-          <Icon name="truck" size={14} /> autó (utolsó ismert pozíció ma: zöldeskék &lt;45 p, borostyán &lt;3 ó, szürke régebbi) ·{' '}
+        <div className="tiny muted" style={{ marginTop: 8 }}>
+          <Icon name="truck" size={14} style={{ verticalAlign: -3 }} /> autó (utolsó ismert pozíció ma: zöldeskék &lt;45 p, borostyán &lt;3 ó, szürke régebbi) ·{' '}
           <span style={{ color: '#22c55e' }}>●</span> kész stop ·{' '}
           <span style={{ color: '#f59e0b' }}>●</span> hátravan ·{' '}
           <span style={{ color: '#ef4444' }}>●</span> sikertelen · kör = telephely
