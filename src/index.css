@@ -276,6 +276,7 @@ a { color: var(--primary); }
 .tabs button { flex: 1; border: none; background: transparent; color: var(--text-dim); padding: 11px; border-radius: 10px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .tabs button.active { background: var(--primary-ghost); color: var(--primary); }
 /* Sok fül: telefonon oldalra görgethető, nem vágja le az utolsót */
+.tabs.compact button { padding: 9px 4px; font-size: 14px; gap: 4px; }
 .tabs.scroll { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .tabs.scroll::-webkit-scrollbar { display: none; }
 .tabs.scroll button { flex: 1 0 auto; white-space: nowrap; padding-left: 14px; padding-right: 14px; }

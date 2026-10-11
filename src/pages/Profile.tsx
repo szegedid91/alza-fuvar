@@ -99,7 +99,7 @@ function ThemeCard() {
   return (
     <div className="card stack">
       <div className="card-title"><Icon name="sun" />Megjelenés</div>
-      <div className="tabs" style={{ margin: 0 }}>
+      <div className="tabs compact" style={{ margin: 0 }}>
         {options.map((o) => (
           <button
             key={o}
