@@ -238,6 +238,8 @@ export default function Scan() {
   }
 
   const checkedIn = !!today?.checkin
+  // Mai eseményeknél elég az óra:perc — a dátum csak zaj
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="stack">
@@ -249,7 +251,7 @@ export default function Scan() {
         <div className="card stack primary" style={{ borderColor: 'var(--success)' }}>
           <div className="between">
             <span className="badge success"><Icon name="check" />Ma becsekkolva</span>
-            <span className="tiny muted">{formatDateTime(today.checkin!.checked_in_at)}</span>
+            <span className="small muted">{hhmm(today.checkin!.checked_in_at)}</span>
           </div>
           <div>
             <div className="muted small">Autó</div>
@@ -265,8 +267,8 @@ export default function Scan() {
             <div className="list">
               {today.crew.map((c) => (
                 <div key={c.user_id} className="row between">
-                  <span>{c.full_name ?? 'Ismeretlen'} {c.user_id === profile?.id && <span className="tiny muted">(te)</span>}</span>
-                  <span className="tiny muted">{formatDateTime(c.checked_in_at)}</span>
+                  <span className="row" style={{ gap: 6 }}><Icon name="user" size={16} className="muted" />{c.full_name ?? 'Ismeretlen'} {c.user_id === profile?.id && <span className="tiny muted">(te)</span>}</span>
+                  <span className="small muted">{hhmm(c.checked_in_at)}</span>
                 </div>
               ))}
               {today.car.category?.crew_size === 1
@@ -279,7 +281,7 @@ export default function Scan() {
             <div className="between">
               <span className="badge success"><Icon name="flag" />Kijelentkezve</span>
               <span className="small">
-                {formatDateTime(today.checkin!.checked_out_at)} ·{' '}
+                {hhmm(today.checkin!.checked_out_at)} ·{' '}
                 {formatHours(new Date(today.checkin!.checked_out_at).getTime() - new Date(today.checkin!.checked_in_at).getTime())}
               </span>
             </div>
