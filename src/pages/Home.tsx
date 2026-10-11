@@ -17,15 +17,13 @@ export default function Home() {
   const isAdmin = role === 'admin'
   const { data: today } = useToday()
 
-  // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek
+  // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
+  // alsó menüben is ott van (beolvasás, fuvar, beosztás), azt nem ismételjük
   const crewLinks: HubItem[] = [
-    { to: '/beolvasas', icon: 'qr-code', title: 'Becsekkolás', desc: '' },
     { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
-    { to: '/fuvar', icon: 'map', title: 'Fuvarterv', desc: '' },
     { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
     { to: '/hibak', icon: 'wrench', title: 'Autó-hiba', desc: '' },
-    { to: '/beosztas', icon: 'calendar', title: 'Beosztásom', desc: '' },
   ]
 
   const managerHub: HubItem[] = [
