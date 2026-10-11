@@ -211,6 +211,10 @@ a { color: var(--primary); }
 .input-icon { position: relative; }
 .input-icon .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-dim); pointer-events: none; }
 .input-icon .input { padding-left: 40px; }
+/* Ikon-gomb a mező jobb szélén (pl. jelszó mutatása) */
+.input-icon-right .icon { position: static; transform: none; }
+.input-icon-right .input { padding-left: 14px; padding-right: 48px; }
+.input-icon-right .icon-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); }
 .btn.sm { min-height: 40px; padding: 8px 14px; font-size: 14px; width: auto; }
 .btn.auto { width: auto; }
 

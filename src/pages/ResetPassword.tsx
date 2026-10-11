@@ -12,6 +12,8 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(RECOVERY_URL_ERROR)
   const [done, setDone] = useState(false)
+  // Telefonon a gépelt jelszó megmutatása kevesebb elgépelést jelent, mint a két vak mező
+  const [show, setShow] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -67,16 +69,23 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
         <form className="stack" onSubmit={submit}>
           <div className="field">
             <label htmlFor="np">Új jelszó</label>
-            <input id="np" className="input" type="password" value={pw} onChange={(e) => setPw(e.target.value)}
-              placeholder="••••••••" autoComplete="new-password" minLength={6} required />
+            <div className="input-icon input-icon-right">
+              <input id="np" className="input" type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)}
+                placeholder="legalább 6 karakter" autoComplete="new-password" minLength={6} required />
+              <button type="button" className="icon-btn" aria-label={show ? 'Jelszó elrejtése' : 'Jelszó mutatása'} onClick={() => setShow((v) => !v)}>
+                <Icon name={show ? 'eye-off' : 'eye'} size={18} />
+              </button>
+            </div>
           </div>
           <div className="field">
             <label htmlFor="np2">Új jelszó még egyszer</label>
-            <input id="np2" className="input" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)}
-              placeholder="••••••••" autoComplete="new-password" minLength={6} required />
+            <input id="np2" className="input" type={show ? 'text' : 'password'} value={pw2} onChange={(e) => setPw2(e.target.value)}
+              placeholder="ugyanaz még egyszer" autoComplete="new-password" minLength={6} required />
+            {pw2 && pw !== pw2 && <div className="tiny" style={{ color: 'var(--error-text)' }}>A két jelszó még nem egyezik.</div>}
+            {pw2 && pw === pw2 && pw.length >= 6 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
           </div>
 
-          {error && <div className="alert error">{error}</div>}
+          {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
 
           <button className="btn" type="submit" disabled={busy}><Icon name="key" />{busy ? 'Mentés…' : 'Jelszó mentése'}</button>
           <button className="link-btn" type="button" onClick={() => void supabase.auth.signOut().then(onDone)}>
