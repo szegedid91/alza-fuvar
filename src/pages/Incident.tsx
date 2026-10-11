@@ -76,20 +76,37 @@ export default function Incident() {
   return (
     <div className="stack">
       <h2>Esemény / baleset</h2>
-      <div className="card stack">
-        <p className="small muted">Azonnali dokumentáció: fotó, GPS, időbélyeg és leírás.</p>
-        <div style={{ maxWidth: 220 }}>
-          <PhotoSlot label="Fotó" photo={photo} onCapture={setPhoto} />
+      <div className="card stack primary" style={{ borderColor: 'var(--danger)' }}>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--danger)' }} />Esemény rögzítése</div>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Fotó, GPS és időbélyeg automatikusan rögzül — a vezetők azonnal értesítést kapnak.
+          {today?.car ? <> Mai autó: <strong className="num">{today.car.plate}</strong>.</> : ' Nincs mai becsekkolás — a jelentés autó nélkül kerül mentésre.'}
+        </p>
+        <div className="field">
+          <label>Fotó a helyszínről</label>
+          <div style={{ width: 160 }}>
+            <PhotoSlot label="Fotó készítése" photo={photo} onCapture={setPhoto} />
+          </div>
         </div>
         <div className="field">
           <label>Leírás</label>
-          <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mi történt?" />
+          <textarea className="textarea" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mi történt? Hol, kivel, mi sérült?" />
         </div>
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         <button className="btn danger" disabled={!photo || busy} onClick={() => void submit()}>
           <Icon name="alert-triangle" />{busy ? 'Mentés…' : 'Esemény rögzítése'}
         </button>
+        {!photo && <div className="tiny muted" style={{ textAlign: 'center' }}>Előbb készíts fotót — a rögzítéshez kötelező.</div>}
+        {/* Baleset esetén a segélyhívó egy koppintásra — a dokumentálás ráér */}
+        <a className="btn ghost sm" href="tel:112" style={{ textDecoration: 'none' }}><Icon name="phone" />Segélyhívó: 112</a>
       </div>
+
+      {(list?.length ?? 0) === 0 && (
+        <div className="empty" style={{ padding: '24px 16px' }}>
+          <span className="ico"><Icon name="check-circle" size={36} /></span>
+          <span className="small">Ma még nem rögzítettél eseményt.</span>
+        </div>
+      )}
 
       {(list?.length ?? 0) > 0 && (
         <div className="card stack">
