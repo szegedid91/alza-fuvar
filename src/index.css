@@ -364,6 +364,12 @@ input[type='date'].input {
   border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 .leaflet-container { font-family: inherit; }
+.map-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.map-filters > :nth-child(3) { grid-column: 1 / -1; }
+@media (min-width: 720px) {
+  .map-filters { grid-template-columns: auto auto auto auto; justify-content: start; }
+  .map-filters > :nth-child(3) { grid-column: auto; }
+}
 
 /* Heti beosztás-táblázat: a bal oldali (rendszám) oszlop rögzített, és a
    cella-hézagokat is fedi, hogy görgetéskor ne látsszanak alatta a nevek */

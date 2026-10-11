@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import 'leaflet/dist/leaflet.css'
 import type { Map as LeafletMap, LayerGroup } from 'leaflet'
+import Icon from '../components/Icon'
+
+// Teherautó-ikon a Leaflet divIcon HTML-jébe (ugyanaz a rajz, mint az Icon komponensé)
+const TRUCK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>'
 import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -218,7 +222,7 @@ export default function FleetMap() {
       if (currentWorkspace?.geo_lat != null && currentWorkspace?.geo_lng != null && currentWorkspace?.geo_radius_m != null) {
         L.circle([currentWorkspace.geo_lat, currentWorkspace.geo_lng], {
           radius: currentWorkspace.geo_radius_m, color: '#14b8a6', fillOpacity: 0.08, weight: 1.5,
-        }).addTo(map).bindPopup('📍 Telephely')
+        }).addTo(map).bindPopup('Telephely')
       }
       layerRef.current = L.layerGroup().addTo(map)
       mapRef.current = map
@@ -282,13 +286,13 @@ export default function FleetMap() {
           const bg = ageMin < 45 ? '#0f766e' : ageMin < 180 ? '#b45309' : '#52525b'
           const icon = L.divIcon({
             className: 'car-pin',
-            html: `<div style="background:${bg}">🚚 ${esc(c.plate)}</div>`,
+            html: `<div style="background:${bg}">${TRUCK_SVG}${esc(c.plate)}</div>`,
             iconSize: undefined as unknown as [number, number],
             iconAnchor: [40, 14],
           })
           const when = new Date(c.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
           const crewLine = (c.crew ?? []).length
-            ? `<br>👥 ${esc((c.crew ?? []).join(' + '))}`
+            ? `<br>Páros: ${esc((c.crew ?? []).join(' + '))}`
             : ''
           L.marker([c.lat, c.lng], { icon, zIndexOffset: 1000 })
             .bindPopup(
@@ -320,26 +324,27 @@ export default function FleetMap() {
       {isError && <div className="alert error">A térkép-adatok betöltése nem sikerült. Frissítsd az oldalt.</div>}
 
       <div className="card" style={{ padding: 10 }}>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterCar} onChange={(e) => setFilterCar(e.target.value)}>
-            <option value="">🚚 Minden autó</option>
+        {/* Szűrők: telefonon 2 oszlop (autó + munkatárs), a nézet-váltó teljes szélesen */}
+        <div className="map-filters" style={{ marginBottom: 8 }}>
+          <select className="select" aria-label="Autó" style={{ minHeight: 40, padding: '6px 10px' }} value={filterCar} onChange={(e) => setFilterCar(e.target.value)}>
+            <option value="">Minden autó</option>
             {(data?.carPositions ?? []).map((c) => <option key={c.carId} value={c.carId}>{c.plate}</option>)}
           </select>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
-            <option value="">👤 Minden munkatárs</option>
+          <select className="select" aria-label="Munkatárs" style={{ minHeight: 40, padding: '6px 10px' }} value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
+            <option value="">Minden munkatárs</option>
             {(data?.people ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <select className="select" style={{ width: 'auto', minHeight: 40, padding: '6px 10px' }} value={filterEvent} onChange={(e) => setFilterEvent(e.target.value)}>
-            <option value="">📌 Utolsó pozíciók</option>
+          <select className="select" aria-label="Nézet" style={{ minHeight: 40, padding: '6px 10px' }} value={filterEvent} onChange={(e) => setFilterEvent(e.target.value)}>
+            <option value="">Utolsó pozíciók</option>
             {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           {(filterCar || filterPerson || filterEvent) && (
-            <button className="btn ghost sm" onClick={() => { setFilterCar(''); setFilterPerson(''); setFilterEvent('') }}>✕ Szűrők törlése</button>
+            <button className="btn ghost sm" onClick={() => { setFilterCar(''); setFilterPerson(''); setFilterEvent('') }}><Icon name="x" />Szűrők törlése</button>
           )}
         </div>
         <div ref={containerRef} style={{ height: 'clamp(440px, 62vh, 720px)', borderRadius: 12, overflow: 'hidden' }} />
-        <div className="tiny muted" style={{ marginTop: 8 }}>
-          🚚 autó (utolsó ismert pozíció ma: zöldeskék &lt;45 p, borostyán &lt;3 ó, szürke régebbi) ·{' '}
+        <div className="tiny muted row" style={{ marginTop: 8, gap: 4, flexWrap: 'wrap' }}>
+          <Icon name="truck" size={14} /> autó (utolsó ismert pozíció ma: zöldeskék &lt;45 p, borostyán &lt;3 ó, szürke régebbi) ·{' '}
           <span style={{ color: '#22c55e' }}>●</span> kész stop ·{' '}
           <span style={{ color: '#f59e0b' }}>●</span> hátravan ·{' '}
           <span style={{ color: '#ef4444' }}>●</span> sikertelen · kör = telephely
@@ -353,8 +358,8 @@ export default function FleetMap() {
         </div>
         {isLoading && <div className="spinner" style={{ marginTop: 8 }} />}
         {(data?.pendingGeocode ?? 0) > 0 && (
-          <div className="tiny muted" style={{ marginTop: 8 }}>
-            📍 {data!.pendingGeocode} stop címét még keressük a térképen — pár perc múlva megjelennek.
+          <div className="tiny muted row" style={{ marginTop: 8, gap: 6 }}>
+            <Icon name="map-pin" size={14} />{data!.pendingGeocode} stop címét még keressük a térképen — pár perc múlva megjelennek.
           </div>
         )}
         {!isLoading && total === 0 && (data?.carPositions.length ?? 0) === 0 && (
