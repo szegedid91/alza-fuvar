@@ -7,6 +7,15 @@ import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
 import { todayISO, formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import { fetchAll } from '../lib/fetchAll'
+import { Link } from 'react-router-dom'
+import Icon, { type IconName } from '../components/Icon'
+import Skeleton from '../components/Skeleton'
+
+// Figyelmeztetés-fajták ikonja és (ha van) a részletező oldal
+const FLAG_META: Record<string, { icon: IconName; to?: string }> = {
+  km: { icon: 'fuel' }, geo: { icon: 'map-pin' }, issue: { icon: 'wrench', to: '/hibak' },
+  cash: { icon: 'banknote' }, noshow: { icon: 'user' }, insp: { icon: 'camera' }, manual: { icon: 'pencil' },
+}
 
 // Telephely (geofence) beállítása — nem tilt, csak jelzi a kívül eső be-/kijelentkezést
 function GeofenceCard() {
@@ -65,7 +74,7 @@ function GeofenceCard() {
   return (
     <div className="card stack">
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}>📍 Telephely (geofence)</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="map-pin" />Telephely (geofence)</div>
         {!open && <button className="btn ghost sm" onClick={openEditor}>{configured ? 'Módosítás' : 'Beállítás'}</button>}
       </div>
       {!open && (
@@ -82,7 +91,7 @@ function GeofenceCard() {
             <div className="field"><label>Hosszúság (lng)</label><input className="input" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="19.0402" /></div>
           </div>
           <div className="field"><label>Sugár (méter)</label><input className="input" inputMode="numeric" value={radius} onChange={(e) => setRadius(e.target.value)} placeholder="500" /></div>
-          <button className="btn ghost sm" onClick={() => void useCurrent()}>🧭 Jelenlegi pozícióm használata</button>
+          <button className="btn ghost sm" onClick={() => void useCurrent()}><Icon name="navigation" />Jelenlegi pozícióm használata</button>
           {msg && <div className="alert error">{msg}</div>}
           <div className="btn-grid">
             <button className="btn ghost sm" onClick={() => setOpen(false)}>Mégse</button>
@@ -207,45 +216,71 @@ export default function Dashboard() {
   return (
     <div className="stack">
       <h2>Áttekintés — {currentWorkspace?.name}</h2>
-      {isLoading && <div className="card"><div className="spinner" /></div>}
+      {isLoading && <><Skeleton rows={2} /><Skeleton rows={3} /></>}
       {data && (
         <>
-          <div className="card">
+          <div className="card primary">
             <div className="grid-2">
               <Stat label="Aktív párosok ma" value={String(data.crews)} />
-              <Stat label="Leadandó készpénz" value={formatHuf(data.cashToHandOver)} tone="warning" />
+              <Stat label="Leadandó készpénz" value={formatHuf(data.cashToHandOver)} />
               <Stat label="Beszedve ma" value={formatHuf(data.collectedTotal)} />
-              <Stat label="Borravaló ma" value={formatHuf(data.tipsTotal)} tone="success" />
+              <Stat label="Borravaló ma" value={formatHuf(data.tipsTotal)} tone={data.tipsTotal > 0 ? 'success' : undefined} />
             </div>
           </div>
 
           {data.flags.length > 0 && (
-            <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
-              <div className="card-title" style={{ color: 'var(--warning)' }}>⚠️ Figyelmeztetések ({data.flags.length})</div>
-              {data.flags.map((f, i) => <div key={i} className="small">• {f.text}</div>)}
+            <div className="card stack" style={{ borderColor: 'var(--warning)', gap: 10 }}>
+              <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--warning)' }} />Figyelmeztetések ({data.flags.length})</div>
+              {data.flags.map((f, i) => {
+                const meta = FLAG_META[f.kind] ?? { icon: 'alert-circle' as IconName }
+                const row = (
+                  <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
+                    <Icon name={meta.icon} size={18} style={{ color: 'var(--warning)', marginTop: 1 }} />
+                    <span className="small" style={{ flex: 1 }}>{f.text}</span>
+                    {meta.to && <Icon name="chevron-right" size={16} className="muted" />}
+                  </div>
+                )
+                return meta.to
+                  ? <Link key={i} to={meta.to} style={{ textDecoration: 'none', color: 'inherit' }}>{row}</Link>
+                  : <div key={i}>{row}</div>
+              })}
             </div>
           )}
 
           <div className="card stack">
-            <div className="card-title">Ma az utakon</div>
-            {data.perCar.length === 0 && <div className="tiny muted">Ma még senki nem csekkolt be.</div>}
+            <div className="card-title" style={{ margin: 0 }}><Icon name="truck" />Ma az utakon</div>
+            {data.perCar.length === 0 && (
+              <div className="empty" style={{ padding: '20px 8px' }}>
+                <span className="ico"><Icon name="truck" size={32} /></span>
+                <span className="small">Ma még senki nem csekkolt be.</span>
+              </div>
+            )}
             {data.perCar.map((c) => (
-              <div key={c.carId} className="between">
-                <div>
-                  <div style={{ fontWeight: 700 }}>{c.car?.plate ?? '?'}</div>
-                  <div className="tiny muted">{c.crew.join(' + ') || '—'}</div>
+              <div key={c.carId} className="stack" style={{ gap: 6 }}>
+                <div className="between">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="num" style={{ fontSize: 16 }}>{c.car?.plate ?? '?'}</div>
+                    <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.crew.join(' + ') || '—'}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    {c.totalStops > 0 ? <div className="badge">{c.doneStops}/{c.totalStops} stop</div> : <div className="tiny muted">nincs fuvarterv</div>}
+                    <div className="tiny muted">{formatHuf(c.collected)}</div>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  {c.totalStops > 0 && <div className="badge">{c.doneStops}/{c.totalStops} stop</div>}
-                  <div className="tiny muted">{formatHuf(c.collected)}</div>
-                </div>
+                {c.totalStops > 0 && (
+                  <div className="progress" style={{ marginTop: 0 }} aria-hidden="true"><div style={{ width: `${Math.round((c.doneStops / c.totalStops) * 100)}%` }} /></div>
+                )}
               </div>
             ))}
           </div>
 
           <GeofenceCard />
 
-          {data.lastCheckin && <div className="tiny muted" style={{ textAlign: 'center' }}>Utolsó becsekkolás: {formatDateTime(data.lastCheckin)} · élő frissítés</div>}
+          {data.lastCheckin && (
+            <div className="tiny muted row" style={{ justifyContent: 'center', gap: 6 }}>
+              <Icon name="clock" size={14} />Utolsó becsekkolás: {formatDateTime(data.lastCheckin)} · élő frissítés
+            </div>
+          )}
         </>
       )}
     </div>
@@ -257,7 +292,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'wa
   return (
     <div>
       <div className="tiny muted">{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
+      <div className="num num-lg" style={{ color }}>{value}</div>
     </div>
   )
 }
