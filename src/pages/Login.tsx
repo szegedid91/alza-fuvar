@@ -66,8 +66,14 @@ export default function Login() {
         if (data.session) {
           // Auto-belépett -> az App a "várj jóváhagyásra" képernyőt mutatja
           setInfo('Sikeres regisztráció. Várj a jóváhagyásra.')
+        } else if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          // Megerősítés bekapcsolva + már létező email: a Supabase "üres" usert ad
+          // vissza, hogy ne árulja el a fiók létét — mi a belépés felé tereljük
+          setInfo('Ha ezzel az email címmel már van fiók, lépj be vele — vagy kérj új jelszót az „Elfelejtettem a jelszavam” gombbal.')
+          setMode('login')
         } else {
-          setInfo('Regisztráció elküldve. Ha email-megerősítés szükséges, ellenőrizd a postafiókod, majd lépj be.')
+          // Nincs azonnali munkamenet = email-megerősítés szükséges (a projekt beállítása)
+          setInfo(`Küldtünk egy megerősítő emailt ide: ${email.trim()}. Nyisd meg a benne lévő linket (a spam mappát is nézd meg), utána itt lépj be — a fiókod ezután jóváhagyásra kerül.`)
           setMode('login')
         }
       }
@@ -120,8 +126,8 @@ export default function Login() {
             </p>
           )}
 
-          {error && <div className="alert error">{error}</div>}
-          {info && <div className="alert success">{info}</div>}
+          {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
+          {info && <div className="alert success row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="mail" style={{ flexShrink: 0 }} /><span>{info}</span></div>}
 
           <button className="btn" type="submit" disabled={busy}>
             <Icon name={mode === 'login' ? 'log-in' : mode === 'register' ? 'user-check' : 'mail'} />
