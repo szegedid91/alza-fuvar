@@ -121,8 +121,14 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
         </div>
       )}
 
-      <div className="card stack">
-        <div className="card-title"><Icon name="camera" />Ellenőrző fotók — {car.plate}</div>
+      <div className="card stack primary">
+        <div className="between">
+          <div className="card-title" style={{ margin: 0 }}><Icon name="camera" />Ellenőrző fotók — {car.plate}</div>
+          <span className={`badge ${allCaptured ? 'success' : ''}`}>{VIEWS.filter((v) => photos[v]).length}/{VIEWS.length}</span>
+        </div>
+        <div className="progress" style={{ marginTop: 0 }} aria-hidden="true">
+          <div style={{ width: `${(VIEWS.filter((v) => photos[v]).length / VIEWS.length) * 100}%` }} />
+        </div>
         <div className="grid-3">
           {VIEWS.map((v) => (
             <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
@@ -142,9 +148,10 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
           />
         )}
         <button className="btn" disabled={!allCaptured || busy} onClick={() => void submit()}>
-          {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Fotók: ${VIEWS.filter((v) => photos[v]).length}/5`}
+          <Icon name={allCaptured ? 'check' : 'camera'} />
+          {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - VIEWS.filter((v) => photos[v]).length} fotó hiányzik`}
         </button>
-        <p className="tiny muted">Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galéria nem használható.</p>
+        <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galéria nem használható.</p>
       </div>
 
       <CleaningCard car={car} date={date} />
@@ -164,8 +171,9 @@ function CleaningCard({ car, date }: { car: Car; date: string }) {
     queryKey: ['cleaning', car.id, date, profile?.id],
     enabled: !!profile,
     queryFn: async () => {
-      const { data } = await supabase.from('cleanings').select('*')
+      const { data, error } = await supabase.from('cleanings').select('*')
         .eq('car_id', car.id).eq('work_date', date).order('created_at', { ascending: false })
+      if (error) throw error
       return data ?? []
     },
   })
@@ -190,20 +198,23 @@ function CleaningCard({ car, date }: { car: Car; date: string }) {
 
   return (
     <div className="card stack">
-      <div className="card-title">Takarítás</div>
+      <div className="card-title"><Icon name="sparkles" />Takarítás</div>
       {err && <div className="alert error">{err}</div>}
       {(cleaning?.length ?? 0) > 0 ? (
         <div className="list">
           {cleaning!.map((c) => (
             <div key={c.id} className="between">
-              <span className="badge success">✔ Kész</span>
+              <span className="badge success"><Icon name="check" />Kész</span>
               <span className="tiny muted">{formatDateTime(c.created_at)}</span>
             </div>
           ))}
-          <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}>Újabb takarítás rögzítése</button>
+          <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}><Icon name="plus" />Újabb takarítás rögzítése</button>
         </div>
       ) : (
-        <button className="btn" disabled={busy} onClick={() => void markClean()}>{busy ? 'Mentés…' : 'Takarítás kész'}</button>
+        <>
+          <p className="tiny muted" style={{ margin: 0 }}>Ha kitakarítottad az autót, jelöld be — a vezetők a naptárban látják.</p>
+          <button className="btn secondary" disabled={busy} onClick={() => void markClean()}><Icon name="sparkles" />{busy ? 'Mentés…' : 'Takarítás kész'}</button>
+        </>
       )}
     </div>
   )
@@ -213,9 +224,10 @@ function InspectionHistory({ carId, date }: { carId: string; date: string }) {
   const { data } = useQuery({
     queryKey: ['inspections', carId, date],
     queryFn: async () => {
-      const { data } = await supabase.from('car_inspections')
+      const { data, error } = await supabase.from('car_inspections')
         .select('*, photos:car_inspection_photos(count)')
         .eq('car_id', carId).eq('work_date', date).order('created_at', { ascending: false })
+      if (error) throw error
       const rows = data ?? []
       // A nevet nem profiles-joinnal kérjük: azt az RLS a munkatársak elől
       // elrejti, ezért a névfeloldó RPC-t használjuk (csak neveket ad vissza).
@@ -226,7 +238,7 @@ function InspectionHistory({ carId, date }: { carId: string; date: string }) {
   if (!data || data.length === 0) return null
   return (
     <div className="card stack">
-      <div className="card-title">Mai ellenőrzések</div>
+      <div className="card-title"><Icon name="check-circle" />Mai ellenőrzések</div>
       {data.map((i) => {
         const cnt = (i.photos as unknown as { count: number }[] | null)?.[0]?.count ?? 0
         const name = i._name
