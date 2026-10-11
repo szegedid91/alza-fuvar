@@ -62,13 +62,15 @@ export default function SwapApprovals({ workspaceId }: { workspaceId: string | n
               )}
               {r.partner_id && (
                 <span className={`badge ${r.partner_decision === 'approved' ? 'success' : r.partner_decision === 'rejected' ? 'danger' : 'warning'}`} style={{ marginTop: 4 }}>
-                  Társ ({names[r.partner_id] ?? '?'}): {r.partner_decision === 'approved' ? '✔ elfogadta' : r.partner_decision === 'rejected' ? '✖ elutasította' : 'még nem döntött'}
+                  <Icon name={r.partner_decision === 'approved' ? 'check' : r.partner_decision === 'rejected' ? 'x' : 'clock'} />
+                  Társ ({names[r.partner_id] ?? '?'}): {r.partner_decision === 'approved' ? 'elfogadta' : r.partner_decision === 'rejected' ? 'elutasította' : 'még nem döntött'}
                 </span>
               )}
             </div>
-            <div className="btn-grid">
-              <button className="btn danger sm" onClick={() => void decide(r.id, false)}>Elutasítás</button>
-              <button className="btn sm" onClick={() => void decide(r.id, true)}>Csere jóváhagyása</button>
+            {/* Az elutasítás nem töröl adatot (a kérés "elutasítva" marad) — ezért nem piros */}
+            <div className="stop-actions">
+              <button className="btn ghost" onClick={() => void decide(r.id, false)}>Elutasítás</button>
+              <button className="btn" onClick={() => void decide(r.id, true)}><Icon name="check" />Csere jóváhagyása</button>
             </div>
             {r.partner_decision !== 'approved' && (
               <p className="tiny muted" style={{ margin: 0 }}>A társ jóváhagyása nélkül is átteheted — a te döntésed a végső.</p>
