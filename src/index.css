@@ -330,6 +330,8 @@ a { color: var(--primary); }
 .hub a .icon { color: var(--primary); width: 24px; height: 24px; }
 .hub a .name { font-weight: 700; font-size: 15px; }
 /* A leírás egy sor — a csempék egyforma magasak maradnak telefonon is */
+.hub a { min-width: 0; }
+.hub a > div { min-width: 0; }
 .hub a .tiny { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (min-width: 720px) { .hub { grid-template-columns: 1fr 1fr 1fr; } }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
