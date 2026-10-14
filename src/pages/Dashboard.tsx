@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
@@ -7,9 +7,73 @@ import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
 import { todayISO, formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
 import { fetchAll } from '../lib/fetchAll'
+import { useCrewConflicts } from '../lib/crewConflicts'
+import { toast } from '../lib/toast'
 import { Link } from 'react-router-dom'
 import Icon, { type IconName } from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import ConfirmButton from '../components/ConfirmButton'
+
+// Túl sokan egy autón (Box = 1 fő): ezt a vezetőnek kell rendeznie — vagy a
+// tévesen becsekkolt embert kijelentkezteti innen, vagy a munkatárs maga vált
+// autót. Amíg a nyitott becsekkolások száma a létszám fölött van, itt marad.
+function CrewConflictsCard() {
+  const qc = useQueryClient()
+  const { data: conflicts } = useCrewConflicts()
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+
+  const checkout = useMutation({
+    mutationFn: async (checkinId: string) => {
+      const { error } = await supabase.from('check_ins')
+        .update({ checked_out_at: new Date().toISOString() })
+        .eq('id', checkinId).is('checked_out_at', null)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('Kijelentkeztetve — az autón maradók listája frissült.')
+      void qc.invalidateQueries({ queryKey: ['crew-conflicts'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+  })
+
+  if (!conflicts || conflicts.length === 0) return null
+  return (
+    <div className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, gap: 12 }}>
+      <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>
+        <Icon name="users" />Megoldandó: túl sokan egy autón ({conflicts.length})
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        Több nyitott becsekkolás van, mint ahány fős az autó. Aki valójában nem ezen dolgozik, azt jelentkeztesd ki itt — vagy ő váltson át a saját autójára a Becsekkolás oldalon.
+      </p>
+      {conflicts.map((c) => (
+        <div key={c.carId} className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <div className="between">
+            <span className="num" style={{ fontSize: 16 }}>{c.plate}</span>
+            <span className="badge danger">{c.people.length} fő · {c.capacity} fős{c.category ? ` (${c.category})` : ''}</span>
+          </div>
+          {c.people.map((p) => (
+            <div key={p.checkinId} className="stack" style={{ gap: 4 }}>
+              <div className="between" style={{ gap: 8 }}>
+                <span className="small row" style={{ gap: 6, minWidth: 0, fontWeight: 600 }}>
+                  <Icon name="user" size={14} className="muted" />{p.name}
+                </span>
+                <span className="tiny muted" style={{ flexShrink: 0 }}>{hhmm(p.checkedInAt)}</span>
+              </div>
+              <div className="between" style={{ gap: 8 }}>
+                <span className="tiny muted">{p.flagged ? 'A figyelmeztetés ellenére csekkolt be' : 'Előbb volt az autón'}</span>
+                <ConfirmButton className="btn danger-outline sm" confirmLabel="Biztos? Igen" disabled={checkout.isPending}
+                  onConfirm={() => checkout.mutate(p.checkinId)}>
+                  <Icon name="log-out" size={14} />Kijelentkeztetés
+                </ConfirmButton>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // Figyelmeztetés-fajták ikonja és (ha van) a részletező oldal
 const FLAG_META: Record<string, { icon: IconName; to?: string }> = {
@@ -108,7 +172,7 @@ export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
 
-  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'route_stops', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues'], [['dashboard']])
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'route_stops', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues'], [['dashboard'], ['crew-conflicts']])
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentWorkspaceId, today],
@@ -216,6 +280,7 @@ export default function Dashboard() {
   return (
     <div className="stack">
       <h2>Áttekintés — {currentWorkspace?.name}</h2>
+      <CrewConflictsCard />
       {isLoading && <><Skeleton rows={2} /><Skeleton rows={3} /></>}
       {data && (
         <>

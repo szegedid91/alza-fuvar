@@ -381,6 +381,7 @@ export type Database = {
           checked_in_at: string
           checked_out_at: string | null
           created_at: string
+          crew_conflict: boolean
           crew_key: string | null
           gps_lat: number | null
           gps_lng: number | null
@@ -401,6 +402,7 @@ export type Database = {
           checked_in_at?: string
           checked_out_at?: string | null
           created_at?: string
+          crew_conflict?: boolean
           crew_key?: string | null
           gps_lat?: number | null
           gps_lng?: number | null
@@ -421,6 +423,7 @@ export type Database = {
           checked_in_at?: string
           checked_out_at?: string | null
           created_at?: string
+          crew_conflict?: boolean
           crew_key?: string | null
           gps_lat?: number | null
           gps_lng?: number | null

@@ -11,6 +11,8 @@ export interface CrewMember {
   user_id: string
   full_name: string | null
   checked_in_at: string
+  // null = még az autón van; egyébként a kijelentkezés / autócsere ideje
+  checked_out_at: string | null
 }
 
 // Az autó feloldása a beolvasott QR tokenből (a workspace-en belül).
@@ -30,13 +32,16 @@ export async function resolveCarByToken(token: string, workspaceId: string): Pro
 }
 
 // Adott autó + nap becsekkolt emberei (a napi páros)
-export async function getCrewForDay(carId: string, date: string): Promise<CrewMember[]> {
-  const { data, error } = await supabase
+// openOnly: csak akik MOST az autón vannak (nincs kijelentkezve / nem váltott át)
+export async function getCrewForDay(carId: string, date: string, openOnly = false): Promise<CrewMember[]> {
+  let q = supabase
     .from('check_ins')
-    .select('user_id, checked_in_at')
+    .select('user_id, checked_in_at, checked_out_at')
     .eq('car_id', carId)
     .eq('work_date', date)
     .order('checked_in_at')
+  if (openOnly) q = q.is('checked_out_at', null)
+  const { data, error } = await q
   if (error) {
     console.error('Páros lekérési hiba:', error.message)
     return []
@@ -45,6 +50,7 @@ export async function getCrewForDay(carId: string, date: string): Promise<CrewMe
   return (data ?? []).map((r) => ({
     user_id: r.user_id,
     checked_in_at: r.checked_in_at,
+    checked_out_at: r.checked_out_at,
     full_name: names[r.user_id] ?? null,
   }))
 }

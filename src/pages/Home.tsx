@@ -5,6 +5,7 @@ import { useToday } from '../hooks/useToday'
 import { formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
 import Icon, { type IconName } from '../components/Icon'
+import { useCrewConflicts } from '../lib/crewConflicts'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
@@ -16,6 +17,8 @@ export default function Home() {
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
   const isAdmin = role === 'admin'
   const { data: today } = useToday()
+  // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
+  const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
 
   // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
   // alsó menüben is ott van (beolvasás, fuvar, beosztás), azt nem ismételjük
@@ -93,6 +96,20 @@ export default function Home() {
             ))}
           </div>
         </div>
+      )}
+
+      {isManagerOrAdmin && (conflicts?.length ?? 0) > 0 && (
+        <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
+          <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>
+            <Icon name="users" />Megoldandó: túl sokan egy autón
+          </div>
+          {conflicts!.map((c) => (
+            <div key={c.carId} className="small">
+              <span className="num">{c.plate}</span> · {c.people.map((p) => p.name).join(', ')} <span className="tiny muted">({c.people.length} fő, {c.capacity} fős autó)</span>
+            </div>
+          ))}
+          <div className="tiny muted row" style={{ gap: 4 }}>Rendezés az Áttekintésben <Icon name="chevron-right" size={14} /></div>
+        </Link>
       )}
 
       {isManagerOrAdmin && (

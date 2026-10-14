@@ -7,12 +7,12 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
-import { groupByCategory } from '../lib/calendar'
+import { groupByCategory, crewSizeFor } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
-import { resolveCarByToken, checkInspectionRequirement, type Car, type InspectionRequirement } from '../lib/checkin'
+import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, type Car, type CrewMember, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
@@ -35,7 +35,11 @@ export default function Scan() {
   const [inspection, setInspection] = useState<InspectionRequirement | null>(null)
 
   // Napközbeni autócsere: a beolvasott új autó + a kötelező ok
-  const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean } | null>(null)
+  // (conflict: a "tele autó" figyelmeztetést már elfogadta — a csere után is jelöljük)
+  const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean; conflict: boolean } | null>(null)
+  // "Tele" autó: ma már annyian vannak rajta nyitott becsekkolással, ahány fős
+  // (Box = 1). Rákérdezünk — ha mégis, a vezetők jelzést kapnak.
+  const [pendingConflict, setPendingConflict] = useState<{ car: Car; manual: boolean; others: CrewMember[]; capacity: number } | null>(null)
   // Kézi becsekkolás (sérült matrica / tiltott kamera): autó a listából
   const [manualOpen, setManualOpen] = useState(false)
   const [manualCarId, setManualCarId] = useState('')
@@ -99,16 +103,47 @@ export default function Scan() {
     }
   }
 
-  // Közös belépési pont QR-ből és kézi választásból: ha ma már egy MÁSIK
-  // autóra vagy becsekkolva és nem jelentkeztél ki, előbb az okot kérjük
-  // (autócsere), egyébként azonnal becsekkolunk.
+  // Közös belépési pont QR-ből és kézi választásból.
+  // 1) Tele az autó? (annyi nyitott becsekkolás, ahány fős — Box: 1) → rákérdezünk.
+  // 2) Ma már egy MÁSIK autóra vagy becsekkolva és nem jelentkeztél ki → az
+  //    autócsere okát kérjük. Egyébként azonnal becsekkolunk.
   async function startCheckIn(car: Car, manual: boolean) {
-    const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
-    if (openCi && openCi.car_id !== car.id) {
-      setPendingSwitch({ car, manual })
+    let others: CrewMember[] = []
+    try {
+      others = (await getCrewForDay(car.id, todayISO(), true)).filter((c) => c.user_id !== profile?.id)
+    } catch { /* offline: nem tudjuk ellenőrizni — a flush után az Áttekintés jelzi */ }
+    const capacity = crewSizeFor(cars, categories, car.id)
+    if (others.length >= capacity) {
+      setPendingConflict({ car, manual, others, capacity })
       return
     }
-    await doCheckIn(car, null, null, null, manual)
+    await continueCheckIn(car, manual, false)
+  }
+
+  async function continueCheckIn(car: Car, manual: boolean, conflict: boolean) {
+    const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
+    if (openCi && openCi.car_id !== car.id) {
+      setPendingSwitch({ car, manual, conflict })
+      return
+    }
+    await doCheckIn(car, null, null, null, manual, conflict)
+  }
+
+  // "Mégis erre az autóra" — a figyelmeztetés ellenére, jelöléssel
+  async function proceedConflict() {
+    if (!pendingConflict) return
+    const { car, manual } = pendingConflict
+    setBusy(true)
+    setError(null)
+    try {
+      await continueCheckIn(car, manual, true)
+      setPendingConflict(null)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Hiba'
+      setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function manualCheckIn() {
@@ -131,7 +166,8 @@ export default function Scan() {
   // Becsekkolás (normál vagy autócsere). Csere esetén a régi becsekkolást
   // lezárjuk, az újba pedig bekerül az ok és az előző autó.
   // manual: QR nélkül, listából választva — a vezetők jelzést kapnak róla.
-  async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null, manual = false) {
+  // conflict: tele autóra, a figyelmeztetés ellenére — a vezetők pusht kapnak.
+  async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null, manual = false, conflict = false) {
     if (!currentWorkspaceId || !profile) return
     const date = todayISO()
     const gps = await getCurrentPosition()
@@ -163,6 +199,7 @@ export default function Scan() {
           switch_reason: reason,
           prev_car_id: prevCarId,
           manual_checkin: manual,
+          crew_conflict: conflict,
         },
       })
     } else {
@@ -184,6 +221,7 @@ export default function Scan() {
           switch_reason: reason,
           prev_car_id: prevCarId,
           manual_checkin: manual,
+          crew_conflict: conflict,
         },
       })
     }
@@ -218,7 +256,7 @@ export default function Scan() {
     setError(null)
     try {
       const reason = switchNote.trim() ? `${switchReason}: ${switchNote.trim()}` : switchReason
-      await doCheckIn(pendingSwitch.car, reason, today.checkin.car_id, today.checkin.id, pendingSwitch.manual)
+      await doCheckIn(pendingSwitch.car, reason, today.checkin.car_id, today.checkin.id, pendingSwitch.manual, pendingSwitch.conflict)
       setPendingSwitch(null)
       setSwitchNote('')
     } catch (e) {
@@ -268,6 +306,9 @@ export default function Scan() {
   )
   // Mai eseményeknél elég az óra:perc — a dátum csak zaj
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+  // A mai autó létszáma és akik most rajta vannak (nem jelentkeztek ki)
+  const capacity = today?.car?.category?.crew_size === 1 ? 1 : 2
+  const openCrewCount = (today?.crew ?? []).filter((c) => !c.checked_out_at).length
 
   return (
     <div className="stack">
@@ -294,14 +335,19 @@ export default function Scan() {
             </div>
             <div className="list">
               {today.crew.map((c) => (
-                <div key={c.user_id} className="row between">
+                <div key={c.user_id} className="row between" style={{ opacity: c.checked_out_at ? 0.6 : 1 }}>
                   <span className="row" style={{ gap: 6 }}><Icon name="user" size={16} className="muted" />{c.full_name ?? 'Ismeretlen'} {c.user_id === profile?.id && <span className="tiny muted">(te)</span>}</span>
-                  <span className="small muted">{hhmm(c.checked_in_at)}</span>
+                  <span className="small muted">{hhmm(c.checked_in_at)}{c.checked_out_at ? ` – ${hhmm(c.checked_out_at)}` : ''}</span>
                 </div>
               ))}
-              {today.car.category?.crew_size === 1
+              {/* Nyitott becsekkolások a létszám fölött — a vezetők már jelzést kaptak */}
+              {openCrewCount > capacity ? (
+                <div className="tiny" style={{ color: 'var(--danger)', fontWeight: 700 }}>
+                  <Icon name="alert-triangle" size={14} /> Túl sokan az autón ({openCrewCount} fő, {capacity} fős autó) — a vezetők jelzést kaptak. Aki nem ezen dolgozik, váltson autót vagy jelentkezzen ki.
+                </div>
+              ) : capacity === 1
                 ? <div className="tiny muted">1 fős autó — ma egyedül dolgozol.</div>
-                : today.crew.length < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
+                : openCrewCount < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
             </div>
           </div>
           <div className="divider" />
@@ -361,9 +407,38 @@ export default function Scan() {
         </div>
       )}
 
+      {pendingConflict && (
+        <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
+          <div className="row"><Icon name="users" size={24} style={{ color: 'var(--danger)' }} /><strong>Ezen az autón már van valaki: {pendingConflict.car.plate}</strong></div>
+          <p className="small muted" style={{ margin: 0 }}>
+            {pendingConflict.capacity === 1
+              ? '1 fős (Box) autó — egyszerre egy ember dolgozhat rajta.'
+              : `${pendingConflict.capacity} fős autó — a létszám már megvan.`}
+            {' '}Ma becsekkolva, és még az autón:
+          </p>
+          <div className="list">
+            {pendingConflict.others.map((o) => (
+              <div key={o.user_id} className="row between">
+                <span className="row" style={{ gap: 6 }}><Icon name="user" size={16} className="muted" />{o.full_name ?? 'Ismeretlen'}</span>
+                <span className="small muted">{hhmm(o.checked_in_at)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ margin: 0 }}>
+            Ha ő már másik autóra ült át, előbb neki kell átváltania vagy kijelentkeznie. Ha mégis erre az autóra csekkolsz, a vezetők azonnal jelzést kapnak, és nekik kell rendezniük.
+          </p>
+          <div className="btn-grid">
+            <button className="btn ghost" disabled={busy} onClick={() => setPendingConflict(null)}>Mégse</button>
+            <ConfirmButton className="btn danger-outline" confirmLabel="Igen, biztos erre" disabled={busy} onConfirm={() => void proceedConflict()}>
+              {busy ? 'Feldolgozás…' : 'Mégis erre az autóra'}
+            </ConfirmButton>
+          </div>
+        </div>
+      )}
+
       {error && <div className="alert error">{error}</div>}
 
-      {!checkedIn && !isLoading && (
+      {!checkedIn && !isLoading && !pendingConflict && (
         <div className="card stack primary">
           <p className="muted small">Olvasd be az autó QR-kódját a nap kezdéséhez. A beolvasás rögzíti a ledolgozott napot (idő + GPS).</p>
           <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
@@ -378,7 +453,7 @@ export default function Scan() {
         </div>
       )}
 
-      {checkedIn && !pendingSwitch && (
+      {checkedIn && !pendingSwitch && !pendingConflict && (
         <div className="stack">
           <button className="btn secondary" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
             <Icon name="qr-code" />Másik autó beolvasása
