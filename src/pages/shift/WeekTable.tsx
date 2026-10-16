@@ -295,8 +295,8 @@ export default function WeekTable() {
       const failed = results.filter((r) => r.status === 'rejected').length
       setPublishMsg(
         reached === 0
-          ? `⚠️ ${byUser.size} munkatársból senkit sem ért el az értesítés — náluk nincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).${failed ? ` (${failed} küldés hibára futott.)` : ''}`
-          : `✅ Beosztás kiküldve: ${byUser.size} munkatársból ${reached} főt ért el az értesítés. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
+          ? `Senkit sem ért el: ${byUser.size} munkatársból egyiküknél sincs bekapcsolva az értesítés (Profil → Értesítések bekapcsolása, iPhone-on kezdőképernyőre telepítve).${failed ? ` (${failed} küldés hibára futott.)` : ''}`
+          : `Beosztás kiküldve: ${byUser.size} munkatársból ${reached} főt ért el az értesítés. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
       )
     } catch (e) {
       setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
@@ -327,7 +327,11 @@ export default function WeekTable() {
         </ConfirmButton>
         {error && <div className="alert error">{error}</div>}
         {copyMsg && <div className="alert info">{copyMsg}</div>}
-        {publishMsg && <div className={`alert ${publishMsg.startsWith('Hiba') ? 'error' : 'info'}`}>{publishMsg}</div>}
+        {publishMsg && (
+          <div className={`alert ${publishMsg.startsWith('Hiba') || publishMsg.startsWith('Senkit') ? 'error' : publishMsg.startsWith('Beosztás kiküldve') ? 'success' : 'info'}`}>
+            <Icon name={publishMsg.startsWith('Beosztás kiküldve') ? 'check-circle' : 'alert-triangle'} size={16} style={{ verticalAlign: -3 }} /> {publishMsg}
+          </div>
+        )}
 
         {/* Bal blokk (kategória + rendszám) FIXEN áll, csak a nap-oszlopok görgethetők.
             A két táblázat sorai azonos, rögzített magasságúak → mindig egy vonalban maradnak. */}
