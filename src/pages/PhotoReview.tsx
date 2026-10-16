@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { useCars } from '../hooks/useCars'
+import { useCarCategories } from '../hooks/useCarCategories'
+import { groupByCategory } from '../lib/calendar'
 import { resolveNames } from '../lib/names'
 import { signedUrl, signedUrls, sha256Hex, thumbPath } from '../lib/photos'
 import Icon from '../components/Icon'
@@ -21,7 +23,7 @@ interface Filters {
   userId: string
   from: string // YYYY-MM-DD vagy ''
   to: string
-  view: ViewFilter // csak az Indulás (ellenőrző) fülön értelmezett
+  view: ViewFilter // csak az Ellenőrzés fülön értelmezett
 }
 
 const VIEW_OPTIONS: Enums<'inspection_view'>[] = ['front', 'rear', 'left', 'right', 'interior']
@@ -36,9 +38,9 @@ interface Item {
 }
 
 const TABS: { key: PhotoType; label: string }[] = [
-  { key: 'inspection', label: 'Indulás' },
+  { key: 'inspection', label: 'Ellenőrzés' },
   { key: 'fuel', label: 'Tankolás' },
-  { key: 'incident', label: 'Baleset' },
+  { key: 'incident', label: 'Esemény' },
   { key: 'evidence', label: 'Bizonyíték' },
   { key: 'issue', label: 'Autó-hiba' },
 ]
@@ -130,6 +132,7 @@ export default function PhotoReview() {
   const [type, setType] = useState<PhotoType>('inspection')
   const { currentWorkspaceId } = useWorkspace()
   const { data: cars } = useCars()
+  const { data: categories } = useCarCategories()
   const { data: members } = useMembers()
   const [carId, setCarId] = useState('')
   const [userId, setUserId] = useState('')
@@ -192,7 +195,11 @@ export default function PhotoReview() {
             <label>Autó</label>
             <select className="select" value={carId} onChange={(e) => setCarId(e.target.value)}>
               <option value="">— összes —</option>
-              {cars?.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+              {groupByCategory(cars ?? [], categories).map((g) => (
+                <optgroup key={g.name} label={g.name}>
+                  {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <div className="field">
