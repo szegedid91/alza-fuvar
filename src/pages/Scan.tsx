@@ -1,7 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { prefetchRoute } from '../lib/routeQueries'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
@@ -245,8 +244,6 @@ export default function Scan() {
     }
     setInspection(req)
     await qc.invalidateQueries({ queryKey: ['today'] })
-    // A mai fuvarterv előtöltése a háttérben — a Fuvar oldal azonnal nyílik
-    void prefetchRoute(qc, currentWorkspaceId, car.id, date)
   }
 
   // Autócsere megerősítése a megadott okkal

@@ -13,7 +13,7 @@ export interface InspectionGateState {
 }
 
 // Kötelező ellenőrzés kikényszerítése: ha ma kell (9-e / sofőrváltás) és még nincs kész,
-// a fuvar/tankolás blokkolt.
+// a tankolás blokkolt.
 export function useInspectionGate(carId: string | undefined, date: string): InspectionGateState {
   const { profile } = useAuth()
   const { data, isLoading, isError, refetch } = useQuery({

@@ -21,12 +21,11 @@ export default function Home() {
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
 
   // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
-  // alsó menüben is ott van (beolvasás, fuvar, beosztás), azt nem ismételjük
+  // alsó menüben is ott van (beolvasás, autó-hiba, beosztás), azt nem ismételjük
   const crewLinks: HubItem[] = [
     { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
     { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
-    { to: '/hibak', icon: 'wrench', title: 'Autó-hiba', desc: '' },
   ]
 
   const managerHub: HubItem[] = [
@@ -35,9 +34,8 @@ export default function Home() {
     { to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
     { to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, tiltás' },
     { to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok kezelése' },
-    { to: '/fuvar-feltoltes', icon: 'upload', title: 'Fuvarterv feltöltés', desc: 'Excel autóhoz/naphoz' },
     { to: '/riportok', icon: 'trending-up', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },
-    { to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók és stopok élőben' },
+    { to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók és események élőben' },
     { to: '/hibak', icon: 'wrench', title: 'Autó-hibák', desc: 'Bejelentések követése' },
     { to: '/elolegek', icon: 'wallet', title: 'Előleg / levonás', desc: 'Rögzítés' },
     { to: '/bizonyitek', icon: 'camera', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },

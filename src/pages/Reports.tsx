@@ -13,7 +13,7 @@ import Skeleton from '../components/Skeleton'
 
 interface UserRow {
   id: string; name: string; days: number; hoursMs: number
-  driverDays: number; loaderDays: number; stops: number; tips: number; shortfall: number
+  driverDays: number; loaderDays: number
 }
 interface CarRow {
   id: string; plate: string; fuelCount: number; liters: number; cost: number
@@ -31,14 +31,12 @@ export default function Reports() {
     queryFn: async () => {
       const ws = currentWorkspaceId!
       // Lapozva (1000 sor felett is teljes), hibánál dob — csonka riport ne szülessen
-      const [carsRes, checkins, shifts, stops, fuel] = await Promise.all([
+      const [carsRes, checkins, shifts, fuel] = await Promise.all([
         supabase.from('cars').select('id, plate').eq('workspace_id', ws),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, checked_in_at, checked_out_at')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('route_stops').select('recorded_by, tip, status')
-          .eq('workspace_id', ws).gte('recorded_at', range.startISO).lt('recorded_at', range.endISO).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption, odometer_km')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
       ])
@@ -55,7 +53,7 @@ export default function Reports() {
       // Fejenkénti összesítés
       const users = new Map<string, UserRow>()
       const u = (id: string): UserRow => {
-        if (!users.has(id)) users.set(id, { id, name: '', days: 0, hoursMs: 0, driverDays: 0, loaderDays: 0, stops: 0, tips: 0, shortfall: 0 })
+        if (!users.has(id)) users.set(id, { id, name: '', days: 0, hoursMs: 0, driverDays: 0, loaderDays: 0 })
         return users.get(id)!
       }
       const seenDay = new Set<string>()
@@ -86,14 +84,6 @@ export default function Reports() {
         if (span.to == null) continue
         u(key.slice(0, key.indexOf('|'))).hoursMs += Math.max(0, span.to - span.from)
       }
-      for (const s of stops ?? []) {
-        if (!s.recorded_by) continue
-        const row = u(s.recorded_by)
-        row.stops++
-        const tip = Number(s.tip ?? 0)
-        if (tip > 0) row.tips += tip
-        if (tip < 0) row.shortfall += -tip
-      }
       const names = await resolveNames([...users.keys()])
       for (const row of users.values()) row.name = names[row.id] ?? '—'
 
@@ -122,7 +112,6 @@ export default function Reports() {
     await exportRowsToXlsx(`riport_${ym}.xlsx`, `Riport ${ym}`, data.userRows.map((r) => ({
       'Munkatárs': r.name, 'Napok': r.days, 'Órák': Math.round((r.hoursMs / 3600000) * 10) / 10,
       'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays,
-      'Stopok': r.stops, 'Borravaló': r.tips, 'Kp-hiány': r.shortfall,
     })))
   }
 
@@ -161,11 +150,6 @@ export default function Reports() {
               <div className="grid-2 small">
                 <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó</span></div>
                 <div className="between"><span className="muted">Órák</span><span>{r.hoursMs > 0 ? formatHours(r.hoursMs) : '—'}</span></div>
-                <div className="between"><span className="muted">Stopok</span><span>{r.stops}</span></div>
-                <div className="between"><span className="muted">Borravaló</span><span style={{ color: r.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(r.tips)}</span></div>
-                {r.shortfall > 0 && (
-                  <div className="between"><span className="muted">Kp-hiány</span><span style={{ color: 'var(--danger)' }}>{formatHuf(r.shortfall)}</span></div>
-                )}
               </div>
               <div className="divider" />
             </div>

@@ -8,7 +8,7 @@ import type { Tables } from '../lib/database.types'
 export type Car = Tables<'cars'> & { category?: { name: string; crew_size: number } | null }
 
 // Az aktuális munkaterület autói. Az activeOnly a cache-kulcs része,
-// így az "összes autó" (admin lista) és a "csak aktív" (beosztás, fuvarterv)
+// így az "összes autó" (admin lista) és a "csak aktív" (beosztás, becsekkolás)
 // nézetek nem írják felül egymást a query-cache-ben.
 export function useCars(activeOnly = false) {
   const { currentWorkspaceId } = useWorkspace()

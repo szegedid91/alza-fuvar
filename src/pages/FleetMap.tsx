@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import 'leaflet/dist/leaflet.css'
 import type { Map as LeafletMap, LayerGroup } from 'leaflet'
 import Icon from '../components/Icon'
@@ -11,12 +11,7 @@ import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
-import { geocodeAddress, sleep } from '../lib/geocode'
-import { stopAddressText } from '../lib/nav'
-import { todayISO, formatHuf } from '../lib/labels'
-import type { Tables } from '../lib/database.types'
-
-type Stop = Tables<'route_stops'>
+import { todayISO } from '../lib/labels'
 
 // Egy autó utolsó ismert pozíciója (a mai GPS-es eseményekből)
 interface CarPos {
@@ -43,12 +38,10 @@ interface MapEvent {
 }
 
 interface MapData {
-  stops: (Stop & { _plate: string; _carId: string | null })[]
   carPositions: CarPos[]
   events: MapEvent[]
   people: { id: string; name: string }[]
   personCars: Record<string, string[]> // userId -> carId-k (beosztás + események alapján)
-  pendingGeocode: number
 }
 
 const EVENT_TYPES = ['Becsekkolás', 'Kijelentkezés', 'Autó-ellenőrzés', 'Takarítás', 'Tankolás', 'Esemény'] as const
@@ -59,10 +52,9 @@ function esc(s: string): string {
 
 export default function FleetMap() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
-  const qc = useQueryClient()
   const today = todayISO()
 
-  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'route_stops', 'car_inspections', 'fuel_logs'], [['fleet-map']])
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'car_inspections', 'fuel_logs'], [['fleet-map']])
 
   const { data, isLoading, isError } = useQuery<MapData>({
     queryKey: ['fleet-map', currentWorkspaceId, today],
@@ -70,9 +62,8 @@ export default function FleetMap() {
     refetchInterval: 120_000,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [carsRes, uploadsRes, shiftsRes, checkins, inspections, cleanings, fuel, incidents] = await Promise.all([
+      const [carsRes, shiftsRes, checkins, inspections, cleanings, fuel, incidents] = await Promise.all([
         supabase.from('cars').select('id, plate').eq('workspace_id', ws),
-        supabase.from('route_uploads').select('id, car_id').eq('workspace_id', ws).eq('work_date', today),
         supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
         fetchAll((f, t) => supabase.from('check_ins')
           .select('car_id, user_id, checked_in_at, checked_out_at, gps_lat, gps_lng, out_gps_lat, out_gps_lng')
@@ -87,22 +78,7 @@ export default function FleetMap() {
           .eq('workspace_id', ws).eq('work_date', today).order('id').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
-      if (uploadsRes.error) throw uploadsRes.error
       const plateOf = new Map((carsRes.data ?? []).map((c) => [c.id, c.plate]))
-
-      // Mai stopok (fuvartervenként), rendszámmal megcímkézve
-      const uploads = uploadsRes.data ?? []
-      let stops: (Stop & { _plate: string; _carId: string | null })[] = []
-      if (uploads.length > 0) {
-        const uploadCar = new Map(uploads.map((u) => [u.id, u.car_id]))
-        const s = await fetchAll<Stop>((f, t) => supabase.from('route_stops').select('*')
-          .in('upload_id', uploads.map((u) => u.id)).order('id').range(f, t))
-        stops = s.map((x) => ({
-          ...x,
-          _plate: plateOf.get(uploadCar.get(x.upload_id) ?? '') ?? '?',
-          _carId: uploadCar.get(x.upload_id) ?? null,
-        }))
-      }
 
       // Autónként a legfrissebb GPS-es esemény
       type Ev = { carId: string | null; userId: string | null; at: string | null; lat: number | null; lng: number | null; source: string }
@@ -165,37 +141,9 @@ export default function FleetMap() {
         .map((id) => ({ id, name: names[id] ?? 'munkatárs' }))
         .sort((a, b) => a.name.localeCompare(b.name, 'hu'))
 
-      return { stops, carPositions, events: mapEvents, people, personCars, pendingGeocode: stops.filter((s) => s.lat == null && !s.geocoded).length }
+      return { carPositions, events: mapEvents, people, personCars }
     },
   })
-
-  // Hiányzó stop-koordináták geokódolása a háttérben (best-effort, DB-be cache-elve,
-  // futásonként max 12 cím a Nominatim rate-limit miatt)
-  const geocodingRef = useRef(false)
-  useEffect(() => {
-    const missing = (data?.stops ?? []).filter((s) => (s.lat == null || s.lng == null) && !s.geocoded)
-    if (missing.length === 0 || geocodingRef.current) return
-    geocodingRef.current = true
-    void (async () => {
-      try {
-        for (const s of missing.slice(0, 12)) {
-          try {
-            const geo = await geocodeAddress(stopAddressText(s))
-            if (geo) await supabase.from('route_stops').update({ lat: geo.lat, lng: geo.lng, geocoded: true }).eq('id', s.id)
-            // null = tényleg nincs ilyen cím: ezt jelöljük, hogy ne pörögjön rajta örökké
-            else await supabase.from('route_stops').update({ geocoded: true }).eq('id', s.id)
-          } catch {
-            // hálózati / rate-limit hiba: NEM jelöljük geokódoltnak — később újrapróbáljuk
-            break
-          }
-          await sleep(1100)
-        }
-        void qc.invalidateQueries({ queryKey: ['fleet-map'] })
-      } finally {
-        geocodingRef.current = false
-      }
-    })()
-  }, [data, qc])
 
   // Szűrők: autó / ember / esemény-típus
   const [filterCar, setFilterCar] = useState('')
@@ -251,21 +199,6 @@ export default function FleetMap() {
       const carAllowed = (carId: string | null) =>
         (!filterCar || carId === filterCar) && (!personCarSet || (carId != null && personCarSet.has(carId)))
 
-      // Stopok: státusz-színű pöttyök
-      for (const s of data.stops) {
-        if (s.lat == null || s.lng == null) continue
-        if (!carAllowed(s._carId)) continue
-        const color = s.status === 'done' ? '#22c55e' : s.status === 'skipped' ? '#ef4444' : '#f59e0b'
-        L.circleMarker([s.lat, s.lng], { radius: 6, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95 })
-          .bindPopup(
-            `<b>${esc(s._plate)}</b> · ${s.status === 'done' ? 'kész' : s.status === 'skipped' ? 'sikertelen' : 'hátravan'}<br>` +
-            `${esc(stopAddressText(s))}` +
-            (s.is_cash && s.expected_amount != null ? `<br>💵 ${esc(formatHuf(Number(s.expected_amount)))}` : ''),
-          )
-          .addTo(layer)
-        bounds.push([s.lat, s.lng])
-      }
-
       if (filterEvent) {
         // Esemény-szűrő: az adott típus MINDEN mai előfordulása a térképen
         for (const e of data.events ?? []) {
@@ -313,10 +246,6 @@ export default function FleetMap() {
     })()
   }, [mapReady, data, currentWorkspace, filterCar, filterPerson, filterEvent])
 
-  const done = (data?.stops ?? []).filter((s) => s.status === 'done').length
-  const skipped = (data?.stops ?? []).filter((s) => s.status === 'skipped').length
-  const total = data?.stops.length ?? 0
-
   return (
     <div className="stack">
       <h2>Térkép — {currentWorkspace?.name}</h2>
@@ -345,30 +274,23 @@ export default function FleetMap() {
         <div ref={containerRef} style={{ height: 'clamp(440px, 62vh, 720px)', borderRadius: 12, overflow: 'hidden' }} />
         <div className="tiny muted" style={{ marginTop: 8 }}>
           <Icon name="truck" size={14} style={{ verticalAlign: -3 }} /> autó (utolsó ismert pozíció ma: zöldeskék &lt;45 p, borostyán &lt;3 ó, szürke régebbi) ·{' '}
-          <span style={{ color: '#22c55e' }}>●</span> kész stop ·{' '}
-          <span style={{ color: '#f59e0b' }}>●</span> hátravan ·{' '}
-          <span style={{ color: '#ef4444' }}>●</span> sikertelen · kör = telephely
+          <span style={{ color: '#8b5cf6' }}>●</span> esemény (nézet-szűrővel) · kör = telephely
         </div>
       </div>
 
       <div className="card">
         <div className="grid-2">
           <div className="between"><span className="muted small">Autók a térképen</span><span className="badge">{data?.carPositions.length ?? 0}</span></div>
-          <div className="between"><span className="muted small">Mai stopok</span><span className="badge">{done}/{total} kész{skipped ? ` · ${skipped} sikertelen` : ''}</span></div>
+          <div className="between"><span className="muted small">Mai GPS-es események</span><span className="badge">{data?.events.length ?? 0}</span></div>
         </div>
         {isLoading && <div className="spinner" style={{ marginTop: 8 }} />}
-        {(data?.pendingGeocode ?? 0) > 0 && (
-          <div className="tiny muted row" style={{ marginTop: 8, gap: 6 }}>
-            <Icon name="map-pin" size={14} />{data!.pendingGeocode} stop címét még keressük a térképen — pár perc múlva megjelennek.
-          </div>
-        )}
-        {!isLoading && total === 0 && (data?.carPositions.length ?? 0) === 0 && (
-          <div className="tiny muted" style={{ marginTop: 8 }}>Ma még nincs térképre tehető adat (becsekkolás vagy fuvarterv).</div>
+        {!isLoading && (data?.carPositions.length ?? 0) === 0 && (
+          <div className="tiny muted" style={{ marginTop: 8 }}>Ma még nincs térképre tehető adat (becsekkolás, ellenőrzés, tankolás vagy esemény).</div>
         )}
       </div>
 
       <p className="tiny muted" style={{ textAlign: 'center' }}>
-        A pozíciók a munkanapi rögzítésekből származnak (becsekkolás, tankolás, stop). Az app nem követi folyamatosan a telefonokat.
+        A pozíciók a munkanapi rögzítésekből származnak (becsekkolás, ellenőrzés, tankolás, esemény). Az app nem követi folyamatosan a telefonokat.
       </p>
     </div>
   )

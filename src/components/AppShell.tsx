@@ -18,9 +18,9 @@ interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 // a CSS-ben rejtve) — görgetés közben is látszik, hol vagy.
 const ROUTE_TITLES: Record<string, string> = {
   '/profil': 'Profil', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
-  '/esemeny': 'Esemény / baleset', '/fuvar': 'Fuvarterv', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
+  '/esemeny': 'Esemény / baleset', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
   '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
-  '/tagok': 'Tagok', '/autok': 'Autók', '/fuvar-feltoltes': 'Fuvarterv feltöltés', '/beosztas-szerkeszto': 'Beosztás',
+  '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
   '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',
   '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló',
 }
@@ -215,7 +215,7 @@ function PushPrompt() {
 }
 
 // Ezek az oldalak nagy képernyőn a teljes szélességet használják
-const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/fuvar-feltoltes', '/tortenet']
+const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/tortenet']
 
 // A becsekkolás körüli 20 m-es kör figyelése (hiányzó autó-ellenőrzés esetén
 // a szerver küld értesítést a páros MINDKÉT tagjának, amíg valaki el nem végzi)
@@ -235,10 +235,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   const nav: NavItem[] = [{ to: '/', icon: 'home', label: 'Kezdőlap', end: true }]
   if (isCrew) {
-    // A munkatárs napi útja: beolvasás → fuvar → (este) beosztás. A Profil a
-    // kezdőlap fejlécéből érhető el — az alsó menüben a Beosztás értékesebb.
+    // A munkatárs napi útja: beolvasás → (autó-hiba, ha van) → (este) beosztás.
+    // A fuvartervet külön alkalmazás kezeli. A Profil a kezdőlap fejlécéből
+    // érhető el — az alsó menüben a Beosztás értékesebb.
     nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
-    nav.push({ to: '/fuvar', icon: 'map', label: 'Fuvar' })
+    nav.push({ to: '/hibak', icon: 'wrench', label: 'Autó-hiba' })
     nav.push({ to: '/beosztas', icon: 'calendar', label: 'Beosztás' })
   }
   if (isManagerOrAdmin) {

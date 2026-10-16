@@ -1,16 +1,14 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useInspectionGate } from '../hooks/useInspectionGate'
-import { routeUploadQuery, routeStopsQuery } from '../lib/routeQueries'
-import { formatHuf } from '../lib/labels'
 import Icon, { type IconName } from './Icon'
 
 // "Mai nap" lépéssor a munkatárs kezdőlapján: hol tart a nap, és egy gombbal
 // a KÖVETKEZŐ lépésre visz. A sofőr napja lineáris (becsekk → ellenőrzés →
-// fuvar → kijelentkezés) — ezt mutatjuk a hét egyforma csempe helyett.
+// kijelentkezés) — ezt mutatjuk a hét egyforma csempe helyett. (A fuvartervet
+// külön alkalmazás kezeli, itt csak az autóval kapcsolatos lépések vannak.)
 type StepState = 'done' | 'next' | 'todo' | 'skip' | 'blocked'
 interface Step { key: string; icon: IconName; title: string; detail: string; state: StepState; to: string; cta: string }
 
@@ -23,7 +21,6 @@ const STATE_ICON: Record<StepState, { name: IconName; color: string }> = {
 }
 
 export default function TodayStepper() {
-  const { currentWorkspaceId } = useWorkspace()
   const { data: today, isLoading } = useToday()
   const car = today?.car ?? null
   const date = today?.date ?? ''
@@ -41,20 +38,11 @@ export default function TodayStepper() {
       return count ?? 0
     },
   })
-  // A fuvarterv ugyanabból a cache-ből, amit a becsekkolás előtöltött
-  const { data: upload } = useQuery({
-    ...routeUploadQuery(currentWorkspaceId ?? '', car?.id ?? '', date),
-    enabled: !!currentWorkspaceId && !!car,
-  })
-  const { data: stops } = useQuery({ ...routeStopsQuery(upload?.id ?? ''), enabled: !!upload })
 
   if (isLoading) return null
 
   const checkedOut = !!checkin?.checked_out_at
   const inspected = (inspCount ?? 0) > 0
-  const total = stops?.length ?? 0
-  const done = (stops ?? []).filter((s) => s.status !== 'pending').length
-  const cash = (stops ?? []).filter((s) => s.is_cash && s.status !== 'skipped').reduce((a, s) => a + Number(s.expected_amount ?? 0), 0)
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   const steps: Step[] = [
@@ -65,13 +53,8 @@ export default function TodayStepper() {
     },
     {
       key: 'inspection', icon: 'camera', title: 'Autó-ellenőrzés', to: '/ellenorzes', cta: 'Ellenőrzés indítása',
-      detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a fuvar addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó: elöl, hátul, bal, jobb, beltér',
+      detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a tankolás addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó: elöl, hátul, bal, jobb, beltér',
       state: inspected ? 'done' : !checkin ? 'todo' : gate.blocked ? 'blocked' : 'skip',
-    },
-    {
-      key: 'route', icon: 'map', title: 'Fuvarterv', to: '/fuvar', cta: upload ? 'Fuvarterv megnyitása' : 'Fuvarterv importálása',
-      detail: !checkin ? 'Stopok, navigáció, pénz' : !upload ? 'Még nincs mai fuvarterv' : `${done}/${total} stop kész${cash > 0 ? ` · leadandó ${formatHuf(cash)}` : ''}`,
-      state: !checkin ? 'todo' : upload && total > 0 && done === total ? 'done' : 'todo',
     },
     {
       key: 'checkout', icon: 'flag', title: 'Kijelentkezés', to: '/beolvasas', cta: 'Kijelentkezés (nap vége)',
@@ -85,8 +68,7 @@ export default function TodayStepper() {
   let next: Step | null = null
   if (!checkin) next = steps[0]
   else if (gate.blocked && !inspected) next = steps[1]
-  else if (!(upload && total > 0 && done === total) && !checkedOut) next = steps[2]
-  else if (!checkedOut) next = steps[3]
+  else if (!checkedOut) next = steps[2]
   for (const s of steps) if (s === next) s.state = 'next'
   const allDone = !next
 

@@ -5,8 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
-import { todayISO, formatHuf, formatDateTime, parseHuNumber } from '../lib/labels'
-import { fetchAll } from '../lib/fetchAll'
+import { todayISO, formatDateTime, parseHuNumber } from '../lib/labels'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { toast } from '../lib/toast'
 import { Link } from 'react-router-dom'
@@ -78,7 +77,7 @@ function CrewConflictsCard() {
 // Figyelmeztetés-fajták ikonja és (ha van) a részletező oldal
 const FLAG_META: Record<string, { icon: IconName; to?: string }> = {
   km: { icon: 'fuel' }, geo: { icon: 'map-pin' }, issue: { icon: 'wrench', to: '/hibak' },
-  cash: { icon: 'banknote' }, noshow: { icon: 'user' }, insp: { icon: 'camera' }, manual: { icon: 'pencil' },
+  noshow: { icon: 'user' }, insp: { icon: 'camera' }, manual: { icon: 'pencil' },
 }
 
 // Telephely (geofence) beállítása — nem tilt, csak jelzi a kívül eső be-/kijelentkezést
@@ -172,7 +171,7 @@ export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
 
-  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'route_stops', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues'], [['dashboard'], ['crew-conflicts']])
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues'], [['dashboard'], ['crew-conflicts']])
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentWorkspaceId, today],
@@ -180,46 +179,28 @@ export default function Dashboard() {
     refetchInterval: 60000,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: uploads }, { data: fuel }, { data: insp }, { data: issues }] =
+      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }] =
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
           supabase.from('check_ins').select('car_id, user_id, checked_in_at, outside_geofence, out_outside_geofence, manual_checkin').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
-          supabase.from('route_uploads').select('id, car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
         ])
 
-      const uploadIds = (uploads ?? []).map((u) => u.id)
-      let stops: { car_id: string | null; status: string; is_cash: boolean; expected_amount: number | null; received_amount: number | null; tip: number | null; upload_id: string; city: string | null }[] = []
-      if (uploadIds.length > 0) {
-        const s = await fetchAll((f, t) => supabase.from('route_stops')
-          .select('status, is_cash, expected_amount, received_amount, tip, upload_id, city')
-          .in('upload_id', uploadIds).order('id').range(f, t))
-        stops = s.map((x) => ({ ...x, car_id: null }))
-      }
-      const uploadCar = new Map((uploads ?? []).map((u) => [u.id, u.car_id]))
-
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
       const names = await resolveNames((checkins ?? []).map((c) => c.user_id))
+      const inspCars = new Set((insp ?? []).map((i) => i.car_id))
 
-      // per-autó összesítés
+      // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
       const checkedCarIds = new Set((checkins ?? []).map((c) => c.car_id))
       const perCar = [...checkedCarIds].map((carId) => {
         const crew = (checkins ?? []).filter((c) => c.car_id === carId).map((c) => names[c.user_id] ?? '?')
-        const carStops = stops.filter((s) => uploadCar.get(s.upload_id) === carId)
-        const done = carStops.filter((s) => s.status !== 'pending').length
-        const collected = carStops.reduce((a, s) => a + Number(s.received_amount ?? 0), 0)
-        return { carId, car: carMap.get(carId), crew, doneStops: done, totalStops: carStops.length, collected }
+        const openIssues = (issues ?? []).filter((i) => i.car_id === carId).length
+        const fueled = (fuel ?? []).some((f) => f.car_id === carId)
+        return { carId, car: carMap.get(carId), crew, openIssues, inspected: inspCars.has(carId), fueled }
       })
-
-      // pénz ma
-      const cashToHandOver = stops.filter((s) => s.is_cash).reduce((a, s) => a + Number(s.expected_amount ?? 0), 0)
-      const collectedTotal = stops.reduce((a, s) => a + Number(s.received_amount ?? 0), 0)
-      // Csak a pozitív borravaló — a kp-hiány (negatív tip) külön figyelmeztetésként jelenik meg,
-      // ugyanazzal a szabállyal, mint a bérszámításban
-      const tipsTotal = stops.reduce((a, s) => a + Math.max(0, Number(s.tip ?? 0)), 0)
 
       // figyelmeztetések
       const flags: { kind: string; text: string }[] = []
@@ -233,11 +214,9 @@ export default function Dashboard() {
       }
       // nyitott autó-hibák
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
-      for (const s of stops) if (Number(s.tip ?? 0) < 0) flags.push({ kind: 'cash', text: `Készpénz-hiány egy stopnál: ${s.city ?? ''} (${formatHuf(Number(s.tip))})` })
       // beosztva de nincs becsekkolva
       for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}` })
       // kötelező ellenőrzés hiányzik — EGY lekérdezéssel az összes autóra (nem autónként)
-      const inspCars = new Set((insp ?? []).map((i) => i.car_id))
       const carsToCheck = [...checkedCarIds].filter((id) => !inspCars.has(id))
       if (carsToCheck.length > 0) {
         const { data: prevCi, error: prevErr } = await supabase
@@ -271,8 +250,9 @@ export default function Dashboard() {
       }
 
       return {
-        perCar, cashToHandOver, collectedTotal, tipsTotal, flags,
-        crews: perCar.length, lastCheckin: (checkins ?? []).map((c) => c.checked_in_at).sort().slice(-1)[0] ?? null,
+        perCar, flags,
+        crews: perCar.length, openIssues: issues?.length ?? 0, fuelToday: fuel?.length ?? 0, inspToday: inspCars.size,
+        lastCheckin: (checkins ?? []).map((c) => c.checked_in_at).sort().slice(-1)[0] ?? null,
       }
     },
   })
@@ -287,9 +267,9 @@ export default function Dashboard() {
           <div className="card primary">
             <div className="grid-2">
               <Stat label="Aktív párosok ma" value={String(data.crews)} />
-              <Stat label="Leadandó készpénz" value={formatHuf(data.cashToHandOver)} />
-              <Stat label="Beszedve ma" value={formatHuf(data.collectedTotal)} />
-              <Stat label="Borravaló ma" value={formatHuf(data.tipsTotal)} tone={data.tipsTotal > 0 ? 'success' : undefined} />
+              <Stat label="Nyitott autó-hiba" value={String(data.openIssues)} tone={data.openIssues > 0 ? 'warning' : undefined} />
+              <Stat label="Mai ellenőrzés" value={String(data.inspToday)} tone={data.inspToday > 0 ? 'success' : undefined} />
+              <Stat label="Mai tankolás" value={String(data.fuelToday)} />
             </div>
           </div>
 
@@ -321,20 +301,17 @@ export default function Dashboard() {
               </div>
             )}
             {data.perCar.map((c) => (
-              <div key={c.carId} className="stack" style={{ gap: 6 }}>
-                <div className="between">
-                  <div style={{ minWidth: 0 }}>
-                    <div className="num" style={{ fontSize: 16 }}>{c.car?.plate ?? '?'}</div>
-                    <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.crew.join(' + ') || '—'}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {c.totalStops > 0 ? <div className="badge">{c.doneStops}/{c.totalStops} stop</div> : <div className="tiny muted">nincs fuvarterv</div>}
-                    <div className="tiny muted">{formatHuf(c.collected)}</div>
-                  </div>
+              <div key={c.carId} className="between" style={{ gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="num" style={{ fontSize: 16 }}>{c.car?.plate ?? '?'}</div>
+                  <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.crew.join(' + ') || '—'}</div>
                 </div>
-                {c.totalStops > 0 && (
-                  <div className="progress" style={{ marginTop: 0 }} aria-hidden="true"><div style={{ width: `${Math.round((c.doneStops / c.totalStops) * 100)}%` }} /></div>
-                )}
+                <div className="row" style={{ gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {c.openIssues > 0 && <Link to="/hibak" className="badge warning" style={{ textDecoration: 'none' }}><Icon name="wrench" size={12} />{c.openIssues} hiba</Link>}
+                  {c.inspected && <span className="badge success"><Icon name="camera" size={12} />ellenőrizve</span>}
+                  {c.fueled && <span className="badge"><Icon name="fuel" size={12} />tankolt</span>}
+                  {c.openIssues === 0 && !c.inspected && !c.fueled && <span className="tiny muted">nincs mai esemény</span>}
+                </div>
               </div>
             ))}
           </div>

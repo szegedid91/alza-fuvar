@@ -20,7 +20,6 @@ const Scan = lazy(() => import('./pages/Scan'))
 const Inspection = lazy(() => import('./pages/Inspection'))
 const Fuel = lazy(() => import('./pages/Fuel'))
 const Incident = lazy(() => import('./pages/Incident'))
-const RoutePage = lazy(() => import('./pages/Route'))
 const MySchedule = lazy(() => import('./pages/MySchedule'))
 const CarIssues = lazy(() => import('./pages/CarIssues'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -29,7 +28,6 @@ const FleetMap = lazy(() => import('./pages/FleetMap'))
 const Approvals = lazy(() => import('./pages/Approvals'))
 const Members = lazy(() => import('./pages/Members'))
 const Cars = lazy(() => import('./pages/Cars'))
-const ManagerRouteUpload = lazy(() => import('./pages/ManagerRouteUpload'))
 const ShiftEditor = lazy(() => import('./pages/ShiftEditor'))
 const Adjustments = lazy(() => import('./pages/Adjustments'))
 const Evidence = lazy(() => import('./pages/Evidence'))
@@ -101,7 +99,6 @@ export default function App() {
           {isCrew && <Route path="/ellenorzes" element={<Inspection />} />}
           {isCrew && <Route path="/tankolas" element={<Fuel />} />}
           {isCrew && <Route path="/esemeny" element={<Incident />} />}
-          {isCrew && <Route path="/fuvar" element={<RoutePage />} />}
           {isCrew && <Route path="/beosztas" element={<MySchedule />} />}
           {(isCrew || isManagerOrAdmin) && <Route path="/hibak" element={<CarIssues />} />}
 
@@ -112,7 +109,6 @@ export default function App() {
           {isManagerOrAdmin && <Route path="/jovahagyas" element={<Approvals />} />}
           {isManagerOrAdmin && <Route path="/tagok" element={<Members />} />}
           {isManagerOrAdmin && <Route path="/autok" element={<Cars />} />}
-          {isManagerOrAdmin && <Route path="/fuvar-feltoltes" element={<ManagerRouteUpload />} />}
           {isManagerOrAdmin && <Route path="/beosztas-szerkeszto" element={<ShiftEditor />} />}
           {isManagerOrAdmin && <Route path="/elolegek" element={<Adjustments />} />}
           {isManagerOrAdmin && <Route path="/bizonyitek" element={<Evidence />} />}

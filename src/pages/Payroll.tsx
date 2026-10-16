@@ -83,7 +83,7 @@ export default function Payroll() {
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
-      const [profilesRes, workspacesRes, rateHistRes, checkins, shifts, adj, stops] = await Promise.all([
+      const [profilesRes, workspacesRes, rateHistRes, checkins, shifts, adj] = await Promise.all([
         // Státusz-szűrő NÉLKÜL: a hónap közben letiltott munkatársnak is jár a
         // ledolgozott napjaiért a bér — csak a bér nélküli inaktívakat hagyjuk ki lent
         supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)'),
@@ -99,8 +99,6 @@ export default function Payroll() {
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, reason')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('route_stops').select('recorded_by, tip')
-          .gte('recorded_at', range.startISO).lt('recorded_at', range.endISO).not('tip', 'is', null).order('id').range(f, t)),
       ])
       if (profilesRes.error) throw profilesRes.error
       if (workspacesRes.error) throw workspacesRes.error
@@ -146,17 +144,6 @@ export default function Payroll() {
         if (!items.has(a.user_id)) items.set(a.user_id, [])
         items.get(a.user_id)!.push({ date: a.work_date, amount: Number(a.amount), reason: a.reason ?? null })
       }
-      // Borravaló (pozitív) és készpénz-hiány (negatív tip) külön gyűjtve —
-      // a hiány levonásként jelenik meg, nem "negatív borravalóként".
-      const tipsByUser = new Map<string, number>()
-      const shortfallByUser = new Map<string, number>()
-      for (const s of stops ?? []) {
-        if (!s.recorded_by) continue
-        const tip = Number(s.tip ?? 0)
-        if (tip > 0) tipsByUser.set(s.recorded_by, (tipsByUser.get(s.recorded_by) ?? 0) + tip)
-        if (tip < 0) shortfallByUser.set(s.recorded_by, (shortfallByUser.get(s.recorded_by) ?? 0) - tip)
-      }
-
       const rows: PayrollRow[] = ((profiles ?? []) as unknown as (Tables<'profiles'> & { workspace: { name: string } | null })[])
         .filter((p) => isCrewRole(p.role) && (p.status === 'active' || (daysByUser.get(p.id)?.size ?? 0) > 0))
         .map((p) => {
@@ -180,8 +167,6 @@ export default function Payroll() {
           workedDays.sort((a, b) => a.date.localeCompare(b.date))
           const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date)
           const wsRate = rates[p.workspace_id ?? '']
-          const tips = tipsByUser.get(p.id) ?? 0
-          const shortfall = shortfallByUser.get(p.id) ?? 0
           const advances = advByUser.get(p.id) ?? 0
           const deductions = dedByUser.get(p.id) ?? 0
           return {
@@ -189,10 +174,10 @@ export default function Payroll() {
             workspaceId: p.workspace_id, driverDays, loaderDays, days: driverDays + loaderDays,
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0,
             driverPay, loaderPay,
-            tips, shortfall, advances, deductions, base,
+            advances, deductions, base,
             status: p.status as string,
-            earned: base + tips - shortfall - deductions,
-            total: base + tips - shortfall - advances - deductions,
+            earned: base - deductions,
+            total: base - advances - deductions,
             workedDays,
             advanceItems: (advItemsByUser.get(p.id) ?? []).sort(byDate),
             deductionItems: (dedItemsByUser.get(p.id) ?? []).sort(byDate),
@@ -211,19 +196,19 @@ export default function Payroll() {
       'Munkatárs': r.name, 'Munkaterület': r.workspace,
       'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays, 'Ledolgozott nap': r.days,
       'Sofőr napidíj': r.driverRate, 'Rakodó napidíj': r.loaderRate, 'Alapbér': r.base,
-      'Borravaló': r.tips, 'Kp-hiány': r.shortfall, 'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
+      'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
     })))
   }
 
   // Alapból csak azok, akiknél van mit elszámolni (nap, előleg vagy levonás) —
   // 20+ nullás sor elrejtené a lényeget. Az export mindig az összes sort viszi.
   const [onlyWorked, setOnlyWorked] = useState(true)
-  const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0 || r.tips > 0
+  const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0
   const shownRows = (data?.rows ?? []).filter((r) => !onlyWorked || relevant(r))
   const workedCount = (data?.rows ?? []).filter(relevant).length
   const totals = (data?.rows ?? []).reduce(
-    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, tips: a.tips + r.tips, advances: a.advances + r.advances }),
-    { pay: 0, days: 0, tips: 0, advances: 0 },
+    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances }),
+    { pay: 0, days: 0, deductions: 0, advances: 0 },
   )
 
   return (
@@ -240,7 +225,7 @@ export default function Payroll() {
           <div className="grid-2">
             <div><div className="tiny muted">Kifizetendő összesen</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
             <div><div className="tiny muted">Ledolgozott napok</div><div className="num num-lg">{totals.days}</div></div>
-            <div><div className="tiny muted">Borravaló</div><div className="num" style={{ color: totals.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(totals.tips)}</div></div>
+            <div><div className="tiny muted">Levonás</div><div className="num" style={{ color: totals.deductions > 0 ? 'var(--danger)' : undefined }}>{formatHuf(totals.deductions)}</div></div>
             <div><div className="tiny muted">Felvett előleg</div><div className="num">{formatHuf(totals.advances)}</div></div>
           </div>
         )}
@@ -495,10 +480,6 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         <div className="between"><span className="muted">Rakodóként</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
         <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
-        <div className="between"><span className="muted">Borravaló</span><span style={{ color: row.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(row.tips)}</span></div>
-        {row.shortfall > 0 && (
-          <div className="between"><span className="muted">Kp-hiány</span><span style={{ color: 'var(--danger)' }}>−{formatHuf(row.shortfall)}</span></div>
-        )}
         <div className="between"><span className="muted">Előleg</span><span style={{ color: row.advances > 0 ? 'var(--warning)' : undefined }}>{row.advances > 0 ? '−' : ''}{formatHuf(row.advances)}</span></div>
         <div className="between"><span className="muted">Levonás</span><span style={{ color: row.deductions > 0 ? 'var(--danger)' : undefined }}>{row.deductions > 0 ? '−' : ''}{formatHuf(row.deductions)}</span></div>
       </div>

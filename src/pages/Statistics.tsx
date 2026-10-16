@@ -58,10 +58,6 @@ interface UserStat {
   loaderDays: number
   hoursMs: number
   daysWithHours: number
-  tips: number
-  shortfall: number
-  stops: number
-  skippedStops: number
   incidents: number
   switches: number
   issues: number
@@ -96,15 +92,13 @@ export default function Statistics() {
     queryFn: async () => {
       const ws = currentWorkspaceId!
       // Lapozva (1000 sor felett is teljes), hibánál dob — csonka statisztika ne szülessen
-      const [carsRes, checkins, shifts, stops, fuel, incidents, issues, adj, swaps] = await Promise.all([
+      const [carsRes, checkins, shifts, fuel, incidents, issues, adj, swaps] = await Promise.all([
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll((f, t) => supabase.from('check_ins')
           .select('user_id, car_id, work_date, checked_in_at, checked_out_at, switch_reason, prev_car_id, outside_geofence, out_outside_geofence')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('route_stops').select('recorded_by, tip, status')
-          .eq('workspace_id', ws).gte('recorded_at', range.startISO).lt('recorded_at', range.endISO).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('incidents').select('user_id, car_id, work_date')
@@ -124,7 +118,7 @@ export default function Statistics() {
         if (!users.has(id)) {
           users.set(id, {
             id, name: '', days: 0, driverDays: 0, loaderDays: 0, hoursMs: 0, daysWithHours: 0,
-            tips: 0, shortfall: 0, stops: 0, skippedStops: 0, incidents: 0, switches: 0,
+            incidents: 0, switches: 0,
             issues: 0, outside: 0, assignedDays: 0, missedDays: 0, advances: 0, swapRequests: 0,
           })
         }
@@ -201,16 +195,6 @@ export default function Statistics() {
         }
       }
 
-      for (const s of stops ?? []) {
-        if (!s.recorded_by) continue
-        const row = u(s.recorded_by)
-        row.stops++
-        if (s.status === 'skipped') row.skippedStops++
-        const tip = Number(s.tip ?? 0)
-        if (tip > 0) row.tips += tip
-        if (tip < 0) row.shortfall += -tip
-      }
-
       const incidentsByCar = new Map<string, number>()
       for (const i of incidents ?? []) {
         if (i.user_id) u(i.user_id).incidents++
@@ -248,9 +232,9 @@ export default function Statistics() {
         .sort((a, b) => b.daysUsed - a.daysUsed || a.plate.localeCompare(b.plate))
 
       // Aki bármilyen nyomot hagyott az időszakban (nap, beosztás, esemény,
-      // hiba, stop, előleg), az látszik — különben az összesítők nem stimmelnének
+      // hiba, előleg), az látszik — különben az összesítők nem stimmelnének
       const userRows = [...users.values()].filter(
-        (r) => r.days > 0 || r.assignedDays > 0 || r.incidents > 0 || r.issues > 0 || r.stops > 0 || r.advances > 0,
+        (r) => r.days > 0 || r.assignedDays > 0 || r.incidents > 0 || r.issues > 0 || r.advances > 0,
       )
         .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name))
 
@@ -263,8 +247,6 @@ export default function Statistics() {
     await exportRowsToXlsx(`statisztika_${range.start}_${range.endExclusive}.xlsx`, 'Statisztika', data.userRows.map((r) => ({
       'Munkatárs': r.name, 'Napok': r.days, 'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays,
       'Órák': Math.round((r.hoursMs / 3600000) * 10) / 10,
-      'Borravaló': r.tips, 'Borravaló/nap': r.days ? Math.round(r.tips / r.days) : 0,
-      'Kp-hiány': r.shortfall, 'Stopok': r.stops, 'Kihagyott stop': r.skippedStops,
       'Esemény': r.incidents, 'Autócsere': r.switches, 'Hibabejelentés': r.issues,
       'Telephelyen kívül': r.outside, 'Kihagyott beosztás': r.missedDays,
       'Előleg': r.advances, 'Cserekérés': r.swapRequests,
@@ -276,17 +258,12 @@ export default function Statistics() {
     if (!data || data.userRows.length === 0) return null
     const withDays = data.userRows.filter((r) => r.days > 0)
     const mostDays = withDays[0] ?? null
-    const tipsEligible = withDays.filter((r) => r.days >= 3)
-    const bestTips = tipsEligible.length
-      ? [...tipsEligible].sort((a, b) => b.tips / b.days - a.tips / a.days)[0]
-      : null
     const mostIncidents = [...withDays].sort((a, b) => b.incidents - a.incidents)[0]
     const problemCar = data.carRows.length
       ? [...data.carRows].sort((a, b) => (b.issues + b.switchedAway) - (a.issues + a.switchedAway))[0]
       : null
     return {
       mostDays,
-      bestTips,
       mostIncidents: mostIncidents && mostIncidents.incidents > 0 ? mostIncidents : null,
       problemCar: problemCar && problemCar.issues + problemCar.switchedAway > 0 ? problemCar : null,
     }
@@ -296,7 +273,7 @@ export default function Statistics() {
     if (!data) return null
     return {
       days: data.userRows.reduce((s, r) => s + r.days, 0),
-      tips: data.userRows.reduce((s, r) => s + r.tips, 0),
+      issues: data.userRows.reduce((s, r) => s + r.issues, 0),
       incidents: data.userRows.reduce((s, r) => s + r.incidents, 0),
       fuel: data.carRows.reduce((s, c) => s + c.fuelCost, 0),
     }
@@ -320,7 +297,7 @@ export default function Statistics() {
         {totals && (totals.days > 0 || totals.fuel > 0) && (
           <div className="grid-2" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
             <div><div className="tiny muted">Munkanap (fő×nap)</div><div className="num num-lg">{totals.days}</div></div>
-            <div><div className="tiny muted">Borravaló</div><div className="num num-lg" style={{ color: totals.tips > 0 ? 'var(--success)' : undefined }}>{formatHuf(totals.tips)}</div></div>
+            <div><div className="tiny muted">Hibabejelentés</div><div className="num num-lg" style={{ color: totals.issues > 0 ? 'var(--warning)' : undefined }}>{totals.issues}</div></div>
             <div><div className="tiny muted">Esemény / baleset</div><div className="num num-lg" style={{ color: totals.incidents > 0 ? 'var(--warning)' : undefined }}>{totals.incidents}</div></div>
             <div><div className="tiny muted">Üzemanyag</div><div className="num num-lg">{formatHuf(totals.fuel)}</div></div>
           </div>
@@ -342,14 +319,6 @@ export default function Statistics() {
             <div className="between small">
               <span className="muted">Legtöbbet dolgozott</span>
               <span>{highlights.mostDays.name} · {highlights.mostDays.days} nap</span>
-            </div>
-          )}
-          {highlights.bestTips && (
-            <div className="between small">
-              <span className="muted">Legjobb borravaló-átlag</span>
-              <span style={{ color: 'var(--success)' }}>
-                {highlights.bestTips.name} · {formatHuf(Math.round(highlights.bestTips.tips / highlights.bestTips.days))}/nap
-              </span>
             </div>
           )}
           {highlights.mostIncidents && (
@@ -385,27 +354,11 @@ export default function Statistics() {
                   <span>{r.daysWithHours > 0 ? `${formatHours(Math.round(r.hoursMs / r.daysWithHours))}/nap` : '—'}</span>
                 </div>
                 <div className="between">
-                  <span className="muted">Borravaló</span>
-                  <span style={{ color: r.tips > 0 ? 'var(--success)' : undefined }}>
-                    {formatHuf(r.tips)}{r.days > 0 && r.tips > 0 ? ` (${formatHuf(Math.round(r.tips / r.days))}/nap)` : ''}
-                  </span>
-                </div>
-                <div className="between">
-                  <span className="muted">Stopok</span>
-                  <span>{r.stops}{r.days > 0 && r.stops > 0 ? ` (${Math.round((r.stops / r.days) * 10) / 10}/nap)` : ''}</span>
-                </div>
-                <div className="between">
                   <span className="muted">Esemény / baleset</span>
                   <span style={{ color: r.incidents > 0 ? 'var(--warning)' : 'inherit' }}>
                     {r.incidents}{r.incidents > 0 && r.days > 0 ? ` (≈1 / ${Math.round(r.days / r.incidents)} nap)` : ''}
                   </span>
                 </div>
-                {r.shortfall > 0 && (
-                  <div className="between"><span className="muted">Kp-hiány</span><span style={{ color: 'var(--danger)' }}>{formatHuf(r.shortfall)}</span></div>
-                )}
-                {r.skippedStops > 0 && (
-                  <div className="between"><span className="muted">Kihagyott stop</span><span style={{ color: 'var(--warning)' }}>{r.skippedStops}</span></div>
-                )}
                 {r.switches > 0 && (
                   <div className="between"><span className="muted">Autócsere menet közben</span><span>{r.switches}</span></div>
                 )}

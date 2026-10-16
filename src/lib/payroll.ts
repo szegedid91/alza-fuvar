@@ -43,8 +43,6 @@ export interface PayrollRow {
   // lenne annál, aki több munkaterületen dolgozott
   driverPay: number
   loaderPay: number
-  tips: number // csak a pozitív borravalók összege
-  shortfall: number // készpénz-hiányok összege (pozitív számként)
   advances: number
   deductions: number
   base: number

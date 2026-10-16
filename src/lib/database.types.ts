@@ -1127,185 +1127,6 @@ export type Database = {
           },
         ]
       }
-      route_stops: {
-        Row: {
-          address_override: string | null
-          city: string | null
-          cod_amount: number | null
-          created_at: string
-          display_order: number | null
-          event_note: string | null
-          expected_amount: number | null
-          geocoded: boolean
-          id: string
-          is_cash: boolean
-          lat: number | null
-          lng: number | null
-          note: string | null
-          payment_method: string | null
-          phone: string | null
-          planned_time: string | null
-          postal_code: string | null
-          received_amount: number | null
-          recorded_at: string | null
-          recorded_by: string | null
-          seq: number | null
-          sheet_name: string | null
-          skip_reason: string | null
-          status: Database["public"]["Enums"]["stop_status"]
-          street: string | null
-          time_window: string | null
-          tip: number | null
-          upload_id: string
-          weight: number | null
-          workspace_id: string
-        }
-        Insert: {
-          address_override?: string | null
-          city?: string | null
-          cod_amount?: number | null
-          created_at?: string
-          display_order?: number | null
-          event_note?: string | null
-          expected_amount?: number | null
-          geocoded?: boolean
-          id?: string
-          is_cash?: boolean
-          lat?: number | null
-          lng?: number | null
-          note?: string | null
-          payment_method?: string | null
-          phone?: string | null
-          planned_time?: string | null
-          postal_code?: string | null
-          received_amount?: number | null
-          recorded_at?: string | null
-          recorded_by?: string | null
-          seq?: number | null
-          sheet_name?: string | null
-          skip_reason?: string | null
-          status?: Database["public"]["Enums"]["stop_status"]
-          street?: string | null
-          time_window?: string | null
-          tip?: number | null
-          upload_id: string
-          weight?: number | null
-          workspace_id: string
-        }
-        Update: {
-          address_override?: string | null
-          city?: string | null
-          cod_amount?: number | null
-          created_at?: string
-          display_order?: number | null
-          event_note?: string | null
-          expected_amount?: number | null
-          geocoded?: boolean
-          id?: string
-          is_cash?: boolean
-          lat?: number | null
-          lng?: number | null
-          note?: string | null
-          payment_method?: string | null
-          phone?: string | null
-          planned_time?: string | null
-          postal_code?: string | null
-          received_amount?: number | null
-          recorded_at?: string | null
-          recorded_by?: string | null
-          seq?: number | null
-          sheet_name?: string | null
-          skip_reason?: string | null
-          status?: Database["public"]["Enums"]["stop_status"]
-          street?: string | null
-          time_window?: string | null
-          tip?: number | null
-          upload_id?: string
-          weight?: number | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "route_stops_recorded_by_fkey"
-            columns: ["recorded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_stops_upload_id_fkey"
-            columns: ["upload_id"]
-            isOneToOne: false
-            referencedRelation: "route_uploads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_stops_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      route_uploads: {
-        Row: {
-          car_id: string | null
-          created_at: string
-          end_poi: string | null
-          file_name: string | null
-          id: string
-          start_poi: string | null
-          uploaded_by: string | null
-          work_date: string
-          workspace_id: string
-        }
-        Insert: {
-          car_id?: string | null
-          created_at?: string
-          end_poi?: string | null
-          file_name?: string | null
-          id?: string
-          start_poi?: string | null
-          uploaded_by?: string | null
-          work_date: string
-          workspace_id: string
-        }
-        Update: {
-          car_id?: string | null
-          created_at?: string
-          end_poi?: string | null
-          file_name?: string | null
-          id?: string
-          start_poi?: string | null
-          uploaded_by?: string | null
-          work_date?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "route_uploads_car_id_fkey"
-            columns: ["car_id"]
-            isOneToOne: false
-            referencedRelation: "cars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_uploads_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_uploads_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       shifts: {
         Row: {
           car_id: string
@@ -1647,7 +1468,6 @@ export type Database = {
       inspection_reason: "day9" | "driver_change" | "manual"
       inspection_view: "front" | "rear" | "left" | "right" | "interior"
       pay_type: "daily" | "monthly"
-      stop_status: "pending" | "done" | "skipped"
       swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
       user_status: "pending" | "active" | "disabled"
@@ -1784,7 +1604,6 @@ export const Constants = {
       inspection_reason: ["day9", "driver_change", "manual"],
       inspection_view: ["front", "rear", "left", "right", "interior"],
       pay_type: ["daily", "monthly"],
-      stop_status: ["pending", "done", "skipped"],
       swap_status: ["pending", "approved", "rejected"],
       user_role: ["driver", "loader", "manager", "admin", "crew"],
       user_status: ["pending", "active", "disabled"],
