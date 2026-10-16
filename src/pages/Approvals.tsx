@@ -8,6 +8,8 @@ import { roleLabel, formatDateTime } from '../lib/labels'
 import { sendPush } from '../lib/push'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import ConfirmButton from '../components/ConfirmButton'
+import { telHref } from '../lib/names'
 
 type Profile = Tables<'profiles'>
 type AssignRole = Enums<'user_role'>
@@ -42,7 +44,7 @@ export default function Approvals() {
         <div className="empty">
           <span className="ico"><Icon name="user-check" size={40} /></span>
           Nincs függőben lévő regisztráció.
-          <div className="tiny muted" style={{ marginTop: 6 }}>Új regisztrációról értesítést kapsz.</div>
+          <div className="tiny muted" style={{ marginTop: 6 }}>Új regisztrációról push-értesítést kapsz. Az elutasítottak a Tagok oldalon „letiltott" állapotban vannak, onnan visszaengedhetők.</div>
         </div>
       )}
       {pending?.map((u) => (
@@ -106,22 +108,27 @@ function PendingCard({
 
   return (
     <div className="card stack primary">
-      <div className="between">
-        <div className="row" style={{ gap: 12, minWidth: 0 }}>
-          <div
-            style={{
-              width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
-              background: 'var(--primary-ghost)', color: 'var(--primary)',
-            }}
-          >
-            <Icon name="user" size={20} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div className="name" style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.full_name || user.email}</div>
-            <div className="muted small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
-          </div>
+      {/* Telefonon szűk a hely: a dátum és a telefon a név ALÁ kerül, nem mellé */}
+      <div className="row" style={{ gap: 12, minWidth: 0, alignItems: 'flex-start' }}>
+        <div
+          style={{
+            width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
+            background: 'var(--primary-ghost)', color: 'var(--primary)',
+          }}
+        >
+          <Icon name="user" size={20} />
         </div>
-        <span className="tiny muted" style={{ flexShrink: 0 }}>{formatDateTime(user.created_at)}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="name" style={{ fontSize: 16, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.full_name || user.email}</div>
+          <div className="muted small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
+          <div className="tiny muted">Regisztrált: {formatDateTime(user.created_at)}</div>
+          {/* Telefon, ha megadta — egy koppintással hívható, hogy a vezető ellenőrizze, ki regisztrált */}
+          {user.phone && (
+            telHref(user.phone)
+              ? <a className="small row" href={telHref(user.phone)!} style={{ gap: 4, textDecoration: 'none', marginTop: 2 }}><Icon name="phone" size={14} />{user.phone}</a>
+              : <div className="muted small">{user.phone}</div>
+          )}
+        </div>
       </div>
 
       <div className="grid-2">
@@ -141,9 +148,12 @@ function PendingCard({
 
       {error && <div className="alert error">{error}</div>}
 
-      {/* Az elutasítás letiltott állapotba teszi (a Tagok oldalon visszafordítható) — ezért nem piros */}
+      {/* Az elutasítás letiltott állapotba teszi (a Tagok oldalon visszafordítható) — ezért nem piros,
+          de két koppintás: a két gomb egymás mellett van, a félrekoppintás ne tiltson le senkit */}
       <div className="stop-actions">
-        <button className="btn ghost" disabled={busy} onClick={() => reject.mutate()}>Elutasítás</button>
+        <ConfirmButton className="btn ghost" confirmLabel="Biztos? Elutasítás" disabled={busy} onConfirm={() => { setError(null); reject.mutate() }}>
+          {reject.isPending ? 'Elutasítás…' : 'Elutasítás'}
+        </ConfirmButton>
         <button className="btn" disabled={busy || !workspaceId} onClick={() => { setError(null); approve.mutate() }}>
           <Icon name="check" />{approve.isPending ? 'Jóváhagyás…' : 'Jóváhagyás'}
         </button>
