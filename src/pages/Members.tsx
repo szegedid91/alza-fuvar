@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import type { Enums, Tables } from '../lib/database.types'
 import { roleLabel, statusLabel, formatDateTime } from '../lib/labels'
 import { qrDataUrl } from '../lib/qr'
+import { telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 
@@ -110,7 +112,7 @@ function InviteCard() {
             <div className="card-title" style={{ margin: 0 }}><Icon name="send" />Meghívók</div>
             <div className="tiny muted">{activeCount > 0 ? `${activeCount} aktív meghívó` : 'Hívj meg új munkatársat linkkel vagy QR-kóddal'}</div>
           </div>
-          <button className="btn sm auto" onClick={() => setExpanded(true)}><Icon name="plus" />Új meghívó</button>
+          <button className="btn sm auto" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={() => setExpanded(true)}><Icon name="plus" />Új meghívó</button>
         </div>
       </div>
     )
@@ -146,7 +148,7 @@ function InviteCard() {
       </div>
       {error && <div className="alert error">{error}</div>}
       <button className="btn sm" disabled={create.isPending || !email.trim()} onClick={() => create.mutate()}>
-        ➕ Meghívó létrehozása
+        <Icon name="plus" />Meghívó létrehozása
       </button>
 
       {(invites?.length ?? 0) > 0 && <div className="divider" />}
@@ -167,7 +169,8 @@ function InviteCard() {
                   {copiedId === inv.id ? <><Icon name="check" />Másolva</> : 'Link'}
                 </button>
                 <button className="btn secondary sm" onClick={() => void toggleQr(inv.id)}>
-                  {qrFor === inv.id ? <><Icon name="x" />QR</> : <><Icon name="qr-code" />QR-kód</>}
+                  {/* rövid felirat: a 3 oszlopos rács telefonon két sorba törné a "QR-kód"-ot */}
+                  {qrFor === inv.id ? <><Icon name="x" />QR</> : <><Icon name="qr-code" />QR</>}
                 </button>
                 <button className="btn secondary sm" onClick={() => void shareLink(inv)}><Icon name="upload" />Megosztás</button>
               </div>
@@ -321,9 +324,10 @@ export default function Members() {
     <div className="stack">
 
       {(pendingCount ?? 0) > 0 && (
-        <a href="/jovahagyas" className="alert info" style={{ textDecoration: 'none', display: 'block' }}>
-          {pendingCount} regisztráció vár jóváhagyásra → Jóváhagyás
-        </a>
+        <Link to="/jovahagyas" className="alert info row" style={{ textDecoration: 'none', gap: 8, justifyContent: 'space-between' }}>
+          <span><Icon name="user-check" size={16} style={{ verticalAlign: -3 }} /> {pendingCount} regisztráció vár jóváhagyásra</span>
+          <Icon name="chevron-right" size={16} />
+        </Link>
       )}
 
       <InviteCard />
@@ -356,7 +360,7 @@ export default function Members() {
       {deleteWarn && (
         <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
           <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
-            ⚠️ {deleteWarn.name} törlése adatvesztéssel jár
+            <Icon name="alert-triangle" />{deleteWarn.name} törlése adatvesztéssel jár
           </div>
           <p className="small" style={{ margin: 0 }}>
             Hozzá tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
@@ -370,7 +374,7 @@ export default function Members() {
               disabled={setStatus.isPending}
               onClick={() => { setStatus.mutate({ id: deleteWarn.id, status: 'disabled' }); setDeleteWarn(null) }}
             >
-              🚫 Inkább letiltom
+              <Icon name="ban" />Inkább letiltom
             </button>
           </div>
           <ConfirmButton
@@ -379,16 +383,16 @@ export default function Members() {
             disabled={removeMember.isPending}
             onConfirm={() => removeMember.mutate({ id: deleteWarn.id, force: true })}
           >
-            🗑 Végleges törlés az adataival együtt
+            <Icon name="trash" />Végleges törlés az adataival együtt
           </ConfirmButton>
         </div>
       )}
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
-        <div className="empty"><span className="ico">👥</span>Még nincs jóváhagyott tag ezen a munkaterületen.</div>
+        <div className="empty"><span className="ico"><Icon name="users" size={40} /></span>Még nincs jóváhagyott tag ezen a munkaterületen.</div>
       )}
       {!isLoading && all.length > 0 && visible.length === 0 && (
-        <div className="empty"><span className="ico">🔍</span>Nincs találat a szűrésre.</div>
+        <div className="empty"><span className="ico"><Icon name="search" size={40} /></span>Nincs találat a szűrésre.</div>
       )}
 
       {visible.length > 0 && (
@@ -431,6 +435,15 @@ export default function Members() {
                 </button>
                 {open && (
                   <div className="grid-2" style={{ padding: '4px 10px 12px' }}>
+                    {/* Telefon — egy koppintással hívható (párosok szervezésénél, hiányzásnál) */}
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Telefon</label>
+                      {m.phone
+                        ? (telHref(m.phone)
+                          ? <a className="small row" href={telHref(m.phone)!} style={{ gap: 6, textDecoration: 'none' }}><Icon name="phone" size={16} />{m.phone}</a>
+                          : <div className="small">{m.phone}</div>)
+                        : <div className="tiny muted">Nincs megadva — a munkatárs a Profil oldalán adhatja meg.</div>}
+                    </div>
                     <div className="field">
                       <label>Szerep</label>
                       <select
