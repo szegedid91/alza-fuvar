@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
-import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber } from '../lib/labels'
+import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber, isCrewRole } from '../lib/labels'
+import { resolveNames } from '../lib/names'
+import ConfirmButton from '../components/ConfirmButton'
 import type { Enums } from '../lib/database.types'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
@@ -24,6 +26,12 @@ export default function Adjustments() {
   const [type, setType] = useState<Enums<'adjustment_type'>>('advance')
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // A lista alapból a kiválasztott munkatársra szűr (előleg rögzítésekor
+  // látszik, mennyit vett fel eddig a hónapban) — egy koppintással az összes
+  const [showAll, setShowAll] = useState(false)
+
+  // Csak munkatársnak van napidíjas bére — a vezetők nem kaphatnak előleget/levonást itt
+  const crew = (members ?? []).filter((m) => isCrewRole(m.role))
 
   const { data: list } = useQuery({
     queryKey: ['adjustments', currentWorkspaceId],
@@ -32,10 +40,23 @@ export default function Adjustments() {
       const { data, error } = await supabase.from('adjustments')
         .select('*, user:profiles!adjustments_user_id_fkey(full_name)')
         .eq('workspace_id', currentWorkspaceId!)
-        .order('work_date', { ascending: false }).limit(30)
+        .order('work_date', { ascending: false }).order('created_at', { ascending: false }).limit(60)
       if (error) throw error
-      return data ?? []
+      const rows = data ?? []
+      // Ki rögzítette — a profiles-t a névfeloldó RPC-n át (csak nevek)
+      const names = await resolveNames(rows.map((r) => r.created_by))
+      return rows.map((r) => ({ ...r, _by: r.created_by ? names[r.created_by] ?? null : null }))
     },
+  })
+
+  // Téves tétel törlése (zárolt hónapban a trigger tiltja — a hibát mutatjuk)
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('adjustments').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => { toast.success('Tétel törölve.'); void qc.invalidateQueries({ queryKey: ['adjustments'] }) },
+    onError: (e) => toast.error('Nem törölhető: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
   const add = useMutation({
@@ -71,7 +92,7 @@ export default function Adjustments() {
           <label>Munkatárs</label>
           <select className="select" value={userId} onChange={(e) => setUserId(e.target.value)}>
             <option value="">— válassz —</option>
-            {members?.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+            {crew.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
           </select>
         </div>
         <div className="field">
@@ -107,26 +128,60 @@ export default function Adjustments() {
           <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="pl. előleg készpénzben" />
         </div>
         {error && <div className="alert error">{error}</div>}
-        <button className="btn" disabled={!canSave} onClick={() => add.mutate()}><Icon name="check" />{add.isPending ? 'Mentés…' : 'Rögzítés'}</button>
+        {/* Bért érintő művelet — két koppintás, mint a többi véglegesítésnél */}
+        <ConfirmButton className="btn" confirmLabel={`Biztos? ${type === 'advance' ? 'Előleg' : 'Levonás'} rögzítése`} disabled={!canSave} onConfirm={() => add.mutate()}>
+          <Icon name="check" />{add.isPending ? 'Mentés…' : 'Rögzítés'}
+        </ConfirmButton>
       </div>
 
-      {(list?.length ?? 0) > 0 && (
-        <div className="card stack">
-          <div className="card-title"><Icon name="history" />Legutóbbi tételek</div>
-          {list!.map((a) => (
-            <div key={a.id} className="between" style={{ gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <div className="small" style={{ fontWeight: 600 }}>{(a.user as unknown as { full_name: string | null } | null)?.full_name ?? 'Ismeretlen'}</div>
-                <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatDate(a.work_date)}{a.reason ? ` · ${a.reason}` : ''}</div>
-              </div>
-              <span className={`badge ${a.type === 'advance' ? 'money' : 'danger'}`} style={{ flexShrink: 0 }}>
-                {a.type === 'deduction' ? '−' : ''}{formatHuf(Number(a.amount))}
-                <span className="muted" style={{ fontWeight: 500 }}>{adjustmentTypeLabel[a.type].toLowerCase()}</span>
-              </span>
+      {(() => {
+        const all = list ?? []
+        const selected = userId && !showAll ? crew.find((m) => m.id === userId) : null
+        const shown = selected ? all.filter((a) => a.user_id === userId) : all
+        // A kiválasztott munkatárs e havi előlege — rögzítés előtt jó látni
+        const ym = todayISO().slice(0, 7)
+        const monthAdv = selected ? shown.filter((a) => a.type === 'advance' && a.work_date.startsWith(ym)).reduce((x, a) => x + Number(a.amount), 0) : 0
+        if (all.length === 0) return null
+        return (
+          <div className="card stack">
+            <div className="between">
+              <div className="card-title" style={{ margin: 0 }}><Icon name="history" />{selected ? 'Tételei' : 'Legutóbbi tételek'}</div>
+              {userId && (
+                <button className="link-btn" type="button" style={{ width: 'auto', fontSize: 13, padding: '6px 8px' }} onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? 'Csak a kiválasztott' : 'Összes munkatárs'}
+                </button>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+            {selected && (
+              <div className="tiny muted">
+                {selected.full_name || selected.email} · ebben a hónapban felvett előleg: <strong>{formatHuf(monthAdv)}</strong>
+              </div>
+            )}
+            {shown.length === 0 && <div className="tiny muted">Nincs rögzített tétel ennél a munkatársnál.</div>}
+            {shown.map((a) => (
+              <div key={a.id} className="between" style={{ gap: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 600 }}>{(a.user as unknown as { full_name: string | null } | null)?.full_name ?? 'Ismeretlen'}</div>
+                  <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {formatDate(a.work_date)}{a.reason ? ` · ${a.reason}` : ''}{a._by ? ` · ${a._by}` : ''}
+                  </div>
+                </div>
+                <div className="row" style={{ gap: 4, flexShrink: 0 }}>
+                  <span className={`badge ${a.type === 'advance' ? 'money' : 'danger'}`}>
+                    {a.type === 'deduction' ? '−' : ''}{formatHuf(Number(a.amount))}
+                    <span className="muted" style={{ fontWeight: 500 }}>{adjustmentTypeLabel[a.type].toLowerCase()}</span>
+                  </span>
+                  <ConfirmButton className="btn ghost sm" confirmLabel="Törlés?" title="Tétel törlése" disabled={remove.isPending}
+                    style={{ minHeight: 34, padding: '4px 8px' }}
+                    onConfirm={() => remove.mutate(a.id)}>
+                    <Icon name="trash" size={16} />
+                  </ConfirmButton>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }
