@@ -22,6 +22,10 @@ export default function PhotoThumb({ path, alt = '', src }: { path: string | nul
   }, [isSuccess, fetched, useFull, src])
   const url = src ?? fetched
   if (!path) return <div className="thumb thumb-empty"><span className="tiny">nincs kép</span></div>
+  // A teljes kép sem írható alá (a fájlt a kép-megőrzés már törölte): ne pörögjön örökké
+  if (useFull && isSuccess && fetched === null && src === undefined) {
+    return <div className="thumb thumb-empty"><span className="tiny muted" style={{ textAlign: 'center', padding: 4 }}>a kép már törölve (megőrzési idő)</span></div>
+  }
   if (!url) return <div className="thumb thumb-empty"><div className="spinner" style={{ width: 20, height: 20 }} /></div>
   return (
     <img
