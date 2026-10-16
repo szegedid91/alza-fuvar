@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { resolveNames } from '../lib/names'
-import { todayISO, formatDate, formatDateTime, carIssueStatusLabel } from '../lib/labels'
+import { todayISO, formatDate, carIssueStatusLabel } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
@@ -30,6 +30,7 @@ type RoleSwap = {
   shift: { work_date: string; car_id: string } | null
 }
 type Issue = { id: string; car_id: string; user_id: string; note: string | null; status: Enums<'car_issue_status'>; created_at: string }
+type Cleaning = { id: string; car_id: string; user_id: string; work_date: string; created_at: string }
 
 function isoDaysAgo(n: number): string {
   // Naptári nappal számolunk (nem 24 órával) — óraátállításnál sem csúszik el
@@ -61,7 +62,7 @@ export default function History() {
     enabled: !!currentWorkspaceId && from <= to,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [carsRes, checkins, incidents, issues, roleSwaps] = await Promise.all([
+      const [carsRes, checkins, incidents, issues, roleSwaps, cleanings] = await Promise.all([
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll<CheckIn>((f, t) => supabase.from('check_ins')
           .select('car_id, prev_car_id, user_id, work_date, checked_in_at, checked_out_at, switch_reason')
@@ -84,6 +85,10 @@ export default function History() {
           .eq('status', 'approved')
           .gte('shifts.work_date', from).lte('shifts.work_date', to)
           .order('id').range(f, t)),
+        fetchAll<Cleaning>((f, t) => supabase.from('cleanings')
+          .select('id, car_id, user_id, work_date, created_at')
+          .eq('workspace_id', ws).gte('work_date', from).lte('work_date', to)
+          .order('created_at').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
       const names = await resolveNames([
@@ -91,8 +96,12 @@ export default function History() {
         ...incidents.map((i) => i.user_id),
         ...issues.map((i) => i.user_id),
         ...roleSwaps.flatMap((s) => [s.requested_by, s.partner_id]),
+        ...cleanings.map((c) => c.user_id),
       ])
-      return { cars: carsRes.data ?? [], checkins, incidents, issues, roleSwaps, names }
+      // Autók kategória, azon belül rendszám szerint — a szűrő listája így olvasható
+      const catName = (c: { category: unknown }) => (c.category as { name: string } | null)?.name ?? ''
+      const cars = [...(carsRes.data ?? [])].sort((a, b) => catName(a).localeCompare(catName(b), 'hu') || a.plate.localeCompare(b.plate, 'hu', { sensitivity: 'base' }))
+      return { cars, checkins, incidents, issues, roleSwaps, cleanings, names }
     },
   })
 
@@ -117,6 +126,7 @@ export default function History() {
     const checkins = data.checkins.filter((c) => (okCar(c.car_id) || okCar(c.prev_car_id)) && okPerson(c.user_id))
     const incidents = data.incidents.filter((i) => okCar(i.car_id) && okPerson(i.user_id))
     const issues = data.issues.filter((i) => okCar(i.car_id) && okPerson(i.user_id))
+    const cleanings = (data.cleanings ?? []).filter((c) => okCar(c.car_id) && okPerson(c.user_id))
     const switches = checkins.filter((c) => c.switch_reason != null)
     // Sofőr ↔ rakodó cserék: a kérő VAGY a társ számít "érintettnek"
     const roleSwaps = (data.roleSwaps ?? []).filter(
@@ -139,11 +149,12 @@ export default function History() {
       roleSwaps: { id: string; who: string; partner: string | null; carId: string | null; at: string }[]
       incidents: Incident[]
       issues: Issue[]
+      cleanings: Cleaning[]
     }
     const dayMap = new Map<string, DayGroup>()
     const day = (date: string): DayGroup => {
       let g = dayMap.get(date)
-      if (!g) { g = { date, usage: [], switches: [], timelines: [], roleSwaps: [], incidents: [], issues: [] }; dayMap.set(date, g) }
+      if (!g) { g = { date, usage: [], switches: [], timelines: [], roleSwaps: [], incidents: [], issues: [], cleanings: [] }; dayMap.set(date, g) }
       return g
     }
 
@@ -196,6 +207,7 @@ export default function History() {
 
     for (const i of incidents) day(i.work_date).incidents.push(i)
     for (const i of issues) day(localDateOf(i.created_at)).issues.push(i)
+    for (const c of cleanings) day(c.work_date).cleanings.push(c)
 
     const days = [...dayMap.values()].sort((a, b) => b.date.localeCompare(a.date))
 
@@ -207,10 +219,12 @@ export default function History() {
         roleSwapCount: roleSwaps.length,
         incidentCount: incidents.length,
         issueCount: issues.length,
+        cleanCount: cleanings.length,
         reasons: [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]),
       },
       people: [...new Set([
         ...checkins.map((c) => c.user_id), ...incidents.map((i) => i.user_id), ...issues.map((i) => i.user_id),
+        ...cleanings.map((c) => c.user_id),
         ...(data.roleSwaps ?? []).flatMap((s) => [s.requested_by, s.partner_id]).filter((x): x is string => !!x),
       ])]
         .map((id) => ({ id, name: data.names[id] ?? 'munkatárs' }))
@@ -224,7 +238,7 @@ export default function History() {
   return (
     <div className="stack">
       <h2>Előzmények</h2>
-      <p className="small muted">Visszamenőleg: melyik napon melyik autók mentek, autócserék és okaik, események, hibák.</p>
+      <p className="small muted">Visszamenőleg: melyik napon melyik autók mentek, autócserék és okaik, takarítások, események, hibák.</p>
 
       <div className="card stack" style={{ gap: 10 }}>
         <div className="grid-2">
@@ -267,6 +281,7 @@ export default function History() {
             <option value="roleswap">Sofőr ↔ rakodó cserék</option>
             <option value="incident">Események / balesetek</option>
             <option value="issue">Autó-hibák</option>
+            <option value="clean">Takarítások</option>
           </select>
           {(filterCar || filterPerson || filterType) && (
             <button className="btn ghost sm" onClick={() => { setFilterCar(''); setFilterPerson(''); setFilterType('') }}><Icon name="x" />Szűrők törlése</button>
@@ -285,6 +300,7 @@ export default function History() {
             <span className={`badge ${view.stats.roleSwapCount ? 'primary' : ''}`}><Icon name="users" />{view.stats.roleSwapCount} szerepcsere</span>
             <span className={`badge ${view.stats.incidentCount ? 'warning' : ''}`}><Icon name="alert-triangle" />{view.stats.incidentCount} esemény</span>
             <span className="badge"><Icon name="wrench" />{view.stats.issueCount} hiba</span>
+            <span className={`badge ${view.stats.cleanCount ? 'success' : ''}`}><Icon name="sparkles" />{view.stats.cleanCount} takarítás</span>
           </div>
           {view.stats.reasons.length > 0 && (
             <div className="tiny muted">
@@ -310,7 +326,8 @@ export default function History() {
           (show('switch') && g.switches.length > 0) ||
           (show('roleswap') && g.roleSwaps.length > 0) ||
           (show('incident') && g.incidents.length > 0) ||
-          (show('issue') && g.issues.length > 0)
+          (show('issue') && g.issues.length > 0) ||
+          (show('clean') && g.cleanings.length > 0)
         if (!hasContent) return null
         return (
           <div key={g.date} className="card stack" style={{ gap: 8 }}>
@@ -365,9 +382,16 @@ export default function History() {
             {show('issue') && g.issues.map((i) => (
               <div key={i.id} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--border)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  <Icon name="wrench" size={14} style={{ verticalAlign: -2 }} /> Autó-hiba — {carLabel(i.car_id)} · {nm(i.user_id)} · {formatDateTime(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
+                  <Icon name="wrench" size={14} style={{ verticalAlign: -2 }} /> Autó-hiba — {carLabel(i.car_id)} · {nm(i.user_id)} · {t(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
+              </div>
+            ))}
+
+            {show('clean') && g.cleanings.map((c) => (
+              <div key={c.id} className="tiny row" style={{ gap: 6, paddingLeft: 13 }}>
+                <Icon name="sparkles" size={14} style={{ color: 'var(--success)' }} />
+                <span><strong>Takarítás</strong> — {carLabel(c.car_id)} · {nm(c.user_id)} · {t(c.created_at)}</span>
               </div>
             ))}
           </div>
