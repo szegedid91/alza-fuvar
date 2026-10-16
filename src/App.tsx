@@ -20,6 +20,7 @@ const Scan = lazy(() => import('./pages/Scan'))
 const Inspection = lazy(() => import('./pages/Inspection'))
 const Fuel = lazy(() => import('./pages/Fuel'))
 const Incident = lazy(() => import('./pages/Incident'))
+const Cleaning = lazy(() => import('./pages/Cleaning'))
 const MySchedule = lazy(() => import('./pages/MySchedule'))
 const CarIssues = lazy(() => import('./pages/CarIssues'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -99,6 +100,7 @@ export default function App() {
           {isCrew && <Route path="/ellenorzes" element={<Inspection />} />}
           {isCrew && <Route path="/tankolas" element={<Fuel />} />}
           {isCrew && <Route path="/esemeny" element={<Incident />} />}
+          {isCrew && <Route path="/takaritas" element={<Cleaning />} />}
           {isCrew && <Route path="/beosztas" element={<MySchedule />} />}
           {(isCrew || isManagerOrAdmin) && <Route path="/hibak" element={<CarIssues />} />}
 

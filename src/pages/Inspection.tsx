@@ -160,7 +160,9 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
   )
 }
 
-function CleaningCard({ car, date }: { car: Car; date: string }) {
+// Takarítás: önálló oldalon (/takaritas) ÉS az ellenőrzés alján is elérhető.
+// Az autó MAI takarításait mutatja (a társét is) — párosnál így látszik, ki csinálta.
+export function CleaningCard({ car, date }: { car: Car; date: string }) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
@@ -174,7 +176,9 @@ function CleaningCard({ car, date }: { car: Car; date: string }) {
       const { data, error } = await supabase.from('cleanings').select('*')
         .eq('car_id', car.id).eq('work_date', date).order('created_at', { ascending: false })
       if (error) throw error
-      return data ?? []
+      const rows = data ?? []
+      const names = await resolveNames(rows.map((r) => r.user_id))
+      return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null }))
     },
   })
 
@@ -203,12 +207,19 @@ function CleaningCard({ car, date }: { car: Car; date: string }) {
       {(cleaning?.length ?? 0) > 0 ? (
         <div className="list">
           {cleaning!.map((c) => (
-            <div key={c.id} className="between">
-              <span className="badge success"><Icon name="check" />Kész</span>
-              <span className="tiny muted">{formatDateTime(c.created_at)}</span>
+            <div key={c.id} className="between" style={{ gap: 8 }}>
+              <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                <span className="badge success"><Icon name="check" />Kész</span>
+                <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c._name ?? 'Ismeretlen'}{c.user_id === profile?.id ? <span className="tiny muted"> (te)</span> : null}
+                </span>
+              </span>
+              {/* mai esemény: elég az óra:perc — a dátum csak helyet foglal a név elől */}
+              <span className="tiny muted" style={{ flexShrink: 0 }}>{new Date(c.created_at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ))}
-          <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}><Icon name="plus" />Újabb takarítás rögzítése</button>
+          <p className="tiny muted" style={{ margin: 0 }}>A vezetők a beosztás-naptárban látják, ki és mikor takarított.</p>
+          <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}><Icon name="plus" />{busy ? 'Mentés…' : 'Újabb takarítás rögzítése'}</button>
         </div>
       ) : (
         <>

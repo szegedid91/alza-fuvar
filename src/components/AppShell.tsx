@@ -18,7 +18,7 @@ interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 // a CSS-ben rejtve) — görgetés közben is látszik, hol vagy.
 const ROUTE_TITLES: Record<string, string> = {
   '/profil': 'Profil', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
-  '/esemeny': 'Esemény / baleset', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
+  '/esemeny': 'Esemény / baleset', '/takaritas': 'Takarítás', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
   '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
   '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
   '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',

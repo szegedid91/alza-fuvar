@@ -25,6 +25,7 @@ export default function Home() {
   const crewLinks: HubItem[] = [
     { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
     { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
+    { to: '/takaritas', icon: 'sparkles', title: 'Takarítás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
   ]
 
