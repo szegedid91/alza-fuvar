@@ -9,7 +9,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory } from '../lib/calendar'
 import { submitNow } from '../lib/outbox'
 import { resolveNames } from '../lib/names'
-import { carIssueStatusLabel, formatDateTime, isCrewRole, todayISO } from '../lib/labels'
+import { carIssueStatusLabel, formatDateTime, formatDate, isCrewRole, todayISO } from '../lib/labels'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
 import PhotoThumb from '../components/PhotoThumb'
 import ConfirmButton from '../components/ConfirmButton'
@@ -30,6 +30,7 @@ export default function CarIssues() {
   const [carId, setCarId] = useState('')
   // Vezetői lista-szűrő: alapból a még nem megoldott hibák
   const [statusFilter, setStatusFilter] = useState<'active' | 'resolved' | 'all'>('active')
+  const [carFilter, setCarFilter] = useState('')
   const [note, setNote] = useState('')
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null)
   const [busy, setBusy] = useState(false)
@@ -49,8 +50,8 @@ export default function CarIssues() {
         .order('created_at', { ascending: false })
         .limit(40)
       const rows = (data ?? []) as unknown as (Issue & { car: { plate: string } | null })[]
-      const names = await resolveNames(rows.map((r) => r.user_id))
-      return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null }))
+      const names = await resolveNames([...rows.map((r) => r.user_id), ...rows.map((r) => r.resolved_by)])
+      return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null, _resolver: r.resolved_by ? names[r.resolved_by] ?? null : null }))
     },
   })
 
@@ -63,7 +64,7 @@ export default function CarIssues() {
       }).eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['car-issues'] }),
+    onSuccess: (_d, v) => { toast.success(v.status === 'resolved' ? 'Megoldva — lekerült a nyitott hibák közül.' : v.status === 'open' ? 'Újranyitva.' : 'Folyamatban.'); void qc.invalidateQueries({ queryKey: ['car-issues'] }) },
     onError: (e) => setMsg('Hiba: az állapot mentése nem sikerült — ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
@@ -107,6 +108,7 @@ export default function CarIssues() {
   // Crew csak a sajátját (mai) látja — ott nincs szűrő; vezetőnél a nyitottak elöl
   const shown = !isManagerOrAdmin ? (issues ?? []) : (issues ?? [])
     .filter((i) => statusFilter === 'all' ? true : statusFilter === 'resolved' ? i.status === 'resolved' : i.status !== 'resolved')
+    .filter((i) => !carFilter || i.car_id === carFilter)
     .slice()
     .sort((a, b) => (a.status === 'resolved' ? 1 : 0) - (b.status === 'resolved' ? 1 : 0))
 
@@ -114,10 +116,10 @@ export default function CarIssues() {
     <div className="stack">
       <h2>Autó-hibák — {currentWorkspace?.name}</h2>
 
-      {isCrew && (
+      {(isCrew || isManagerOrAdmin) && (
         <div className="card stack primary">
-          <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Hiba bejelentése</div>
-          <p className="tiny muted" style={{ margin: 0 }}>A menedzser azonnal látja, és követi a javítást — a fotó segít, de nem kötelező.</p>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />{isManagerOrAdmin ? 'Hiba rögzítése' : 'Hiba bejelentése'}</div>
+          <p className="tiny muted" style={{ margin: 0 }}>{isManagerOrAdmin ? 'Vezetőként is rögzíthetsz hibát (pl. szemle vagy szerviz után) — ugyanide kerül, mint a munkatársak bejelentései.' : 'A menedzser azonnal látja, és követi a javítást — a fotó segít, de nem kötelező.'}</p>
           <div className="field">
             <label>Autó</label>
             <select className="select" value={effectiveCarId} onChange={(e) => setCarId(e.target.value)}>
@@ -132,7 +134,7 @@ export default function CarIssues() {
                 </optgroup>
               ))}
             </select>
-            {!today?.car && <div className="tiny muted" style={{ marginTop: 4 }}>Nincs mai becsekkolás — válaszd ki, melyik autóról van szó.</div>}
+            {!today?.car && isCrew && <div className="tiny muted" style={{ marginTop: 4 }}>Nincs mai becsekkolás — válaszd ki, melyik autóról van szó.</div>}
           </div>
           <div className="field">
             <label>Mi a probléma? *</label>
@@ -195,6 +197,16 @@ export default function CarIssues() {
               style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
               onClick={() => setStatusFilter(key)}>{label}</button>
           ))}
+          {/* Autó-szűrő: egy autó karbantartási előzménye egyben */}
+          <select className="select" aria-label="Autó" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}
+            style={{ minHeight: 32, padding: '2px 8px', fontSize: 12, width: 'auto', maxWidth: 180, borderRadius: 999 }}>
+            <option value="">Minden autó</option>
+            {groupByCategory(cars ?? [], categories).map((g) => (
+              <optgroup key={g.name} label={g.name}>
+                {g.cars.filter((c) => (issues ?? []).some((i) => i.car_id === c.id)).map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
+              </optgroup>
+            ))}
+          </select>
         </div>
       )}
 
@@ -217,8 +229,21 @@ export default function CarIssues() {
             <span className="tiny muted">{formatDateTime(i.created_at)}</span>
           </div>
           <div className="small">{i.note}</div>
-          <div className="tiny muted">Bejelentette: {i._name ?? 'Ismeretlen'}</div>
+          <div className="tiny muted">
+            Bejelentette: {i._name ?? 'Ismeretlen'}
+            {i.status !== 'resolved' && (() => {
+              const days = Math.floor((Date.now() - new Date(i.created_at).getTime()) / 86400000)
+              return days >= 1 ? <span style={{ color: days >= 14 ? 'var(--danger)' : days >= 3 ? 'var(--warning)' : undefined, fontWeight: 700 }}> · {days} napja nyitott</span> : null
+            })()}
+            {i.status === 'resolved' && (i.resolved_at || i._resolver) && (
+              <span> · Megoldva{i.resolved_at ? ` ${formatDate(i.resolved_at)}` : ''}{i._resolver ? ` · ${i._resolver}` : ''}</span>
+            )}
+          </div>
           {i.photo_path && <div style={{ maxWidth: 120 }}><PhotoThumb path={i.photo_path} /></div>}
+          {isManagerOrAdmin && i.status === 'resolved' && (
+            <button className="btn ghost sm auto" disabled={setStatus.isPending}
+              onClick={() => setStatus.mutate({ id: i.id, status: 'open' })}><Icon name="refresh" />Újranyitás</button>
+          )}
           {isManagerOrAdmin && i.status !== 'resolved' && (
             <div className="btn-grid">
               {i.status === 'open' && (
