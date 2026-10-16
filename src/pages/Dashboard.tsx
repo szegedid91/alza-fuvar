@@ -5,7 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
-import { todayISO, formatDateTime, parseHuNumber } from '../lib/labels'
+import { todayISO, parseHuNumber } from '../lib/labels'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { toast } from '../lib/toast'
 import { Link } from 'react-router-dom'
@@ -76,8 +76,8 @@ function CrewConflictsCard() {
 
 // Figyelmeztetés-fajták ikonja és (ha van) a részletező oldal
 const FLAG_META: Record<string, { icon: IconName; to?: string }> = {
-  km: { icon: 'fuel' }, geo: { icon: 'map-pin' }, issue: { icon: 'wrench', to: '/hibak' },
-  noshow: { icon: 'user' }, insp: { icon: 'camera' }, manual: { icon: 'pencil' },
+  km: { icon: 'fuel', to: '/riportok' }, geo: { icon: 'map-pin', to: '/tortenet' }, issue: { icon: 'wrench', to: '/hibak' },
+  noshow: { icon: 'user', to: '/beosztas-szerkeszto' }, insp: { icon: 'camera', to: '/kepek' }, manual: { icon: 'pencil', to: '/tortenet' },
 }
 
 // Telephely (geofence) beállítása — nem tilt, csak jelzi a kívül eső be-/kijelentkezést
@@ -182,7 +182,7 @@ export default function Dashboard() {
       const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }] =
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
-          supabase.from('check_ins').select('car_id, user_id, checked_in_at, outside_geofence, out_outside_geofence, manual_checkin').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('check_ins').select('car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
@@ -190,13 +190,16 @@ export default function Dashboard() {
         ])
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
-      const names = await resolveNames((checkins ?? []).map((c) => c.user_id))
+      const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id])])
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
 
       // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
       const checkedCarIds = new Set((checkins ?? []).map((c) => c.car_id))
       const perCar = [...checkedCarIds].map((carId) => {
-        const crew = (checkins ?? []).filter((c) => c.car_id === carId).map((c) => names[c.user_id] ?? '?')
+        const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+        // aki már kijelentkezett (vagy átült másik autóra), az halványan, az idővel
+        const crew = (checkins ?? []).filter((c) => c.car_id === carId)
+          .map((c) => `${names[c.user_id] ?? '?'}${c.checked_out_at ? ` (ki: ${hhmm(c.checked_out_at)})` : ''}`)
         const openIssues = (issues ?? []).filter((i) => i.car_id === carId).length
         const fueled = (fuel ?? []).some((f) => f.car_id === carId)
         return { carId, car: carMap.get(carId), crew, openIssues, inspected: inspCars.has(carId), fueled }
@@ -215,7 +218,10 @@ export default function Dashboard() {
       // nyitott autó-hibák
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
       // beosztva de nincs becsekkolva
-      for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}` })
+      for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) {
+        const who = [sh.driver_id, sh.loader_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
+        flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}${who ? ` — ${who}` : ''}` })
+      }
       // kötelező ellenőrzés hiányzik — EGY lekérdezéssel az összes autóra (nem autónként)
       const carsToCheck = [...checkedCarIds].filter((id) => !inspCars.has(id))
       if (carsToCheck.length > 0) {
@@ -301,12 +307,14 @@ export default function Dashboard() {
               </div>
             )}
             {data.perCar.map((c) => (
-              <div key={c.carId} className="between" style={{ gap: 8 }}>
-                <div style={{ minWidth: 0 }}>
+              <div key={c.carId} className="stack" style={{ gap: 4 }}>
+                <div className="between" style={{ gap: 8 }}>
                   <div className="num" style={{ fontSize: 16 }}>{c.car?.plate ?? '?'}</div>
-                  <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.crew.join(' + ') || '—'}</div>
+                  {c.car?.label && <span className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.car.label}</span>}
                 </div>
-                <div className="row" style={{ gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {/* a nevek teljes szélességben, a jelvények alattuk — telefonon egymás mellett a név levágódott */}
+                <div className="small">{c.crew.join(' + ') || '—'}</div>
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                   {c.openIssues > 0 && <Link to="/hibak" className="badge warning" style={{ textDecoration: 'none' }}><Icon name="wrench" size={12} />{c.openIssues} hiba</Link>}
                   {c.inspected && <span className="badge success"><Icon name="camera" size={12} />ellenőrizve</span>}
                   {c.fueled && <span className="badge"><Icon name="fuel" size={12} />tankolt</span>}
@@ -320,7 +328,7 @@ export default function Dashboard() {
 
           {data.lastCheckin && (
             <div className="tiny muted row" style={{ justifyContent: 'center', gap: 6 }}>
-              <Icon name="clock" size={14} />Utolsó becsekkolás: {formatDateTime(data.lastCheckin)} · élő frissítés
+              <Icon name="clock" size={14} />Utolsó becsekkolás ma {new Date(data.lastCheckin).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })} · élő frissítés
             </div>
           )}
         </>
