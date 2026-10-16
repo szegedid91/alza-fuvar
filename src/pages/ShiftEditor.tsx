@@ -11,7 +11,7 @@ import { todayISO, formatDate, carIssueStatusLabel } from '../lib/labels'
 import { monthGrid, shiftMonth, localDateOf, monthTitle, shortName, crewSizeFor, groupByCategory } from '../lib/calendar'
 import SwapApprovals from './shift/SwapApprovals'
 import WeekTable from './shift/WeekTable'
-import Icon from '../components/Icon'
+import Icon, { type IconName } from '../components/Icon'
 import type { Tables } from '../lib/database.types'
 
 type Shift = Tables<'shifts'>
@@ -158,8 +158,24 @@ export default function ShiftEditor() {
     }
     return map
   }, [cal, carFilter])
-  const iconsOf = (mk: Marker | undefined) =>
-    mk ? `${mk.sw ? '🔁' : ''}${mk.incident ? '⚠️' : ''}${mk.issue ? '❗' : ''}${mk.clean ? '🧽' : ''}${mk.geo ? '📍' : ''}` : ''
+  // A jelzők ikonjai, színei és a jelmagyarázat — egy helyen, hogy a naptár-
+  // cella, a napi részletek és a jelmagyarázat ugyanazt mutassa
+  const MARK: { key: keyof Marker; icon: IconName; color: string; label: string }[] = [
+    { key: 'sw', icon: 'repeat', color: 'var(--primary)', label: 'autócsere' },
+    { key: 'incident', icon: 'alert-triangle', color: 'var(--danger)', label: 'baleset' },
+    { key: 'issue', icon: 'wrench', color: 'var(--warning)', label: 'hibabejelentés' },
+    { key: 'clean', icon: 'sparkles', color: 'var(--success)', label: 'takarítás' },
+    { key: 'geo', icon: 'map-pin', color: 'var(--warning)', label: 'telephelyen kívül' },
+  ]
+  const iconsOf = (mk: Marker | undefined, size = 10) => {
+    const on = MARK.filter((m) => mk?.[m.key])
+    if (on.length === 0) return null
+    return (
+      <span style={{ display: 'inline-flex', gap: 2, verticalAlign: -1 }}>
+        {on.map((m) => <Icon key={m.key} name={m.icon} size={size} style={{ color: m.color }} title={m.label} />)}
+      </span>
+    )
+  }
 
   const nameOf = cal?.names ?? {}
   const carOf = (id: string | null) => (cars ?? []).find((c) => c.id === id)
@@ -171,17 +187,20 @@ export default function ShiftEditor() {
   // Autó havi történet (szűrt nézetben): események + ki volt a páros aznap
   const carHistory = useMemo(() => {
     if (!carFilter || !cal) return []
-    type Ev = { sort: string; date: string; icon: string; label: string; who: string | null }
+    type Ev = { sort: string; date: string; icon: IconName; color: string; label: string; who: string | null }
     const evs: Ev[] = []
     for (const i of cal.incidents) if (i.car_id === carFilter)
-      evs.push({ sort: i.created_at, date: i.work_date, icon: '⚠️', label: `Esemény / baleset${i.note ? `: ${i.note}` : ''}`, who: nameOf[i.user_id] ?? null })
+      evs.push({ sort: i.created_at, date: i.work_date, icon: 'alert-triangle', color: 'var(--danger)', label: `Esemény / baleset${i.note ? `: ${i.note}` : ''}`, who: nameOf[i.user_id] ?? null })
     for (const i of cal.issues) if (i.car_id === carFilter)
-      evs.push({ sort: i.created_at, date: localDateOf(i.created_at), icon: '❗', label: `Hibabejelentés: ${i.note} (${carIssueStatusLabel[i.status]})`, who: nameOf[i.user_id] ?? null })
+      evs.push({ sort: i.created_at, date: localDateOf(i.created_at), icon: 'wrench', color: 'var(--warning)', label: `Hibabejelentés: ${i.note} (${carIssueStatusLabel[i.status]})`, who: nameOf[i.user_id] ?? null })
     for (const c of cal.cleanings) if (c.car_id === carFilter)
-      evs.push({ sort: c.created_at, date: c.work_date, icon: '🧽', label: 'Takarítás', who: nameOf[c.user_id] ?? null })
+      evs.push({ sort: c.created_at, date: c.work_date, icon: 'sparkles', color: 'var(--success)', label: 'Takarítás', who: nameOf[c.user_id] ?? null })
+    for (const c of cal.switches) if (c.car_id === carFilter || c.prev_car_id === carFilter)
+      evs.push({ sort: c.checked_in_at, date: c.work_date, icon: 'repeat', color: 'var(--primary)',
+        label: `Autócsere: ${carOf(c.prev_car_id)?.plate ?? '?'} → ${carOf(c.car_id)?.plate ?? '?'}${c.switch_reason ? ` — ${c.switch_reason}` : ''}`, who: nameOf[c.user_id] ?? null })
     for (const c of cal.geoCheckins) if (c.car_id === carFilter) {
-      if (c.outside_geofence) evs.push({ sort: c.work_date + 'T00', date: c.work_date, icon: '📍', label: 'Telephelyen KÍVÜLI becsekkolás', who: nameOf[c.user_id] ?? null })
-      if (c.out_outside_geofence) evs.push({ sort: c.work_date + 'T01', date: c.work_date, icon: '📍', label: 'Telephelyen KÍVÜLI kijelentkezés', who: nameOf[c.user_id] ?? null })
+      if (c.outside_geofence) evs.push({ sort: c.work_date + 'T00', date: c.work_date, icon: 'map-pin', color: 'var(--warning)', label: 'Telephelyen KÍVÜLI becsekkolás', who: nameOf[c.user_id] ?? null })
+      if (c.out_outside_geofence) evs.push({ sort: c.work_date + 'T01', date: c.work_date, icon: 'flag', color: 'var(--warning)', label: 'Telephelyen KÍVÜLI kijelentkezés', who: nameOf[c.user_id] ?? null })
     }
     return evs.sort((a, b) => b.sort.localeCompare(a.sort))
   }, [carFilter, cal, nameOf])
@@ -268,10 +287,10 @@ export default function ShiftEditor() {
                 <div className="tiny" style={{ fontWeight: isToday ? 800 : 500 }}>{Number(date.slice(8, 10))}</div>
                 {ds.slice(0, 3).map((s, ci, arr) => {
                   const full = !!s.driver_id && (!!s.loader_id || crewOf(s.car_id) === 1)
-                  const chipIcons = iconsOf(markers.get(`${date}|${s.car_id}`))
-                  const label = (carFilter
+                  const chipIcons = iconsOf(markers.get(`${date}|${s.car_id}`), 9)
+                  const label = carFilter
                     ? `${shortName(nameOf[s.driver_id ?? ''])}+${shortName(nameOf[s.loader_id ?? ''])}`
-                    : carOf(s.car_id)?.plate ?? '?') + (chipIcons ? ` ${chipIcons}` : '')
+                    : carOf(s.car_id)?.plate ?? '?'
                   const catBreak = ci > 0 && catRank(arr[ci - 1].car_id) !== catRank(s.car_id)
                   return (
                     <Fragment key={s.id}>
@@ -284,21 +303,26 @@ export default function ShiftEditor() {
                       }}
                       title={`${carOf(s.car_id)?.plate ?? ''}: ${nameOf[s.driver_id ?? ''] ?? '—'} + ${nameOf[s.loader_id ?? ''] ?? '—'}`}
                     >
-                      {label}
+                      {label}{chipIcons && <> {chipIcons}</>}
                     </div>
                     </Fragment>
                   )
                 })}
                 {ds.length > 3 && <div style={{ fontSize: 8.5 }} className="muted">+{ds.length - 3}</div>}
-                {icons && <div style={{ fontSize: 9, lineHeight: '11px' }}>{icons}</div>}
+                {icons && <div style={{ lineHeight: '11px' }}>{icons}</div>}
               </button>
             )
           })}
         </div>
-        <div className="tiny muted" style={{ textAlign: 'center' }}>
-          <span style={{ background: 'rgba(20,184,166,.22)', borderRadius: 4, padding: '0 6px' }}>teljes páros</span>{' '}
+        {/* Jelmagyarázat: tördelődő sor — telefonon 2-3 sorba esik, nem lóg ki */}
+        <div className="tiny muted" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px' }}>
+          <span style={{ background: 'rgba(20,184,166,.22)', borderRadius: 4, padding: '0 6px' }}>teljes páros</span>
           <span style={{ background: 'rgba(234,179,8,.25)', borderRadius: 4, padding: '0 6px' }}>hiányos</span>
-          {' '}· 🔁 autócsere · ⚠️ baleset · ❗ hibabejelentés · 🧽 takarítás · 📍 telephelyen kívül
+          {MARK.map((m) => (
+            <span key={m.key} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name={m.icon} size={12} style={{ color: m.color }} />{m.label}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -355,7 +379,7 @@ export default function ShiftEditor() {
               <div className="between" style={{ gap: 8 }}>
                 <span className="small" style={{ fontWeight: 700 }}>
                   <span className="tiny muted" style={{ fontWeight: 400 }}>{catName(x.car_id) ? `${catName(x.car_id)} · ` : ''}</span>
-                  🚚 {plate(x.car_id)} {iconsOf(markers.get(`${d}|${x.car_id}`))}
+                  <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {plate(x.car_id)} {iconsOf(markers.get(`${d}|${x.car_id}`), 12)}
                 </span>
                 <span className="small muted">
                   {nameOf[x.driver_id ?? ''] ?? '—'}
@@ -370,7 +394,7 @@ export default function ShiftEditor() {
             {sw.map((c, idx) => (
               <div key={`s${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--primary)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  🔁 Autócsere — {nameOf[c.user_id] ?? 'munkatárs'}: {carFull(c.prev_car_id)} → {carFull(c.car_id)} · {tt(c.checked_in_at)}
+                  <Icon name="repeat" size={12} style={{ color: 'var(--primary)', verticalAlign: -2 }} /> Autócsere — {nameOf[c.user_id] ?? 'munkatárs'}: {carFull(c.prev_car_id)} → {carFull(c.car_id)} · {tt(c.checked_in_at)}
                 </span>
                 <span className="small">{c.switch_reason}</span>
               </div>
@@ -378,7 +402,7 @@ export default function ShiftEditor() {
             {inc.map((i, idx) => (
               <div key={`i${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--danger)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  ⚠️ Esemény / baleset — {i.car_id ? `${carFull(i.car_id)} · ` : ''}{nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)}
+                  <Icon name="alert-triangle" size={12} style={{ color: 'var(--danger)', verticalAlign: -2 }} /> Esemény / baleset — {i.car_id ? `${carFull(i.car_id)} · ` : ''}{nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
@@ -386,26 +410,26 @@ export default function ShiftEditor() {
             {iss.map((i, idx) => (
               <div key={`h${idx}`} className="stack" style={{ gap: 2, borderLeft: '3px solid var(--warning)', paddingLeft: 10 }}>
                 <span className="tiny" style={{ fontWeight: 700 }}>
-                  ❗ Hibabejelentés — {carFull(i.car_id)} · {nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
+                  <Icon name="wrench" size={12} style={{ color: 'var(--warning)', verticalAlign: -2 }} /> Hibabejelentés — {carFull(i.car_id)} · {nameOf[i.user_id] ?? 'munkatárs'} · {tt(i.created_at)} · {carIssueStatusLabel[i.status] ?? i.status}
                 </span>
                 <span className="small">{i.note || '(nincs leírás)'}</span>
               </div>
             ))}
             {cln.map((c, idx) => (
               <div key={`c${idx}`} className="tiny" style={{ paddingLeft: 13 }}>
-                🧽 Takarítás — {plate(c.car_id)} · {nameOf[c.user_id] ?? 'munkatárs'} · {tt(c.created_at)}
+                <Icon name="sparkles" size={12} style={{ color: 'var(--success)', verticalAlign: -2 }} /> Takarítás — {plate(c.car_id)} · {nameOf[c.user_id] ?? 'munkatárs'} · {tt(c.created_at)}
               </div>
             ))}
             {geo.map((g, idx) => (
               <Fragment key={`g${idx}`}>
                 {g.outside_geofence && (
                   <div className="tiny" style={{ paddingLeft: 13 }}>
-                    📍 <strong>Bejelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
+                    <Icon name="map-pin" size={12} style={{ color: 'var(--warning)', verticalAlign: -2 }} /> <strong>Bejelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
                   </div>
                 )}
                 {g.out_outside_geofence && (
                   <div className="tiny" style={{ paddingLeft: 13 }}>
-                    🏁 <strong>Kijelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
+                    <Icon name="flag" size={12} style={{ color: 'var(--warning)', verticalAlign: -2 }} /> <strong>Kijelentkezés</strong> telephelyen kívül — {carFull(g.car_id)} · {nameOf[g.user_id] ?? 'munkatárs'}
                   </div>
                 )}
               </Fragment>
@@ -435,7 +459,7 @@ export default function ShiftEditor() {
           {carHistory.map((e, i) => (
             <div key={i} className="between" style={{ gap: 8, alignItems: 'flex-start' }}>
               <div>
-                <div className="small">{e.icon} {e.label}</div>
+                <div className="small row" style={{ gap: 6, alignItems: 'flex-start' }}><Icon name={e.icon} size={14} style={{ color: e.color, flexShrink: 0, marginTop: 2 }} /><span>{e.label}</span></div>
                 <div className="tiny muted">
                   {formatDate(e.date)}{e.who ? ` · ${e.who}` : ''} · páros: {pairOf(e.date, carFilter)}
                 </div>
