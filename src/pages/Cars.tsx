@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -211,6 +212,19 @@ export default function Cars() {
   const { data: cars, isLoading } = useCars()
   const { data: categories } = useCarCategories()
   const categoryName = (id: string | null) => (categories ?? []).find((c) => c.id === id)?.name
+  // Nyitott hibabejelentések autónként — a listában látszik, melyik autóval van gond
+  const { data: openIssues } = useQuery({
+    queryKey: ['car-open-issues', currentWorkspaceId],
+    enabled: !!currentWorkspaceId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('car_issues').select('car_id, status')
+        .eq('workspace_id', currentWorkspaceId!).neq('status', 'resolved')
+      if (error) throw error
+      const m: Record<string, number> = {}
+      for (const r of data ?? []) m[r.car_id] = (m[r.car_id] ?? 0) + 1
+      return m
+    },
+  })
 
   const addCar = useMutation({
     mutationFn: async () => {
@@ -349,7 +363,7 @@ export default function Cars() {
                 if (car?.active) toggleActive.mutate(car)
                 setDeleteWarn(null)
               }}>
-              ⏸ Inkább inaktiválom
+              <Icon name="pause" />Inkább inaktiválom
             </button>
           </div>
           <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés az adatokkal együtt"
@@ -456,6 +470,7 @@ export default function Cars() {
                     </div>
                   </div>
                   {cat && !grouped && <span className="badge primary">{cat}</span>}
+                  {(openIssues?.[car.id] ?? 0) > 0 && <span className="badge warning"><Icon name="wrench" size={12} />{openIssues![car.id]} hiba</span>}
                   {!car.active && <span className="badge danger">Inaktív</span>}
                   <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
@@ -485,6 +500,12 @@ export default function Cars() {
                           {categories!.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
+                    )}
+                    {(openIssues?.[car.id] ?? 0) > 0 && (
+                      <Link to="/hibak" className="alert error row" style={{ textDecoration: 'none', gap: 8, justifyContent: 'space-between' }}>
+                        <span><Icon name="wrench" size={16} style={{ verticalAlign: -3 }} /> {openIssues![car.id]} nyitott hibabejelentés</span>
+                        <Icon name="chevron-right" size={16} />
+                      </Link>
                     )}
                     <div className="btn-grid">
                       <button className="btn secondary sm" onClick={() => setQrCar(car)}><Icon name="qr-code" />QR-kód</button>
