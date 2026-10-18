@@ -60,13 +60,15 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
               <div className="small" style={{ fontWeight: 700 }}>{w.name}</div>
               {lock && <div className="tiny muted">Zárolva: {formatDateTime(lock.locked_at)}</div>}
             </div>
-            <button
-              className={`btn sm ${lock ? 'danger' : 'secondary'}`}
+            {/* Két koppintás: a zárolás az összes vezető szerkesztését tiltja, a feloldás a bért teszi módosíthatóvá */}
+            <ConfirmButton
+              className={`btn sm ${lock ? 'danger-outline' : 'secondary'}`}
+              confirmLabel={lock ? 'Biztos? Feloldás' : 'Biztos? Zárolás'}
               disabled={toggle.isPending}
-              onClick={() => toggle.mutate({ wsId: w.id, locked: !!lock })}
+              onConfirm={() => toggle.mutate({ wsId: w.id, locked: !!lock })}
             >
               {lock ? <><Icon name="unlock" />Feloldás</> : <><Icon name="lock" />Hónap zárolása</>}
-            </button>
+            </ConfirmButton>
           </div>
         )
       })}
@@ -365,8 +367,8 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       </div>
 
       <div className="grid-2 small">
-        <div className="between"><span className="muted row" style={{ gap: 4 }}><Icon name="truck" size={14} />Sofőr / nap</span><span className="num">{formatHuf(ws.driver)}</span></div>
-        <div className="between"><span className="muted row" style={{ gap: 4 }}><Icon name="package" size={14} />Rakodó / nap</span><span className="num">{formatHuf(ws.loader)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="truck" size={14} />Sofőr/nap</span><span className="num">{formatHuf(ws.driver)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="package" size={14} />Rakodó/nap</span><span className="num">{formatHuf(ws.loader)}</span></div>
       </div>
       <div className="tiny muted" style={{ marginTop: -6 }}>Érvényes: {monthTitle(nowYm)}</div>
 
