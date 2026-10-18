@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { roleLabel, statusLabel } from '../lib/labels'
+import { roleLabel, statusLabel, isCrewRole } from '../lib/labels'
 import { pushSupported, isPushSubscribed, subscribePush, unsubscribePush } from '../lib/push'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { RECOVERY_PATH } from '../lib/recovery'
@@ -64,10 +64,16 @@ export default function ProfilePage() {
         <div className="field">
           <label>Telefonszám</label>
           <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+36 30 123 4567" />
-          <div className="tiny muted">A társad ezen a számon tud hívni a beosztásból.</div>
+          <div className="tiny muted">
+            {isCrewRole(profile?.role)
+              ? 'A társad ezen a számon tud hívni a beosztásból.'
+              : 'A munkatársak a Beosztásom oldalon, a vezetők a Tagok oldalon látják ezt a számot.'}
+          </div>
         </div>
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
-        <button className="btn" onClick={() => void save()} disabled={busy}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
+        {/* Üres név nem menthető — a név mindenhol megjelenik (beosztás, bér, napló) */}
+        <button className="btn" onClick={() => void save()} disabled={busy || !fullName.trim()}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
+        {!fullName.trim() && <div className="tiny muted" style={{ textAlign: 'center' }}>Add meg a teljes neved — ez jelenik meg a beosztásban és a bérlapon.</div>}
       </div>
 
       <div className="card stack">
