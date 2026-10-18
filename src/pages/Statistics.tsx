@@ -61,6 +61,8 @@ interface UserStat {
   incidents: number
   switches: number
   issues: number
+  inspections: number
+  cleanings: number
   outside: number
   assignedDays: number
   missedDays: number
@@ -76,6 +78,8 @@ interface CarStat {
   issues: number
   incidents: number
   switchedAway: number
+  inspections: number
+  cleanings: number
   fuelCost: number
   liters: number
   avgConsumption: number | null
@@ -87,12 +91,12 @@ export default function Statistics() {
   const range = useMemo(() => presetRange(preset), [preset])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
-    queryKey: ['statistics', currentWorkspaceId, preset, range.start],
+    queryKey: ['statistics', currentWorkspaceId, preset, range.start, 'v2'],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const ws = currentWorkspaceId!
       // Lapozva (1000 sor felett is teljes), hibánál dob — csonka statisztika ne szülessen
-      const [carsRes, checkins, shifts, fuel, incidents, issues, adj, swaps] = await Promise.all([
+      const [carsRes, checkins, shifts, fuel, incidents, issues, adj, swaps, insp, clean] = await Promise.all([
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll((f, t) => supabase.from('check_ins')
           .select('user_id, car_id, work_date, checked_in_at, checked_out_at, switch_reason, prev_car_id, outside_geofence, out_outside_geofence')
@@ -109,6 +113,10 @@ export default function Statistics() {
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('swap_requests').select('requested_by')
           .eq('workspace_id', ws).gte('created_at', range.startISO).lt('created_at', range.endISO).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('car_inspections').select('user_id, car_id')
+          .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('cleanings').select('user_id, car_id')
+          .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
       const cars = (carsRes.data ?? []) as unknown as { id: string; plate: string; category: { name: string } | null }[]
@@ -119,7 +127,7 @@ export default function Statistics() {
           users.set(id, {
             id, name: '', days: 0, driverDays: 0, loaderDays: 0, hoursMs: 0, daysWithHours: 0,
             incidents: 0, switches: 0,
-            issues: 0, outside: 0, assignedDays: 0, missedDays: 0, advances: 0, swapRequests: 0,
+            issues: 0, inspections: 0, cleanings: 0, outside: 0, assignedDays: 0, missedDays: 0, advances: 0, swapRequests: 0,
           })
         }
         return users.get(id)!
@@ -205,6 +213,11 @@ export default function Statistics() {
         if (i.user_id) u(i.user_id).issues++
         if (i.car_id) issuesByCar.set(i.car_id, (issuesByCar.get(i.car_id) ?? 0) + 1)
       }
+      // Karbantartás: ellenőrző fotók és takarítások fejenként + autónként
+      const inspByCar = new Map<string, number>()
+      const cleanByCar = new Map<string, number>()
+      for (const i of insp ?? []) { u(i.user_id).inspections++; inspByCar.set(i.car_id, (inspByCar.get(i.car_id) ?? 0) + 1) }
+      for (const c of clean ?? []) { u(c.user_id).cleanings++; cleanByCar.set(c.car_id, (cleanByCar.get(c.car_id) ?? 0) + 1) }
       for (const a of adj ?? []) {
         if (a.type === 'advance') u(a.user_id).advances += Number(a.amount)
       }
@@ -224,17 +237,19 @@ export default function Statistics() {
           issues: issuesByCar.get(c.id) ?? 0,
           incidents: incidentsByCar.get(c.id) ?? 0,
           switchedAway: switchedAwayByCar.get(c.id) ?? 0,
+          inspections: inspByCar.get(c.id) ?? 0,
+          cleanings: cleanByCar.get(c.id) ?? 0,
           fuelCost: logs.reduce((a, f) => a + Number(f.amount ?? 0), 0),
           liters: logs.reduce((a, f) => a + Number(f.liters ?? 0), 0),
           avgConsumption: cons.length ? Math.round((cons.reduce((a, b) => a + b, 0) / cons.length) * 100) / 100 : null,
         }
-      }).filter((c) => c.daysUsed > 0 || c.issues > 0 || c.fuelCost > 0)
+      }).filter((c) => c.daysUsed > 0 || c.issues > 0 || c.fuelCost > 0 || c.inspections + c.cleanings > 0)
         .sort((a, b) => b.daysUsed - a.daysUsed || a.plate.localeCompare(b.plate))
 
       // Aki bármilyen nyomot hagyott az időszakban (nap, beosztás, esemény,
       // hiba, előleg), az látszik — különben az összesítők nem stimmelnének
       const userRows = [...users.values()].filter(
-        (r) => r.days > 0 || r.assignedDays > 0 || r.incidents > 0 || r.issues > 0 || r.advances > 0,
+        (r) => r.days > 0 || r.assignedDays > 0 || r.incidents > 0 || r.issues > 0 || r.advances > 0 || r.inspections + r.cleanings > 0,
       )
         .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name))
 
@@ -248,6 +263,7 @@ export default function Statistics() {
       'Munkatárs': r.name, 'Napok': r.days, 'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays,
       'Órák': Math.round((r.hoursMs / 3600000) * 10) / 10,
       'Esemény': r.incidents, 'Autócsere': r.switches, 'Hibabejelentés': r.issues,
+      'Ellenőrzés': r.inspections, 'Takarítás': r.cleanings,
       'Telephelyen kívül': r.outside, 'Kihagyott beosztás': r.missedDays,
       'Előleg': r.advances, 'Cserekérés': r.swapRequests,
     })))
@@ -259,12 +275,14 @@ export default function Statistics() {
     const withDays = data.userRows.filter((r) => r.days > 0)
     const mostDays = withDays[0] ?? null
     const mostIncidents = [...withDays].sort((a, b) => b.incidents - a.incidents)[0]
+    const mostCare = [...data.userRows].sort((a, b) => (b.inspections + b.cleanings) - (a.inspections + a.cleanings))[0]
     const problemCar = data.carRows.length
       ? [...data.carRows].sort((a, b) => (b.issues + b.switchedAway) - (a.issues + a.switchedAway))[0]
       : null
     return {
       mostDays,
       mostIncidents: mostIncidents && mostIncidents.incidents > 0 ? mostIncidents : null,
+      mostCare: mostCare && mostCare.inspections + mostCare.cleanings > 0 ? mostCare : null,
       problemCar: problemCar && problemCar.issues + problemCar.switchedAway > 0 ? problemCar : null,
     }
   }, [data])
@@ -321,6 +339,12 @@ export default function Statistics() {
               <span>{highlights.mostDays.name} · {highlights.mostDays.days} nap</span>
             </div>
           )}
+          {highlights.mostCare && (
+            <div className="between small">
+              <span className="muted">Legtöbb ellenőrzés + takarítás</span>
+              <span style={{ color: 'var(--success)' }}>{highlights.mostCare.name} · {highlights.mostCare.inspections + highlights.mostCare.cleanings} db</span>
+            </div>
+          )}
           {highlights.mostIncidents && (
             <div className="between small">
               <span className="muted">Legtöbb esemény</span>
@@ -359,6 +383,9 @@ export default function Statistics() {
                     {r.incidents}{r.incidents > 0 && r.days > 0 ? ` (≈1 / ${Math.round(r.days / r.incidents)} nap)` : ''}
                   </span>
                 </div>
+                {r.inspections + r.cleanings > 0 && (
+                  <div className="between"><span className="muted">Ellenőrzés / takarítás</span><span>{r.inspections} / {r.cleanings}</span></div>
+                )}
                 {r.switches > 0 && (
                   <div className="between"><span className="muted">Autócsere menet közben</span><span>{r.switches}</span></div>
                 )}
@@ -406,6 +433,9 @@ export default function Statistics() {
                   <span className="muted">Hibabejelentés</span>
                   <span style={{ color: c.issues > 0 ? 'var(--warning)' : 'inherit' }}>{c.issues}</span>
                 </div>
+                {c.inspections + c.cleanings > 0 && (
+                  <div className="between"><span className="muted">Ellenőrzés / takarítás</span><span>{c.inspections} / {c.cleanings}</span></div>
+                )}
                 {c.switchedAway > 0 && (
                   <div className="between"><span className="muted">Lecserélték menet közben</span><span style={{ color: 'var(--danger)' }}>{c.switchedAway}×</span></div>
                 )}
