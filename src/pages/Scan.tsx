@@ -357,9 +357,10 @@ export default function Scan() {
               </span>
             </div>
           ) : (
-            <button className="btn secondary" disabled={outBusy} onClick={() => void checkout()}>
+            // Két koppintás: a nap lezárása rögzíti a munkaidő végét — egy félrekoppintás ne zárja le a napot
+            <ConfirmButton className="btn secondary" confirmLabel="Biztos? Nap lezárása" disabled={outBusy} onConfirm={() => void checkout()}>
               <Icon name="flag" />{outBusy ? 'Mentés…' : 'Kijelentkezés (nap vége)'}
-            </button>
+            </ConfirmButton>
           )}
         </div>
       )}
