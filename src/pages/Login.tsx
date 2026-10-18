@@ -97,10 +97,11 @@ export default function Login() {
 
       <div className="card auth-card primary">
         <div className="tabs">
-          <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null) }} type="button">
+          {/* Fülváltásnál a jelszó ürül és elrejtődik — a belépéshez gépelt jelszó ne menjen át olvashatóan a regisztrációba */}
+          <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
             Belépés
           </button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); setInfo(null) }} type="button">
+          <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
             Regisztráció
           </button>
         </div>
