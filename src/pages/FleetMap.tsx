@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import 'leaflet/dist/leaflet.css'
-import type { Map as LeafletMap, LayerGroup } from 'leaflet'
+import type { Map as LeafletMap, LayerGroup, Marker } from 'leaflet'
 import Icon from '../components/Icon'
 
 // Teherautó-ikon a Leaflet divIcon HTML-jébe (ugyanaz a rajz, mint az Icon komponensé)
@@ -154,8 +154,15 @@ export default function FleetMap() {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const layerRef = useRef<LayerGroup | null>(null)
+  // Autó-pinek rendszám szerint — az alsó listából rá lehet ugrani és kinyitni a popupot
+  const markersRef = useRef<Map<string, Marker>>(new Map())
   const didFitRef = useRef(false)
-  const [mapReady, setMapReady] = useState(false)
+  // Szűrőváltásnál újra ráillesztjük a nézetet a szűrt pontokra (különben a
+  // kiválasztott esemény a térkép szélén vagy azon kívül maradhat)
+  const lastFilterRef = useRef('')
+  // Számláló, nem logikai: a térkép ÚJRA létrejön, ha a munkaterület-azonosító
+  // később érkezik — a réteg-effektnek az új példányra is le kell futnia
+  const [mapReady, setMapReady] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -174,7 +181,7 @@ export default function FleetMap() {
       }
       layerRef.current = L.layerGroup().addTo(map)
       mapRef.current = map
-      setMapReady(true)
+      setMapReady((v) => v + 1)
     })()
     return () => {
       cancelled = true
@@ -189,9 +196,11 @@ export default function FleetMap() {
   useEffect(() => {
     if (!mapReady || !mapRef.current || !layerRef.current || !data) return
     void (async () => {
+      try {
       const L = await import('leaflet')
       const layer = layerRef.current!
       layer.clearLayers()
+      markersRef.current.clear()
       const bounds: [number, number][] = []
 
       // Szűrés: mely autók engedélyezettek (autó- és ember-szűrő szerint)
@@ -227,11 +236,12 @@ export default function FleetMap() {
           const crewLine = (c.crew ?? []).length
             ? `<br>Páros: ${esc((c.crew ?? []).join(' + '))}`
             : ''
-          L.marker([c.lat, c.lng], { icon, zIndexOffset: 1000 })
+          const mk = L.marker([c.lat, c.lng], { icon, zIndexOffset: 1000 })
             .bindPopup(
               `<b>${esc(c.plate)}</b>${crewLine}<br>${esc(c.source)} · ${when}${c.who ? ` — ${esc(c.who)}` : ''}`,
             )
-            .addTo(layer)
+          mk.addTo(layer)
+          markersRef.current.set(c.carId, mk)
           bounds.push([c.lat, c.lng])
         }
       }
@@ -239,9 +249,15 @@ export default function FleetMap() {
       if (currentWorkspace?.geo_lat != null && currentWorkspace?.geo_lng != null) {
         bounds.push([currentWorkspace.geo_lat, currentWorkspace.geo_lng])
       }
-      if (!didFitRef.current && bounds.length > 0) {
+      const filterKey = `${filterCar}|${filterPerson}|${filterEvent}`
+      if ((!didFitRef.current || lastFilterRef.current !== filterKey) && bounds.length > 0) {
         mapRef.current!.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 })
         didFitRef.current = true
+      }
+      lastFilterRef.current = filterKey
+      } catch (e) {
+        // A réteg-rajzolás hibája ne vesszen el némán (a térkép üresen maradna)
+        console.error('Térkép-réteg hiba:', e)
       }
     })()
   }, [mapReady, data, currentWorkspace, filterCar, filterPerson, filterEvent])
@@ -288,6 +304,42 @@ export default function FleetMap() {
           <div className="tiny muted" style={{ marginTop: 8 }}>Ma még nincs térképre tehető adat (becsekkolás, ellenőrzés, tankolás vagy esemény).</div>
         )}
       </div>
+
+      {/* Autó-lista: telefonon a pin-popup rejtett — itt szövegesen is látszik,
+          és koppintásra a térkép ráugrik az autóra */}
+      {(data?.carPositions.length ?? 0) > 0 && (
+        <div className="card stack" style={{ gap: 6 }}>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="truck" />Autók ma</div>
+          {[...data!.carPositions].sort((a, b) => b.at.localeCompare(a.at)).map((c) => {
+            const ageMin = (Date.now() - new Date(c.at).getTime()) / 60000
+            const color = ageMin < 45 ? 'var(--success)' : ageMin < 180 ? 'var(--warning)' : 'var(--text-dim)'
+            return (
+              <button key={c.carId} type="button" className="between"
+                style={{ width: '100%', gap: 8, padding: '8px 0', background: 'none', border: 'none', borderTop: '1px solid var(--border)', color: 'inherit', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => {
+                  setFilterEvent('')
+                  mapRef.current?.setView([c.lat, c.lng], 15)
+                  markersRef.current.get(c.carId)?.openPopup()
+                  containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="row" style={{ gap: 6 }}>
+                    <span className="num" style={{ fontSize: 15 }}>{c.plate}</span>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  </div>
+                  <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.crew.length ? c.crew.join(' + ') : c.who ?? '—'}
+                  </div>
+                </div>
+                <div className="tiny muted" style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div>{c.source}</div>
+                  <div>{new Date(c.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <p className="tiny muted" style={{ textAlign: 'center' }}>
         A pozíciók a munkanapi rögzítésekből származnak (becsekkolás, ellenőrzés, tankolás, esemény). Az app nem követi folyamatosan a telefonokat.
