@@ -23,6 +23,8 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [devBusy, setDevBusy] = useState<string | null>(null)
+  // Jelszó mutatása — telefonon a félregépelés gyakori, a többi jelszó-mezőn is van
+  const [showPw, setShowPw] = useState(false)
 
   async function handleDevLogin(acc: DevAccount) {
     setError(null)
@@ -117,7 +119,12 @@ export default function Login() {
           {mode !== 'forgot' && (
             <div className="field">
               <label htmlFor="pw">Jelszó</label>
-              <input id="pw" className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required />
+              <div className="input-icon input-icon-right">
+                <input id="pw" className="input" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required />
+                <button type="button" className="icon-btn" aria-label={showPw ? 'Jelszó elrejtése' : 'Jelszó mutatása'} onClick={() => setShowPw((v) => !v)}>
+                  <Icon name={showPw ? 'eye-off' : 'eye'} size={18} />
+                </button>
+              </div>
             </div>
           )}
           {mode === 'forgot' && (
