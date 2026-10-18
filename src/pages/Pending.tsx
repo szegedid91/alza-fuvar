@@ -16,6 +16,16 @@ export default function Pending() {
     if (!pushSupported()) { setPushState('unsupported'); return }
     void isPushSubscribed().then((on) => setPushState(on ? 'on' : 'off'))
   }, [])
+  // Automatikus frissítés: 30 mp-enként és az app előtérbe kerülésekor újra
+  // lekérjük a profilt — a jóváhagyás után gombnyomás nélkül is beengedjük
+  useEffect(() => {
+    if (disabled) return
+    const tick = () => { if (document.visibilityState === 'visible') void refreshProfile() }
+    const id = setInterval(tick, 30_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick) }
+  }, [disabled, refreshProfile])
+
   async function enablePush() {
     if (!profile) return
     setPushState('busy')
@@ -54,6 +64,7 @@ export default function Pending() {
           <div className="alert success row" style={{ gap: 8 }}><Icon name="check-circle" />Értesítést kapsz, amint jóváhagyták a fiókod.</div>
         )}
         <button className="btn secondary" onClick={() => void refreshProfile()}><Icon name="refresh" />Állapot frissítése</button>
+        {!disabled && <div className="tiny muted" style={{ textAlign: 'center' }}>Az állapot magától is frissül fél percenként — jóváhagyás után azonnal beengedünk.</div>}
         <button className="link-btn" onClick={() => void signOut()}><Icon name="log-out" size={16} />Kilépés</button>
       </div>
     </div>
