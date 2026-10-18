@@ -67,6 +67,19 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
 
   const allCaptured = VIEWS.every((v) => photos[v])
 
+  // Ma már van ellenőrzés ezen az autón? — akkor a "kötelező" sáv zöldre vált,
+  // és a tankolás-kapu is nyitva van (ugyanaz a kulcs, mint a kezdőlapi lépéssoré)
+  const { data: doneCount } = useQuery({
+    queryKey: ['inspections-today', car.id, date],
+    queryFn: async () => {
+      const { count, error } = await supabase.from('car_inspections')
+        .select('id', { count: 'exact', head: true }).eq('car_id', car.id).eq('work_date', date)
+      if (error) throw error
+      return count ?? 0
+    },
+  })
+  const doneToday = (doneCount ?? 0) > 0
+
   async function submit() {
     if (!currentWorkspaceId || !profile || !allCaptured) return
     setBusy(true); setMsg(null)
@@ -96,6 +109,7 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
       setPhotos({})
       toast.success('Ellenőrzés elmentve.')
       await qc.invalidateQueries({ queryKey: ['inspections', car.id] })
+      await qc.invalidateQueries({ queryKey: ['inspections-today', car.id] })
     } catch (e) {
       // Fél-kész ellenőrzés nem maradhat: a kötelező-ellenőrzés kapu hiányos
       // fotósorral is kinyílna. A már beírt sorokat visszagörgetjük.
@@ -114,10 +128,16 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
 
   return (
     <>
-      {reasonText && (
+      {reasonText && !doneToday && (
         <div className="card" style={{ borderColor: 'var(--warning)' }}>
           <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező ellenőrzés</strong></div>
-          <p className="small muted" style={{ marginTop: 6 }}>{reasonText}</p>
+          <p className="small muted" style={{ marginTop: 6 }}>{reasonText} — a tankolás addig zárva.</p>
+        </div>
+      )}
+      {reasonText && doneToday && (
+        <div className="card" style={{ borderColor: 'var(--success)' }}>
+          <div className="row"><Icon name="check-circle" size={22} style={{ color: 'var(--success)' }} /><strong>A mai kötelező ellenőrzés elkészült</strong></div>
+          <p className="small muted" style={{ marginTop: 6 }}>{reasonText}. Újabb fotósort bármikor készíthetsz.</p>
         </div>
       )}
 
