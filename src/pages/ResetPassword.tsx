@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { RECOVERY_URL_ERROR, clearRecoveryPending } from '../lib/recovery'
+import { RECOVERY_URL_ERROR, RECOVERY_IN_URL, clearRecoveryPending, isRecoveryPending } from '../lib/recovery'
+import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
 // így elég a jelszót frissíteni.
 export default function ResetPassword({ onDone }: { onDone: () => void }) {
+  const { session, recovery } = useAuth()
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
   const [busy, setBusy] = useState(false)
@@ -40,6 +42,29 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // Közvetlenül megnyitott cím (nem az emailes linkről, nincs munkamenet): ne egy
+  // használhatónak látszó űrlapot mutassunk, ami mentéskor "lejárt link"-et ír —
+  // mondjuk meg, hogy az emailben kapott linket kell megnyitni.
+  const noSession = !session && !recovery && !RECOVERY_IN_URL && !isRecoveryPending() && !RECOVERY_URL_ERROR
+  if (noSession && !done) {
+    return (
+      <div className="auth-wrap">
+        <div className="auth-logo">
+          <img src="/pwa-192.png" alt="Alza" />
+          <h1>Alza Fuvarszervező</h1>
+          <p className="muted small">Új jelszó beállítása</p>
+        </div>
+        <div className="card auth-card stack primary">
+          <div className="alert info row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <Icon name="mail" style={{ flexShrink: 0 }} />
+            <span>Ez a képernyő az emailben kapott jelszó-visszaállító linkről nyílik. Nyisd meg a levélben lévő linket — vagy kérj újat a belépési oldalon az „Elfelejtettem a jelszavam” gombbal.</span>
+          </div>
+          <button className="btn" onClick={onDone}><Icon name="log-in" />Belépési oldal</button>
+        </div>
+      </div>
+    )
   }
 
   if (done) {
