@@ -15,11 +15,13 @@ const ENTITY_LABEL: Record<string, string> = {
   adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
+  check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
+  check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder',
 }
 
 type Row = Record<string, unknown> | null | undefined
@@ -157,6 +159,45 @@ function describe(
       return `${label}${who ? ` — ${who}` : ''}`
     }
 
+    // Csak vezetői beavatkozás kerül ide (a munkatárs saját be-/kijelentkezése nem)
+    case 'check_ins': {
+      const who = nm(s(d, 'user_id'))
+      const p = plate(s(d, 'car_id'))
+      const where = [who, p].filter(Boolean).join(' · ')
+      if (action === 'DELETE') return `Becsekkolás törölve (vezető) — ${where}`
+      if (o && n && !s(o, 'checked_out_at') && s(n, 'checked_out_at')) return `Kijelentkeztetve a vezető által — ${where}`
+      if (o && n && s(o, 'checked_out_at') && !s(n, 'checked_out_at')) return `Becsekkolás újranyitva (vezető) — ${where}`
+      if (o && n && s(o, 'car_id') !== s(n, 'car_id')) return `Becsekkolás autója módosítva — ${who ?? ''}: ${plate(s(o, 'car_id')) ?? '—'} → ${p ?? '—'}`
+      return `Becsekkolás módosítva (vezető) — ${where}`
+    }
+
+    case 'workspaces': {
+      const ch: string[] = []
+      if (o && n) {
+        if (s(o, 'name') !== s(n, 'name')) ch.push(`név: ${s(n, 'name')}`)
+        if (s(o, 'driver_day_rate') !== s(n, 'driver_day_rate')) ch.push(`sofőr napidíj: ${formatHuf(Number(o?.['driver_day_rate'] ?? 0))} → ${formatHuf(Number(n?.['driver_day_rate'] ?? 0))}`)
+        if (s(o, 'loader_day_rate') !== s(n, 'loader_day_rate')) ch.push(`rakodó napidíj: ${formatHuf(Number(o?.['loader_day_rate'] ?? 0))} → ${formatHuf(Number(n?.['loader_day_rate'] ?? 0))}`)
+        if (s(o, 'geo_lat') !== s(n, 'geo_lat') || s(o, 'geo_lng') !== s(n, 'geo_lng') || s(o, 'geo_radius_m') !== s(n, 'geo_radius_m')) {
+          ch.push(s(n, 'geo_lat') ? `telephely: ${s(n, 'geo_radius_m') ?? '?'} m sugár` : 'telephely törölve')
+        }
+        if (s(o, 'photo_retention_days') !== s(n, 'photo_retention_days')) ch.push(`kép-megőrzés: ${s(o, 'photo_retention_days') ?? '?'} → ${s(n, 'photo_retention_days') ?? '?'} nap`)
+      }
+      return `Munkaterület-beállítás — ${ch.join(', ') || 'módosítva'}`
+    }
+
+    case 'car_categories': {
+      const name = s(d, 'name') ?? 'kategória'
+      if (action === 'INSERT') return `Új kategória: ${name}`
+      if (action === 'DELETE') return `Kategória törölve: ${name}`
+      const ch: string[] = []
+      if (o && n) {
+        if (s(o, 'name') !== s(n, 'name')) ch.push(`név: ${s(o, 'name')} → ${s(n, 'name')}`)
+        if (s(o, 'crew_size') !== s(n, 'crew_size')) ch.push(`létszám: ${s(n, 'crew_size')} fő`)
+        if (s(o, 'sort_order') !== s(n, 'sort_order')) ch.push('sorrend módosítva')
+      }
+      return `Kategória ${name}${ch.length ? ' — ' + ch.join(', ') : ' módosítva'}`
+    }
+
     case 'payroll_locks': {
       const month = s(d, 'ym') ?? ''
       if (action === 'DELETE') return `Hónap feloldva${month ? `: ${month}` : ''}`
@@ -224,7 +265,7 @@ export default function AuditLog() {
   return (
     <div className="stack">
       <h2>Napló</h2>
-      <p className="small muted" style={{ margin: 0 }}>A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, bizonyítékok) — az utolsó 100 bejegyzés.</p>
+      <p className="small muted" style={{ margin: 0 }}>A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, kategóriák, beállítások, vezetői kijelentkeztetés) — az utolsó 100 bejegyzés.</p>
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
