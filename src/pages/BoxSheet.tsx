@@ -396,7 +396,9 @@ function TimeField({ label, value, onCommit }: { label: string; value: string | 
   return (
     <div className="field">
       <label>{label}</label>
-      <input className="input" type="time" value={txt} onChange={(e) => setTxt(e.target.value)}
+      <input className="input" type="time" value={txt}
+        // A telefonos időválasztó nem mindig vált ki blur-t — teljes (ÓÓ:PP) értéknél azonnal mentünk
+        onChange={(e) => { const v = e.target.value; setTxt(v); if (/^\d{2}:\d{2}$/.test(v) && v !== norm(value)) onCommit(v) }}
         onBlur={() => { if (txt !== norm(value)) onCommit(txt || null) }} />
     </div>
   )
