@@ -625,6 +625,7 @@ export type Database = {
           gps_lat: number | null
           gps_lng: number | null
           id: string
+          inspection_alert_sent_at: string | null
           inspection_help_requested_at: string | null
           inspection_waive_note: string | null
           inspection_waived_at: string | null
@@ -650,6 +651,7 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          inspection_alert_sent_at?: string | null
           inspection_help_requested_at?: string | null
           inspection_waive_note?: string | null
           inspection_waived_at?: string | null
@@ -675,6 +677,7 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          inspection_alert_sent_at?: string | null
           inspection_help_requested_at?: string | null
           inspection_waive_note?: string | null
           inspection_waived_at?: string | null
@@ -1717,6 +1720,7 @@ export type Database = {
       }
       storage_workspace_ok: { Args: { objname: string }; Returns: boolean }
       tick_inspection_reminders: { Args: never; Returns: undefined }
+      tick_photo_missing_alerts: { Args: never; Returns: undefined }
       user_workspace_ids: { Args: never; Returns: string[] }
     }
     Enums: {
