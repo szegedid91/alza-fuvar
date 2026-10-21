@@ -244,6 +244,9 @@ export default function Scan() {
     }
     setInspection(req)
     await qc.invalidateQueries({ queryKey: ['today'] })
+    // Beolvasás után egyből a fotók: az ellenőrzés oldal mutatja az autót + időt,
+    // és sorban viszi végig a nézeteken (körbe az autón, végül a fülke)
+    navigate('/ellenorzes', { state: { fromCheckin: true } })
   }
 
   // Autócsere megerősítése a megadott okkal
@@ -371,7 +374,7 @@ export default function Scan() {
           <p className="small muted">
             {inspection.reasons.includes('day9') && 'A hónap 9-e van. '}
             {inspection.reasons.includes('driver_change') && `Előző nap más ült az autóban${inspection.lastDriverName ? ` (${inspection.lastDriverName})` : ''}. `}
-            Készíts ellenőrző fotókat (elöl/hátul/bal/jobb/beltér).
+            Készíts ellenőrző fotókat (körbe az autón + fülke).
           </p>
           <button className="btn" onClick={() => navigate('/ellenorzes')}><Icon name="camera" />Ellenőrzés indítása</button>
         </div>

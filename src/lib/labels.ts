@@ -34,7 +34,7 @@ export const inspectionViewLabel: Record<Enums<'inspection_view'>, string> = {
   rear: 'Hátul',
   left: 'Bal oldal',
   right: 'Jobb oldal',
-  interior: 'Beltér',
+  interior: 'Fülke (beltér)',
 }
 
 export const carIssueStatusLabel: Record<Enums<'car_issue_status'>, string> = {

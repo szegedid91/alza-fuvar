@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import RequireCheckin from '../components/RequireCheckin'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
@@ -13,36 +14,47 @@ import { inspectionViewLabel, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
-import type { Enums } from '../lib/database.types'
+import type { Enums, Tables } from '../lib/database.types'
 
-const VIEWS: Enums<'inspection_view'>[] = ['front', 'rear', 'left', 'right', 'interior']
+// Körbe az autón (elöl → jobb → hátul → bal), végül a fülke
+const VIEWS: Enums<'inspection_view'>[] = ['front', 'right', 'rear', 'left', 'interior']
 
 export default function Inspection() {
   return (
     <div className="stack">
       <h2>Autó-ellenőrzés</h2>
       <RequireCheckin>
-        {({ car, date }) => <InspectionInner car={car} date={date} />}
+        {({ car, date, checkin }) => <InspectionInner car={car} date={date} checkin={checkin} />}
       </RequireCheckin>
     </div>
   )
 }
 
-function InspectionInner({ car, date }: { car: Car; date: string }) {
+function InspectionInner({ car, date, checkin }: { car: Car; date: string; checkin: Tables<'check_ins'> }) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
+  const location = useLocation()
+  // Becsekkolás után ide érkezik a futár: a beolvasott autó + idő látszik, és
+  // azonnal indulhat a fotózás
+  const fromCheckin = !!(location.state as { fromCheckin?: boolean } | null)?.fromCheckin
   const [photos, setPhotos] = useState<Partial<Record<Enums<'inspection_view'>, CapturedPhoto>>>({})
-  // Épp nyitott kamera-nézet. Felvétel után automatikusan a KÖVETKEZŐ hiányzó
-  // nézet jön — nem kell minden fotó után visszalépni a rácsba és újra koppintani.
+  // Épp nyitott kamera-nézet, illetve az épp elkészült kép előnézete.
+  // Sorrend: körbe az autón (elöl → jobb → hátul → bal), végül a fülke.
+  // Felvétel után ELŐNÉZET jön "Újra" gombbal — homályos/rossz kép azonnal
+  // újrakészíthető, nem a végén derül ki.
   const [activeView, setActiveView] = useState<Enums<'inspection_view'> | null>(null)
+  const [previewView, setPreviewView] = useState<Enums<'inspection_view'> | null>(null)
   function onCaptured(blob: Blob, previewUrl: string) {
     if (!activeView) return
-    const nextPhotos = { ...photos, [activeView]: { blob, previewUrl } }
-    setPhotos(nextPhotos)
-    const idx = VIEWS.indexOf(activeView)
-    const ordered = [...VIEWS.slice(idx + 1), ...VIEWS.slice(0, idx)]
-    setActiveView(ordered.find((v) => !nextPhotos[v]) ?? null)
+    setPhotos((prev) => ({ ...prev, [activeView]: { blob, previewUrl } }))
+    setPreviewView(activeView)
+    setActiveView(null)
+  }
+  const nextMissing = (after: Enums<'inspection_view'> | null) => {
+    const idx = after ? VIEWS.indexOf(after) : -1
+    const ordered = [...VIEWS.slice(idx + 1), ...VIEWS.slice(0, idx + 1)]
+    return ordered.find((v) => !photos[v]) ?? null
   }
   const [reason, setReason] = useState<Enums<'inspection_reason'>>('manual')
   const [reasonText, setReasonText] = useState<string>('')
@@ -65,7 +77,8 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
     }
   }, [car.id, profile, date])
 
-  const allCaptured = VIEWS.every((v) => photos[v])
+  const captured = VIEWS.filter((v) => photos[v]).length
+  const allCaptured = captured === VIEWS.length
 
   // Ma már van ellenőrzés ezen az autón? — akkor a "kötelező" sáv zöldre vált,
   // és a tankolás-kapu is nyitva van (ugyanaz a kulcs, mint a kezdőlapi lépéssoré)
@@ -107,6 +120,7 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
         })
       }
       setPhotos({})
+      setMsg('Kész: az ellenőrző fotók elmentve.')
       toast.success('Ellenőrzés elmentve.')
       await qc.invalidateQueries({ queryKey: ['inspections', car.id] })
       await qc.invalidateQueries({ queryKey: ['inspections-today', car.id] })
@@ -126,8 +140,23 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
     }
   }
 
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+  const firstMissing = nextMissing(null)
+  const previewPhoto = previewView ? photos[previewView] : null
+  const afterPreview = previewView ? nextMissing(previewView) : null
+
   return (
     <>
+      {fromCheckin && (
+        <div className="card stack" style={{ borderColor: 'var(--success)', gap: 6 }}>
+          <div className="between">
+            <span className="badge success"><Icon name="qr-code" />QR beolvasva</span>
+            <span className="small muted">{hhmm(checkin.checked_in_at)}</span>
+          </div>
+          <div className="num num-xl">{car.plate}</div>
+          <div className="small muted">Következő lépés: ellenőrző fotók körbe az autón és a fülkéről.</div>
+        </div>
+      )}
       {reasonText && !doneToday && (
         <div className="card" style={{ borderColor: 'var(--warning)' }}>
           <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező ellenőrzés</strong></div>
@@ -144,21 +173,56 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
       <div className="card stack primary">
         <div className="between">
           <div className="card-title" style={{ margin: 0 }}><Icon name="camera" />Ellenőrző fotók — {car.plate}</div>
-          <span className={`badge ${allCaptured ? 'success' : ''}`}>{VIEWS.filter((v) => photos[v]).length}/{VIEWS.length}</span>
+          <span className={`badge ${allCaptured ? 'success' : ''}`}>{captured}/{VIEWS.length}</span>
         </div>
         <div className="progress" style={{ marginTop: 0 }} aria-hidden="true">
-          <div style={{ width: `${(VIEWS.filter((v) => photos[v]).length / VIEWS.length) * 100}%` }} />
+          <div style={{ width: `${(captured / VIEWS.length) * 100}%` }} />
         </div>
-        <div className="grid-3">
-          {VIEWS.map((v) => (
-            <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
-              onOpen={() => setActiveView(v)}
-              onCapture={(p) => setPhotos((prev) => ({ ...prev, [v]: p }))} />
-          ))}
-        </div>
-        {!allCaptured && (
-          <div className="tiny muted">Koppints egy nézetre — felvétel után automatikusan a következő jön.</div>
+
+        {previewView && previewPhoto ? (
+          // Előnézet: az imént készült kép teljes szélességben — itt dől el, hogy jó-e
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="between">
+              <strong>{inspectionViewLabel[previewView]} ({VIEWS.indexOf(previewView) + 1}/{VIEWS.length})</strong>
+              <span className="tiny muted">Éles? Látszik az egész?</span>
+            </div>
+            <img src={previewPhoto.previewUrl} alt={inspectionViewLabel[previewView]}
+              style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: '#000' }} />
+            <div className="btn-grid">
+              <button type="button" className="btn ghost" onClick={() => { setActiveView(previewView); setPreviewView(null) }}>
+                <Icon name="refresh" />Újra
+              </button>
+              {afterPreview ? (
+                <button type="button" className="btn" onClick={() => { setPreviewView(null); setActiveView(afterPreview) }}>
+                  <Icon name="arrow-right" />Jó, jöhet: {inspectionViewLabel[afterPreview]}
+                </button>
+              ) : (
+                <button type="button" className="btn" onClick={() => setPreviewView(null)}>
+                  <Icon name="check" />Jó, kész
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {firstMissing && (
+              <button type="button" className="btn" onClick={() => setActiveView(firstMissing)}>
+                <Icon name="camera" />{captured === 0 ? 'Fotózás indítása' : 'Folytatás'}: {inspectionViewLabel[firstMissing]} ({VIEWS.indexOf(firstMissing) + 1}/{VIEWS.length})
+              </button>
+            )}
+            <div className="grid-3">
+              {VIEWS.map((v) => (
+                <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
+                  onOpen={() => setActiveView(v)}
+                  onCapture={(p) => setPhotos((prev) => ({ ...prev, [v]: p }))} />
+              ))}
+            </div>
+            <div className="tiny muted">
+              {allCaptured ? 'Mind az 5 kép megvan — koppints egy képre, ha valamelyiket újra akarod csinálni.' : 'Sorban körbe az autón, a végén a fülke. Minden kép után ellenőrizheted és újra készítheted.'}
+            </div>
+          </>
         )}
+
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         {activeView && (
           <CameraCapture
@@ -167,11 +231,14 @@ function InspectionInner({ car, date }: { car: Car; date: string }) {
             onCapture={onCaptured}
           />
         )}
-        <button className="btn" disabled={!allCaptured || busy} onClick={() => void submit()}>
-          <Icon name={allCaptured ? 'check' : 'camera'} />
-          {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - VIEWS.filter((v) => photos[v]).length} fotó hiányzik`}
-        </button>
-        <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galéria nem használható.</p>
+        {!previewView && (
+          <button className="btn" disabled={!allCaptured || busy} onClick={() => void submit()}
+            style={allCaptured ? undefined : { opacity: 0.6 }}>
+            <Icon name={allCaptured ? 'save' : 'camera'} />
+            {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - captured} fotó hiányzik`}
+          </button>
+        )}
+        <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galériából nem tölthető fel, a telefonra nem mentődik.</p>
       </div>
 
       <CleaningCard car={car} date={date} />

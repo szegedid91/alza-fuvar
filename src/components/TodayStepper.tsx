@@ -68,7 +68,7 @@ export default function TodayStepper() {
     },
     {
       key: 'inspection', icon: 'camera', title: 'Autó-ellenőrzés', to: '/ellenorzes', cta: 'Ellenőrzés indítása',
-      detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a tankolás addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó: elöl, hátul, bal, jobb, beltér',
+      detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a tankolás addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó körbe az autón, a végén a fülke',
       state: inspected ? 'done' : !checkin ? 'todo' : gate.blocked ? 'blocked' : 'skip',
     },
     ...(needsBoxSheet ? [{
