@@ -82,6 +82,57 @@ export type Database = {
           },
         ]
       }
+      alza_boxes: {
+        Row: {
+          active: boolean
+          address: string | null
+          article_url: string | null
+          code: string | null
+          created_at: string
+          description: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          name: string
+          notes: string | null
+          parcel_shop_id: number | null
+          photo_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          article_url?: string | null
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+          notes?: string | null
+          parcel_shop_id?: number | null
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          article_url?: string | null
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+          notes?: string | null
+          parcel_shop_id?: number | null
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -115,8 +166,194 @@ export type Database = {
         }
         Relationships: []
       }
+      box_sheet_stops: {
+        Row: {
+          box_code: string | null
+          box_id: string | null
+          box_name: string | null
+          created_at: string
+          damaged: number
+          id: string
+          left_on_car: number
+          missorted: number
+          nf: number
+          note: string | null
+          oversize: number
+          placed: number
+          returned: number
+          seq: number
+          sheet_id: string
+          shortage: number
+          workspace_id: string
+        }
+        Insert: {
+          box_code?: string | null
+          box_id?: string | null
+          box_name?: string | null
+          created_at?: string
+          damaged?: number
+          id?: string
+          left_on_car?: number
+          missorted?: number
+          nf?: number
+          note?: string | null
+          oversize?: number
+          placed?: number
+          returned?: number
+          seq?: number
+          sheet_id: string
+          shortage?: number
+          workspace_id: string
+        }
+        Update: {
+          box_code?: string | null
+          box_id?: string | null
+          box_name?: string | null
+          created_at?: string
+          damaged?: number
+          id?: string
+          left_on_car?: number
+          missorted?: number
+          nf?: number
+          note?: string | null
+          oversize?: number
+          placed?: number
+          returned?: number
+          seq?: number
+          sheet_id?: string
+          shortage?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "box_sheet_stops_box_id_fkey"
+            columns: ["box_id"]
+            isOneToOne: false
+            referencedRelation: "alza_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "box_sheet_stops_sheet_id_fkey"
+            columns: ["sheet_id"]
+            isOneToOne: false
+            referencedRelation: "box_sheets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "box_sheet_stops_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      box_sheets: {
+        Row: {
+          car_id: string | null
+          comp_bu: number
+          comp_hb: number
+          comp_note: string | null
+          comp_r: number
+          comp_szh: number
+          created_at: string
+          end_time: string | null
+          id: string
+          ret_c: number
+          ret_d: number
+          ret_e: number
+          ret_m: number
+          start_time: string | null
+          status: Database["public"]["Enums"]["box_sheet_status"]
+          submitted_at: string | null
+          updated_at: string
+          user_id: string
+          wh_crates_no_label: number
+          wh_note: string | null
+          wh_packages_no_label: number
+          wh_pallet_items: number
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          car_id?: string | null
+          comp_bu?: number
+          comp_hb?: number
+          comp_note?: string | null
+          comp_r?: number
+          comp_szh?: number
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          ret_c?: number
+          ret_d?: number
+          ret_e?: number
+          ret_m?: number
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["box_sheet_status"]
+          submitted_at?: string | null
+          updated_at?: string
+          user_id: string
+          wh_crates_no_label?: number
+          wh_note?: string | null
+          wh_packages_no_label?: number
+          wh_pallet_items?: number
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          car_id?: string | null
+          comp_bu?: number
+          comp_hb?: number
+          comp_note?: string | null
+          comp_r?: number
+          comp_szh?: number
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          ret_c?: number
+          ret_d?: number
+          ret_e?: number
+          ret_m?: number
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["box_sheet_status"]
+          submitted_at?: string | null
+          updated_at?: string
+          user_id?: string
+          wh_crates_no_label?: number
+          wh_note?: string | null
+          wh_packages_no_label?: number
+          wh_pallet_items?: number
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "box_sheets_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "box_sheets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "box_sheets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       car_categories: {
         Row: {
+          box_sheet: boolean
           created_at: string
           crew_size: number
           id: string
@@ -125,6 +362,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          box_sheet?: boolean
           created_at?: string
           crew_size?: number
           id?: string
@@ -133,6 +371,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          box_sheet?: boolean
           created_at?: string
           crew_size?: number
           id?: string
@@ -1463,6 +1702,7 @@ export type Database = {
     }
     Enums: {
       adjustment_type: "advance" | "deduction"
+      box_sheet_status: "draft" | "submitted"
       car_issue_status: "open" | "in_progress" | "resolved"
       evidence_category: "dirt" | "damage" | "cigarette_burn" | "other"
       inspection_reason: "day9" | "driver_change" | "manual"
@@ -1599,6 +1839,7 @@ export const Constants = {
   public: {
     Enums: {
       adjustment_type: ["advance", "deduction"],
+      box_sheet_status: ["draft", "submitted"],
       car_issue_status: ["open", "in_progress", "resolved"],
       evidence_category: ["dirt", "damage", "cigarette_burn", "other"],
       inspection_reason: ["day9", "driver_change", "manual"],

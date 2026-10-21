@@ -5,7 +5,7 @@ import type { Tables } from '../lib/database.types'
 
 // A kategória (név + létszám) minden autó-listában elérhető — régi cache-ből
 // jövő soroknál hiányozhat, ezért mindig ?.-tal olvasd.
-export type Car = Tables<'cars'> & { category?: { name: string; crew_size: number } | null }
+export type Car = Tables<'cars'> & { category?: { name: string; crew_size: number; box_sheet: boolean } | null }
 
 // Az aktuális munkaterület autói. Az activeOnly a cache-kulcs része,
 // így az "összes autó" (admin lista) és a "csak aktív" (beosztás, becsekkolás)
@@ -16,7 +16,7 @@ export function useCars(activeOnly = false) {
     queryKey: ['cars', currentWorkspaceId, activeOnly],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
-      let q = supabase.from('cars').select('*, category:car_categories(name, crew_size)')
+      let q = supabase.from('cars').select('*, category:car_categories(name, crew_size, box_sheet)')
         .eq('workspace_id', currentWorkspaceId!).order('plate')
       if (activeOnly) q = q.eq('active', true)
       const { data, error } = await q

@@ -39,6 +39,21 @@ export default function TodayStepper() {
     },
   })
 
+  // Box-lap (csak AlzaBox-szállító autónál): a mai lap állapota
+  const needsBoxSheet = !!car?.category?.box_sheet
+  const { data: boxSheet } = useQuery({
+    queryKey: ['box-sheet-status', car?.id, date],
+    enabled: needsBoxSheet,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('box_sheets')
+        .select('status, submitted_at, stops:box_sheet_stops(count)').eq('work_date', date).eq('car_id', car!.id)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (error) throw error
+      const row = data as unknown as { status: string; submitted_at: string | null; stops: { count: number }[] } | null
+      return row ? { submitted: row.status === 'submitted', submittedAt: row.submitted_at, stops: row.stops?.[0]?.count ?? 0 } : null
+    },
+  })
+
   if (isLoading) return null
 
   const checkedOut = !!checkin?.checked_out_at
@@ -56,6 +71,11 @@ export default function TodayStepper() {
       detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a tankolás addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó: elöl, hátul, bal, jobb, beltér',
       state: inspected ? 'done' : !checkin ? 'todo' : gate.blocked ? 'blocked' : 'skip',
     },
+    ...(needsBoxSheet ? [{
+      key: 'boxsheet', icon: 'package' as IconName, title: 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
+      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve — a nap végén zárd le` : 'Boxonként: behelyezett, hiány, visszáru…',
+      state: (boxSheet?.submitted ? 'done' : checkin ? 'todo' : 'todo') as StepState,
+    }] : []),
     {
       key: 'checkout', icon: 'flag', title: 'Kijelentkezés', to: '/beolvasas', cta: 'Kijelentkezés (nap vége)',
       detail: checkedOut ? `Nap lezárva ${hhmm(checkin!.checked_out_at!)}` : 'A nap végén, az autó leadásakor',
@@ -68,7 +88,8 @@ export default function TodayStepper() {
   let next: Step | null = null
   if (!checkin) next = steps[0]
   else if (gate.blocked && !inspected) next = steps[1]
-  else if (!checkedOut) next = steps[2]
+  else if (needsBoxSheet && !boxSheet?.submitted) next = steps.find((s) => s.key === 'boxsheet') ?? null
+  else if (!checkedOut) next = steps[steps.length - 1]
   for (const s of steps) if (s === next) s.state = 'next'
   const allDone = !next
 

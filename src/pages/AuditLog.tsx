@@ -15,13 +15,13 @@ const ENTITY_LABEL: Record<string, string> = {
   adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
-  check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória',
+  check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
-  check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder',
+  check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder', box_sheets: 'package',
 }
 
 type Row = Record<string, unknown> | null | undefined

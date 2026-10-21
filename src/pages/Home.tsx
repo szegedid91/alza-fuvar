@@ -27,7 +27,10 @@ export default function Home() {
     { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
     { to: '/takaritas', icon: 'sparkles', title: 'Takarítás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
+    { to: '/boxok', icon: 'package', title: 'AlzaBox kereső', desc: '' },
   ]
+  // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autóhoz — az XL-eseknek nincs
+  if (today?.car?.category?.box_sheet) crewLinks.unshift({ to: '/box-lap', icon: 'clipboard', title: 'Box-lap', desc: '' })
 
   const managerHub: HubItem[] = [
     { to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
@@ -42,6 +45,8 @@ export default function Home() {
     { to: '/bizonyitek', icon: 'camera', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },
     { to: '/kepek', icon: 'image', title: 'Képek', desc: 'Autó, nap, ember szerint' },
     { to: '/tortenet', icon: 'history', title: 'Előzmények', desc: 'Autók, cserék, események' },
+    { to: '/box-lapok', icon: 'package', title: 'Box-lapok', desc: 'AlzaBox szállítási lapok' },
+    { to: '/boxok', icon: 'map-pin', title: 'AlzaBoxok', desc: 'Hol van a box?' },
   ]
   if (isAdmin) managerHub.push({ to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
   if (isAdmin) managerHub.push({ to: '/statisztika', icon: 'target', title: 'Statisztika', desc: 'Átlagok, rangsorok' })

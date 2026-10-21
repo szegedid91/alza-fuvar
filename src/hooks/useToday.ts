@@ -33,7 +33,7 @@ export function useToday() {
       const [{ data: ci, error: ciErr }, { data: shift, error: shErr }] = await Promise.all([
         supabase
           .from('check_ins')
-          .select('*, car:cars!check_ins_car_id_fkey(*, category:car_categories(name, crew_size))')
+          .select('*, car:cars!check_ins_car_id_fkey(*, category:car_categories(name, crew_size, box_sheet))')
           .eq('workspace_id', currentWorkspaceId!)
           .eq('user_id', profile!.id)
           .eq('work_date', date)

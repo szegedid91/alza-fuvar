@@ -60,6 +60,14 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
     onSuccess: () => { setError(null); invalidate() },
     onError: fail('A létszám mentése nem sikerült'),
   })
+  const setBoxSheet = useMutation({
+    mutationFn: async ({ id, box_sheet }: { id: string; box_sheet: boolean }) => {
+      const { error } = await supabase.from('car_categories').update({ box_sheet }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => { setError(null); invalidate() },
+    onError: fail('A Box-lap beállítás mentése nem sikerült'),
+  })
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('car_categories').delete().eq('id', id)
@@ -151,6 +159,16 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
                       </button>
                     ))}
                   </div>
+                  <button type="button" title={cat.box_sheet ? 'Box-lap kell (AlzaBox szállítás) — kikapcsolás' : 'Box-lap bekapcsolása (AlzaBox szállítás)'}
+                    disabled={setBoxSheet.isPending} onClick={() => setBoxSheet.mutate({ id: cat.id, box_sheet: !cat.box_sheet })}
+                    style={{
+                      border: '1px solid var(--border)', borderRadius: 999, cursor: 'pointer', minHeight: 28, padding: '0 8px', fontSize: 11, fontWeight: 700, marginRight: 4,
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: cat.box_sheet ? 'var(--primary-ghost)' : 'transparent',
+                      color: cat.box_sheet ? 'var(--primary)' : 'var(--text-dim)',
+                    }}>
+                    <Icon name="clipboard" size={14} />Box-lap
+                  </button>
                   <button className="btn ghost sm auto" style={iconBtn} title="Feljebb" disabled={idx === 0 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: -1 })} aria-label="Feljebb"><Icon name="arrow-up" size={16} /></button>
                   <button className="btn ghost sm auto" style={iconBtn} title="Lejjebb" disabled={idx === (categories?.length ?? 0) - 1 || move.isPending} onClick={() => move.mutate({ id: cat.id, dir: 1 })} aria-label="Lejjebb"><Icon name="arrow-down" size={16} /></button>
                   <button className="btn ghost sm auto" style={iconBtn} title="Átnevezés" onClick={() => { setRenaming(cat.id); setRenameVal(cat.name) }} aria-label="Átnevezés"><Icon name="pencil" size={16} /></button>

@@ -37,6 +37,9 @@ const Statistics = lazy(() => import('./pages/Statistics'))
 const PhotoReview = lazy(() => import('./pages/PhotoReview'))
 const History = lazy(() => import('./pages/History'))
 const AuditLog = lazy(() => import('./pages/AuditLog'))
+const BoxSheet = lazy(() => import('./pages/BoxSheet'))
+const BoxSheets = lazy(() => import('./pages/BoxSheets'))
+const Boxes = lazy(() => import('./pages/Boxes'))
 
 function FullScreenSpinner() {
   return <div className="center-screen"><div className="spinner" /></div>
@@ -103,6 +106,9 @@ export default function App() {
           {isCrew && <Route path="/takaritas" element={<Cleaning />} />}
           {isCrew && <Route path="/beosztas" element={<MySchedule />} />}
           {(isCrew || isManagerOrAdmin) && <Route path="/hibak" element={<CarIssues />} />}
+          {/* Box-lap: munkatársnak a mai lap, menedzsernek ?sheet=id szerkesztés */}
+          {(isCrew || isManagerOrAdmin) && <Route path="/box-lap" element={<BoxSheet />} />}
+          <Route path="/boxok" element={<Boxes />} />
 
           {/* Manager / admin */}
           {isManagerOrAdmin && <Route path="/attekintes" element={<Dashboard />} />}
@@ -119,6 +125,7 @@ export default function App() {
           {isManagerOrAdmin && <Route path="/kepek" element={<PhotoReview />} />}
           {isManagerOrAdmin && <Route path="/tortenet" element={<History />} />}
           {isAdmin && <Route path="/naplo" element={<AuditLog />} />}
+          {isManagerOrAdmin && <Route path="/box-lapok" element={<BoxSheets />} />}
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

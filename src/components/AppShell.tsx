@@ -23,6 +23,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
   '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',
   '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló',
+  '/box-lap': 'Box-lap', '/box-lapok': 'Box-lapok', '/boxok': 'AlzaBox kereső',
 }
 
 // Lehúzásra frissítés (pull-to-refresh): a lap tetején lefelé húzva minden
