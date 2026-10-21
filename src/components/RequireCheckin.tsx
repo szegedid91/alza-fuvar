@@ -12,11 +12,14 @@ export default function RequireCheckin({
 }: {
   children: (ctx: { car: Car; checkin: Tables<'check_ins'>; date: string }) => ReactNode
 }) {
-  const { data: today, isLoading } = useToday()
+  const { data: today, isLoading, isFetching } = useToday()
 
   if (isLoading) return <Skeleton rows={4} />
 
   if (!today?.car || !today.checkin) {
+    // A tárolt (lehet, hogy tegnapi/régi) cache "nincs becsekkolva"-t mutatna,
+    // amíg a friss lekérdezés fut — addig inkább helyőrző, ne "csekkolj be" felszólítás
+    if (isFetching) return <Skeleton rows={4} />
     return (
       <div className="empty">
         <span className="ico"><Icon name="qr-code" size={40} /></span>

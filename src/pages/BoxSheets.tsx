@@ -164,7 +164,7 @@ export default function BoxSheets() {
                       onClick={() => setOpenId(open ? null : s.id)}>
                       <div style={{ minWidth: 0 }}>
                         <div className="small" style={{ fontWeight: 800 }}>{s._name ?? '–'} <span className="muted" style={{ fontWeight: 500 }}>· {s.car?.plate ?? 'autó nélkül'}</span></div>
-                        <div className="tiny muted">{s.stops.length} box · {t.placed} db · {hhmm(s.start_time)}–{hhmm(s.end_time)}</div>
+                        <div className="tiny muted">{s.stops.length} box · {t.placed} db · {s.start_time ? hhmm(s.start_time) : '?'} → {s.end_time ? hhmm(s.end_time) : '…'}</div>
                       </div>
                       <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                         {issues > 0 && <span className="badge warning">{issues} eltérés</span>}

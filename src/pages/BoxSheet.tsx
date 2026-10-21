@@ -195,7 +195,7 @@ export function SheetEditor({ sheetId, managerView = false }: { sheetId: string;
         <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />
         {stops.length === 0 && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
         {stops.map((s, i) => (
-          <StopRow key={s.id} stop={s} index={i + 1} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
+          <StopRow key={s.id} stop={s} index={i + 1} isLast={i === stops.length - 1} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
             onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
         ))}
       </div>
@@ -300,11 +300,14 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, box, onPatch, onRemove }: {
-  stop: BoxStop; index: number; box: AlzaBox | null
+function StopRow({ stop, index, isLast, box, onPatch, onRemove }: {
+  stop: BoxStop; index: number; isLast: boolean; box: AlzaBox | null
   onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void
 }) {
-  const [open, setOpen] = useState(stop.placed === 0 && index > 0 && !stop.note)
+  // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
+  // hogy 10-20 boxnál is áttekinthető maradjon a lap
+  const [open, setOpen] = useState(isLast && stop.placed === 0 && !stop.note)
+  useEffect(() => { if (!isLast) setOpen(false) }, [isLast])
   const [showBox, setShowBox] = useState(false)
   const extras = STOP_FIELDS.filter((f) => f.key !== 'placed' && stop[f.key] > 0)
   const flagged = stop.shortage > 0 || stop.damaged > 0 || stop.left_on_car > 0
@@ -332,7 +335,7 @@ function StopRow({ stop, index, box, onPatch, onRemove }: {
         <>
           <div className="grid-2">
             {STOP_FIELDS.map((f) => (
-              <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} />
+              <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && isLast && stop.placed === 0} />
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
@@ -355,13 +358,13 @@ function StopRow({ stop, index, box, onPatch, onRemove }: {
 
 // Számmező: szerkesztés közben helyi szöveg, elhagyáskor (blur) ment — így egy
 // koppintás-sorozat nem indít mentést minden karakterre.
-function NumField({ label, value, onCommit, highlight = false }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean }) {
+function NumField({ label, value, onCommit, highlight = false, autoFocus = false }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean; autoFocus?: boolean }) {
   const [txt, setTxt] = useState(String(value))
   useEffect(() => { setTxt(String(value)) }, [value])
   return (
     <div className="field">
       <label>{label}</label>
-      <input className="input num" inputMode="numeric" pattern="[0-9]*" value={txt}
+      <input className="input num" inputMode="numeric" pattern="[0-9]*" value={txt} autoFocus={autoFocus}
         style={highlight ? { borderColor: 'var(--primary)' } : undefined}
         onFocus={(e) => e.target.select()}
         onChange={(e) => setTxt(e.target.value.replace(/[^\d]/g, '').slice(0, 5))}
