@@ -377,7 +377,7 @@ export default function Dashboard() {
                   {!c.inspected && c.waived && <span className="badge primary"><Icon name="shield-check" size={12} />fotó nélkül (engedéllyel)</span>}
                   {!c.inspected && !c.waived && c.open && <span className="badge warning"><Icon name="camera" size={12} />fotó hiányzik</span>}
                   {c.fueled && <span className="badge"><Icon name="fuel" size={12} />tankolt</span>}
-                  {c.openIssues === 0 && !c.inspected && !c.fueled && <span className="tiny muted">nincs mai esemény</span>}
+                  {c.openIssues === 0 && !c.inspected && !c.fueled && !c.open && <span className="tiny muted">nincs mai esemény</span>}
                 </div>
               </div>
             ))}

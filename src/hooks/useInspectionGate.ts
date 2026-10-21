@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { useToday } from './useToday'
 import { checkInspectionRequirement, type InspectionReason } from '../lib/checkin'
@@ -29,10 +30,19 @@ export function useInspectionGate(carId: string | undefined, date: string): Insp
   })
   const t = todayQ.data
   const waived = !!t?.checkin?.inspection_waived_at
+  const blocked = !!t?.car && !t.inspectionDone && !waived
+  // Amíg a kapu zárva (a munkatárs a vezetői engedélyre vár), 15 mp-enként
+  // frissítünk — az engedély után magától kinyílik, nem kell újratölteni.
+  const qc = useQueryClient()
+  useEffect(() => {
+    if (!blocked) return
+    const id = setInterval(() => { void qc.invalidateQueries({ queryKey: ['today'] }) }, 15000)
+    return () => clearInterval(id)
+  }, [blocked, qc])
   return {
     loading: todayQ.isLoading,
     // Hibánál NEM nyitunk kaput (a fotó nem kerülhető meg azzal, hogy nincs térerő)
-    blocked: !!t?.car && !t.inspectionDone && !waived,
+    blocked,
     waived,
     waivedAt: t?.checkin?.inspection_waived_at ?? null,
     error: todayQ.isError,
