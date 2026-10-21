@@ -626,6 +626,8 @@ export type Database = {
           gps_lng: number | null
           id: string
           inspection_alert_sent_at: string | null
+          inspection_crew_reminded_at: string | null
+          inspection_crew_reminders: number
           inspection_help_requested_at: string | null
           inspection_waive_note: string | null
           inspection_waived_at: string | null
@@ -652,6 +654,8 @@ export type Database = {
           gps_lng?: number | null
           id?: string
           inspection_alert_sent_at?: string | null
+          inspection_crew_reminded_at?: string | null
+          inspection_crew_reminders?: number
           inspection_help_requested_at?: string | null
           inspection_waive_note?: string | null
           inspection_waived_at?: string | null
@@ -678,6 +682,8 @@ export type Database = {
           gps_lng?: number | null
           id?: string
           inspection_alert_sent_at?: string | null
+          inspection_crew_reminded_at?: string | null
+          inspection_crew_reminders?: number
           inspection_help_requested_at?: string | null
           inspection_waive_note?: string | null
           inspection_waived_at?: string | null
