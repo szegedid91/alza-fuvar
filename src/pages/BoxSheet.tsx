@@ -7,6 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
+import InspectionGate from '../components/InspectionGate'
 import ConfirmButton from '../components/ConfirmButton'
 import BoxCard from '../components/BoxCard'
 import Icon from '../components/Icon'
@@ -53,7 +54,7 @@ export default function BoxSheetPage() {
   return (
     <div className="stack">
       <h2>Box-lap</h2>
-      <RequireCheckin>{({ car, date }) => <CrewSheet car={car} date={date} />}</RequireCheckin>
+      <RequireCheckin>{({ car, date }) => <InspectionGate carId={car.id} date={date}><CrewSheet car={car} date={date} /></InspectionGate>}</RequireCheckin>
     </div>
   )
 }

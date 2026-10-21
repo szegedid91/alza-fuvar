@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO } from '../lib/labels'
-import { getCrewForDay, type CarWithCategory, type CrewMember } from '../lib/checkin'
+import { getCrewForDay, countInspectionsToday, type CarWithCategory, type CrewMember } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
 
 export interface TodayState {
@@ -13,6 +13,9 @@ export interface TodayState {
   crew: CrewMember[]
   // A mai beosztott szerep a beosztásból (nem a profilból) — a menedzser dönti el.
   assignedRole: 'driver' | 'loader' | null
+  // A becsekkolás teljessége: van-e MA ellenőrző fotósor az autón (bárkitől).
+  // Fotó nélkül csak vezetői továbbengedéssel (checkin.inspection_waived_at) mehet tovább a nap.
+  inspectionDone: boolean
 }
 
 // Az aktuális felhasználó mai becsekkolása az aktuális munkaterületen.
@@ -22,7 +25,7 @@ export function useToday() {
   const date = todayISO()
 
   return useQuery<TodayState>({
-    queryKey: ['today', currentWorkspaceId, profile?.id, date],
+    queryKey: ['today', currentWorkspaceId, profile?.id, date, 'v2'],
     enabled: !!currentWorkspaceId && !!profile?.id,
     queryFn: async () => {
       // A két lekérdezés független — párhuzamosan futnak.
@@ -57,13 +60,13 @@ export function useToday() {
       const row = ci as unknown as (Tables<'check_ins'> & { car: CarWithCategory | null }) | null
       const checkin = row ? ({ ...row, car: undefined } as unknown as Tables<'check_ins'>) : null
       const car = row?.car ?? null
-      const crew = car ? await getCrewForDay(car.id, date) : []
+      const [crew, inspCount] = car ? await Promise.all([getCrewForDay(car.id, date), countInspectionsToday(car.id, date)]) : [[], 0]
 
       // Mai beosztott szerep a shiftből
       const assignedRole: 'driver' | 'loader' | null =
         shift?.driver_id === profile!.id ? 'driver' : shift?.loader_id === profile!.id ? 'loader' : null
 
-      return { date, checkin, car, crew, assignedRole }
+      return { date, checkin, car, crew, assignedRole, inspectionDone: inspCount > 0 }
     },
   })
 }

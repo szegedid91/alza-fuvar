@@ -55,6 +55,14 @@ export async function getCrewForDay(carId: string, date: string, openOnly = fals
   }))
 }
 
+// Van-e MA ellenőrző fotósor az autón (bárkitől) — a becsekkolás ettől teljes
+export async function countInspectionsToday(carId: string, date: string): Promise<number> {
+  const { count, error } = await supabase.from('car_inspections')
+    .select('id', { count: 'exact', head: true }).eq('car_id', carId).eq('work_date', date)
+  if (error) throw error
+  return count ?? 0
+}
+
 export type InspectionReason = Enums<'inspection_reason'>
 
 export interface InspectionRequirement {

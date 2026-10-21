@@ -1,43 +1,45 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useToday } from './useToday'
 import { checkInspectionRequirement, type InspectionReason } from '../lib/checkin'
 
 export interface InspectionGateState {
   loading: boolean
   blocked: boolean
-  error: boolean // a követelmény nem volt ellenőrizhető (pl. offline)
+  waived: boolean
+  waivedAt: string | null
+  error: boolean // az állapot nem volt ellenőrizhető (pl. offline)
   retry: () => void
-  reasons: InspectionReason[]
+  reasons: InspectionReason[] // 9-e / sofőrváltás — csak tájékoztatás, a fotó mindig kötelező
   lastDriverName?: string | null
+  checkinId: string | null
+  helpRequestedAt: string | null
 }
 
-// Kötelező ellenőrzés kikényszerítése: ha ma kell (9-e / sofőrváltás) és még nincs kész,
-// a tankolás blokkolt.
+// A becsekkolás csak a körbefotózással teljes: amíg MA nincs ellenőrző
+// fotósor az autón, a tankolás / takarítás / Box-lap / nap lezárása zárva.
+// Kivétel: a vezető a saját fiókjából fotó nélkül továbbengedte (check_ins.inspection_waived_at).
 export function useInspectionGate(carId: string | undefined, date: string): InspectionGateState {
   const { profile } = useAuth()
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inspection-gate', carId, date, profile?.id],
+  const todayQ = useToday()
+  const reasonsQ = useQuery({
+    queryKey: ['inspection-reasons', carId, date, profile?.id],
     enabled: !!carId && !!profile,
-    queryFn: async () => {
-      const req = await checkInspectionRequirement(carId!, profile!.id, date)
-      if (!req.required) return { blocked: false, reasons: [], lastDriverName: req.lastDriverName }
-      const { count } = await supabase
-        .from('car_inspections')
-        .select('id', { count: 'exact', head: true })
-        .eq('car_id', carId!)
-        .eq('work_date', date)
-      return { blocked: (count ?? 0) === 0, reasons: req.reasons, lastDriverName: req.lastDriverName }
-    },
+    queryFn: () => checkInspectionRequirement(carId!, profile!.id, date),
   })
+  const t = todayQ.data
+  const waived = !!t?.checkin?.inspection_waived_at
   return {
-    loading: isLoading,
-    // Hibánál NEM nyitunk kaput (a kötelező ellenőrzés nem kerülhető meg
-    // azzal, hogy nincs térerő) — a komponens hibakártyát mutat helyette.
-    blocked: data?.blocked ?? false,
-    error: isError,
-    retry: () => { void refetch() },
-    reasons: data?.reasons ?? [],
-    lastDriverName: data?.lastDriverName,
+    loading: todayQ.isLoading,
+    // Hibánál NEM nyitunk kaput (a fotó nem kerülhető meg azzal, hogy nincs térerő)
+    blocked: !!t?.car && !t.inspectionDone && !waived,
+    waived,
+    waivedAt: t?.checkin?.inspection_waived_at ?? null,
+    error: todayQ.isError,
+    retry: () => { void todayQ.refetch() },
+    reasons: reasonsQ.data?.required ? reasonsQ.data.reasons : [],
+    lastDriverName: reasonsQ.data?.lastDriverName,
+    checkinId: t?.checkin?.id ?? null,
+    helpRequestedAt: t?.checkin?.inspection_help_requested_at ?? null,
   }
 }

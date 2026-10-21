@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import RequireCheckin from '../components/RequireCheckin'
+import InspectionGate from '../components/InspectionGate'
 import Icon from '../components/Icon'
 import { CleaningCard } from './Inspection'
 
@@ -11,12 +12,12 @@ export default function Cleaning() {
       <h2>Takarítás</h2>
       <RequireCheckin>
         {({ car, date }) => (
-          <>
+          <InspectionGate carId={car.id} date={date}>
             <CleaningCard car={car} date={date} />
             <Link to="/ellenorzes" className="tiny muted row" style={{ gap: 6, justifyContent: 'center', textDecoration: 'none' }}>
               <Icon name="camera" size={14} />Ellenőrző fotókat az Autó-ellenőrzés oldalon készíthetsz
             </Link>
-          </>
+          </InspectionGate>
         )}
       </RequireCheckin>
     </div>

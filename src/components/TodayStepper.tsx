@@ -68,8 +68,8 @@ export default function TodayStepper() {
     },
     {
       key: 'inspection', icon: 'camera', title: 'Autó-ellenőrzés', to: '/ellenorzes', cta: 'Ellenőrzés indítása',
-      detail: inspected ? 'Fotók elmentve' : gate.blocked ? 'Ma kötelező — a tankolás addig zárva' : checkin ? 'Ma nem kötelező (bármikor készíthetsz)' : '5 fotó körbe az autón, a végén a fülke',
-      state: inspected ? 'done' : !checkin ? 'todo' : gate.blocked ? 'blocked' : 'skip',
+      detail: inspected ? 'Fotók elmentve' : gate.waived ? `Vezetői engedéllyel fotó nélkül (${hhmm(gate.waivedAt!)})` : checkin ? 'Kötelező — enélkül a nap nem mehet tovább' : '5 fotó körbe az autón, a végén a fülke',
+      state: inspected || gate.waived ? 'done' : !checkin ? 'todo' : 'blocked',
     },
     ...(needsBoxSheet ? [{
       key: 'boxsheet', icon: 'package' as IconName, title: 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
@@ -87,7 +87,7 @@ export default function TodayStepper() {
   // (kötelező ellenőrzés mindent megelőz)
   let next: Step | null = null
   if (!checkin) next = steps[0]
-  else if (gate.blocked && !inspected) next = steps[1]
+  else if (!inspected && !gate.waived) next = steps[1]
   else if (needsBoxSheet && !boxSheet?.submitted) next = steps.find((s) => s.key === 'boxsheet') ?? null
   else if (!checkedOut) next = steps[steps.length - 1]
   for (const s of steps) if (s === next) s.state = 'next'

@@ -14,6 +14,7 @@ import { inspectionViewLabel, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
+import WaiverRequest from '../components/WaiverRequest'
 import type { Enums, Tables } from '../lib/database.types'
 
 // Körbe az autón (elöl → jobb → hátul → bal), végül a fülke
@@ -124,6 +125,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
       toast.success('Ellenőrzés elmentve.')
       await qc.invalidateQueries({ queryKey: ['inspections', car.id] })
       await qc.invalidateQueries({ queryKey: ['inspections-today', car.id] })
+      await qc.invalidateQueries({ queryKey: ['today'] })
     } catch (e) {
       // Fél-kész ellenőrzés nem maradhat: a kötelező-ellenőrzés kapu hiányos
       // fotósorral is kinyílna. A már beírt sorokat visszagörgetjük.
@@ -141,6 +143,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   }
 
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+  const waived = !!checkin.inspection_waived_at
   const firstMissing = nextMissing(null)
   const previewPhoto = previewView ? photos[previewView] : null
   const afterPreview = previewView ? nextMissing(previewView) : null
@@ -157,16 +160,25 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
           <div className="small muted">Következő lépés: ellenőrző fotók körbe az autón és a fülkéről.</div>
         </div>
       )}
-      {reasonText && !doneToday && (
-        <div className="card" style={{ borderColor: 'var(--warning)' }}>
-          <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező ellenőrzés</strong></div>
-          <p className="small muted" style={{ marginTop: 6 }}>{reasonText} — a tankolás addig zárva.</p>
+      {!doneToday && !waived && (
+        <div className="card stack" style={{ borderColor: 'var(--warning)', gap: 8 }}>
+          <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező: a becsekkolás a körbefotózással teljes</strong></div>
+          <p className="small muted" style={{ margin: 0 }}>
+            {reasonText ? `${reasonText}. ` : ''}Amíg nincs meg az 5 kép, a tankolás, a takarítás, a Box-lap és a nap lezárása zárva. Fotó nélkül csak a vezető engedhet tovább a saját fiókjából.
+          </p>
+          <WaiverRequest checkinId={checkin.id} requestedAt={checkin.inspection_help_requested_at} />
         </div>
       )}
-      {reasonText && doneToday && (
+      {!doneToday && waived && (
+        <div className="card" style={{ borderColor: 'var(--primary)' }}>
+          <div className="row"><Icon name="shield-check" size={22} style={{ color: 'var(--primary)' }} /><strong>Vezetői engedéllyel fotó nélkül továbbengedve</strong></div>
+          <p className="small muted" style={{ marginTop: 6 }}>{hhmm(checkin.inspection_waived_at!)} — ha mégis tudsz, készítsd el a fotókat.</p>
+        </div>
+      )}
+      {doneToday && (
         <div className="card" style={{ borderColor: 'var(--success)' }}>
-          <div className="row"><Icon name="check-circle" size={22} style={{ color: 'var(--success)' }} /><strong>A mai kötelező ellenőrzés elkészült</strong></div>
-          <p className="small muted" style={{ marginTop: 6 }}>{reasonText}. Újabb fotósort bármikor készíthetsz.</p>
+          <div className="row"><Icon name="check-circle" size={22} style={{ color: 'var(--success)' }} /><strong>A mai ellenőrzés elkészült</strong></div>
+          <p className="small muted" style={{ marginTop: 6 }}>{reasonText ? `${reasonText}. ` : ''}Újabb fotósort bármikor készíthetsz.</p>
         </div>
       )}
 

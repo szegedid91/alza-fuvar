@@ -8,6 +8,7 @@ import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory, crewSizeFor } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
+import WaiverRequest from '../components/WaiverRequest'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
@@ -359,11 +360,26 @@ export default function Scan() {
                 {formatHours(new Date(today.checkin!.checked_out_at).getTime() - new Date(today.checkin!.checked_in_at).getTime())}
               </span>
             </div>
+          ) : !today.inspectionDone && !today.checkin!.inspection_waived_at ? (
+            // A becsekkolás fotók nélkül nem teljes — a napot sem lehet lezárni
+            <div className="stack" style={{ gap: 8 }}>
+              <div className="alert warning row" style={{ gap: 8, alignItems: 'flex-start' }}>
+                <Icon name="camera" style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>A becsekkolás még nem teljes: hiányzik az autó körbefotózása. Fotó nélkül csak a vezető engedhet tovább.</span>
+              </div>
+              <button className="btn" onClick={() => navigate('/ellenorzes')}><Icon name="camera" />Fotózás indítása</button>
+              <WaiverRequest checkinId={today.checkin!.id} requestedAt={today.checkin!.inspection_help_requested_at} />
+            </div>
           ) : (
-            // Két koppintás: a nap lezárása rögzíti a munkaidő végét — egy félrekoppintás ne zárja le a napot
-            <ConfirmButton className="btn secondary" confirmLabel="Biztos? Nap lezárása" disabled={outBusy} onConfirm={() => void checkout()}>
-              <Icon name="flag" />{outBusy ? 'Mentés…' : 'Kijelentkezés (nap vége)'}
-            </ConfirmButton>
+            <>
+              {today.checkin!.inspection_waived_at && !today.inspectionDone && (
+                <div className="tiny muted row" style={{ gap: 6 }}><Icon name="shield-check" size={14} />Vezetői engedéllyel fotó nélkül továbbengedve ({hhmm(today.checkin!.inspection_waived_at)})</div>
+              )}
+              {/* Két koppintás: a nap lezárása rögzíti a munkaidő végét — egy félrekoppintás ne zárja le a napot */}
+              <ConfirmButton className="btn secondary" confirmLabel="Biztos? Nap lezárása" disabled={outBusy} onConfirm={() => void checkout()}>
+                <Icon name="flag" />{outBusy ? 'Mentés…' : 'Kijelentkezés (nap vége)'}
+              </ConfirmButton>
+            </>
           )}
         </div>
       )}

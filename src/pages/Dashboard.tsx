@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
@@ -68,6 +69,54 @@ function CrewConflictsCard() {
               </div>
             </div>
           ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Fotó nélküli becsekkolások: a becsekkolás a körbefotózással teljes — amíg
+// nincs meg, a munkatárs napja áll. A vezető ITT, a saját fiókjából engedheti
+// tovább fotó nélkül (naplózva, a név rákerül a becsekkolásra).
+interface PendingPhoto { checkinId: string; name: string; plate: string; checkedInAt: string; helpAt: string | null }
+function PhotoPendingCard({ items }: { items: PendingPhoto[] }) {
+  const qc = useQueryClient()
+  const { profile } = useAuth()
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+  const waive = useMutation({
+    mutationFn: async (checkinId: string) => {
+      const { error } = await supabase.from('check_ins')
+        .update({ inspection_waived_at: new Date().toISOString(), inspection_waived_by: profile!.id })
+        .eq('id', checkinId)
+      if (error) throw error
+    },
+    onSuccess: () => { toast.success('Továbbengedve fotó nélkül — a munkatárs folytathatja.'); void qc.invalidateQueries({ queryKey: ['dashboard'] }) },
+    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+  })
+  if (items.length === 0) return null
+  const asking = items.filter((i) => i.helpAt).length
+  return (
+    <div className="card stack" style={{ borderColor: asking ? 'var(--danger)' : 'var(--warning)', borderWidth: asking ? 2 : 1, gap: 10 }}>
+      <div className="card-title" style={{ margin: 0, color: asking ? 'var(--danger)' : undefined }}>
+        <Icon name="camera" />Becsekkolás fotó nélkül ({items.length}){asking ? ` · ${asking} engedélyt kér` : ''}
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        Amíg az autó nincs körbefotózva, a munkatárs nem tud tankolni, takarítani, Box-lapot vezetni és a napot lezárni. Ha indokolt, itt engedheted tovább fotó nélkül — a nevedet a becsekkolás és a napló őrzi.
+      </p>
+      {items.map((p) => (
+        <div key={p.checkinId} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div className="between" style={{ gap: 8 }}>
+            <span className="small" style={{ fontWeight: 700, minWidth: 0 }}>{p.name} <span className="muted" style={{ fontWeight: 500 }}>· {p.plate}</span></span>
+            <span className="tiny muted" style={{ flexShrink: 0 }}>becsekkolt {hhmm(p.checkedInAt)}</span>
+          </div>
+          <div className="between" style={{ gap: 8 }}>
+            {p.helpAt
+              ? <span className="badge danger"><Icon name="bell" />Engedélyt kér {hhmm(p.helpAt)}</span>
+              : <span className="tiny muted">még nem fotózott</span>}
+            <ConfirmButton className="btn sm auto" confirmLabel="Biztos? Továbbengedem" disabled={waive.isPending} onConfirm={() => waive.mutate(p.checkinId)}>
+              <Icon name="shield-check" size={14} />Továbbengedés fotó nélkül
+            </ConfirmButton>
+          </div>
         </div>
       ))}
     </div>
@@ -182,7 +231,7 @@ export default function Dashboard() {
       const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }] =
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
-          supabase.from('check_ins').select('car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
@@ -202,7 +251,9 @@ export default function Dashboard() {
           .map((c) => `${names[c.user_id] ?? '?'}${c.checked_out_at ? ` (ki: ${hhmm(c.checked_out_at)})` : ''}`)
         const openIssues = (issues ?? []).filter((i) => i.car_id === carId).length
         const fueled = (fuel ?? []).some((f) => f.car_id === carId)
-        return { carId, car: carMap.get(carId), crew, openIssues, inspected: inspCars.has(carId), fueled }
+        const waived = (checkins ?? []).some((c) => c.car_id === carId && c.inspection_waived_at)
+        const open = (checkins ?? []).some((c) => c.car_id === carId && !c.checked_out_at)
+        return { carId, car: carMap.get(carId), crew, openIssues, inspected: inspCars.has(carId), fueled, waived, open }
       })
 
       // figyelmeztetések
@@ -222,6 +273,11 @@ export default function Dashboard() {
         const who = [sh.driver_id, sh.loader_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
         flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}${who ? ` — ${who}` : ''}` })
       }
+      // fotó nélküli (nem teljes) becsekkolások — a vezető engedheti tovább
+      const pendingPhoto: PendingPhoto[] = (checkins ?? [])
+        .filter((c) => !c.checked_out_at && !inspCars.has(c.car_id) && !c.inspection_waived_at)
+        .map((c) => ({ checkinId: c.id, name: names[c.user_id] ?? '?', plate: carMap.get(c.car_id)?.plate ?? '?', checkedInAt: c.checked_in_at, helpAt: c.inspection_help_requested_at }))
+        .sort((a, b) => (b.helpAt ? 1 : 0) - (a.helpAt ? 1 : 0) || a.checkedInAt.localeCompare(b.checkedInAt))
       // kötelező ellenőrzés hiányzik — EGY lekérdezéssel az összes autóra (nem autónként)
       const carsToCheck = [...checkedCarIds].filter((id) => !inspCars.has(id))
       if (carsToCheck.length > 0) {
@@ -256,7 +312,7 @@ export default function Dashboard() {
       }
 
       return {
-        perCar, flags,
+        perCar, flags, pendingPhoto,
         crews: perCar.length, openIssues: issues?.length ?? 0, fuelToday: fuel?.length ?? 0, inspToday: inspCars.size,
         lastCheckin: (checkins ?? []).map((c) => c.checked_in_at).sort().slice(-1)[0] ?? null,
       }
@@ -267,6 +323,7 @@ export default function Dashboard() {
     <div className="stack">
       <h2>Áttekintés — {currentWorkspace?.name}</h2>
       <CrewConflictsCard />
+      {data && <PhotoPendingCard items={data.pendingPhoto} />}
       {isLoading && <><Skeleton rows={2} /><Skeleton rows={3} /></>}
       {data && (
         <>
@@ -317,6 +374,8 @@ export default function Dashboard() {
                 <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
                   {c.openIssues > 0 && <Link to="/hibak" className="badge warning" style={{ textDecoration: 'none' }}><Icon name="wrench" size={12} />{c.openIssues} hiba</Link>}
                   {c.inspected && <span className="badge success"><Icon name="camera" size={12} />ellenőrizve</span>}
+                  {!c.inspected && c.waived && <span className="badge primary"><Icon name="shield-check" size={12} />fotó nélkül (engedéllyel)</span>}
+                  {!c.inspected && !c.waived && c.open && <span className="badge warning"><Icon name="camera" size={12} />fotó hiányzik</span>}
                   {c.fueled && <span className="badge"><Icon name="fuel" size={12} />tankolt</span>}
                   {c.openIssues === 0 && !c.inspected && !c.fueled && <span className="tiny muted">nincs mai esemény</span>}
                 </div>

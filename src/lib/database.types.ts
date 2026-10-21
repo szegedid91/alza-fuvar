@@ -625,6 +625,10 @@ export type Database = {
           gps_lat: number | null
           gps_lng: number | null
           id: string
+          inspection_help_requested_at: string | null
+          inspection_waive_note: string | null
+          inspection_waived_at: string | null
+          inspection_waived_by: string | null
           manual_checkin: boolean
           out_gps_lat: number | null
           out_gps_lng: number | null
@@ -646,6 +650,10 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          inspection_help_requested_at?: string | null
+          inspection_waive_note?: string | null
+          inspection_waived_at?: string | null
+          inspection_waived_by?: string | null
           manual_checkin?: boolean
           out_gps_lat?: number | null
           out_gps_lng?: number | null
@@ -667,6 +675,10 @@ export type Database = {
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          inspection_help_requested_at?: string | null
+          inspection_waive_note?: string | null
+          inspection_waived_at?: string | null
+          inspection_waived_by?: string | null
           manual_checkin?: boolean
           out_gps_lat?: number | null
           out_gps_lng?: number | null
@@ -684,6 +696,13 @@ export type Database = {
             columns: ["car_id"]
             isOneToOne: false
             referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "check_ins_inspection_waived_by_fkey"
+            columns: ["inspection_waived_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
