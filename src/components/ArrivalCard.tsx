@@ -85,7 +85,10 @@ export default function ArrivalCard() {
   return (
     <div className="card stack" style={{ gap: 8 }}>
       <a className="btn" href={waUrl(arrivalText(new Date(), name))} target="_blank" rel="noopener noreferrer"
-        style={{ textDecoration: 'none' }} onClick={() => void logArrival()}>
+        style={{ textDecoration: 'none' }}
+        // Az üzenet ideje a KOPPINTÁS pillanata (nem a kezdőlap betöltéséé) —
+        // a href-et a navigáció előtt frissítjük
+        onClick={(e) => { e.currentTarget.href = waUrl(arrivalText(new Date(), name)); void logArrival() }}>
         <Icon name="map-pin" />Alzába érkeztem
       </a>
       <p className="tiny muted" style={{ margin: 0, textAlign: 'center' }}>
