@@ -133,6 +133,57 @@ export type Database = {
         }
         Relationships: []
       }
+      arrivals: {
+        Row: {
+          arrived_at: string
+          created_at: string
+          gps_lat: number | null
+          gps_lng: number | null
+          id: string
+          outside_geofence: boolean
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          arrived_at?: string
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          outside_geofence?: boolean
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          arrived_at?: string
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          outside_geofence?: boolean
+          user_id?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "arrivals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "arrivals_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string

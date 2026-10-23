@@ -220,7 +220,7 @@ export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
 
-  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues'], [['dashboard'], ['crew-conflicts']])
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues', 'arrivals'], [['dashboard'], ['crew-conflicts']])
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentWorkspaceId, today],
@@ -228,7 +228,7 @@ export default function Dashboard() {
     refetchInterval: 60000,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }] =
+      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }, { data: arrivals }] =
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
           supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
@@ -236,10 +236,13 @@ export default function Dashboard() {
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
+          supabase.from('arrivals').select('user_id, arrived_at, outside_geofence').eq('workspace_id', ws).eq('work_date', today).order('arrived_at'),
         ])
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
-      const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id])])
+      const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id]), ...(arrivals ?? []).map((a) => a.user_id)])
+      // "Alzába érkeztem" jelzések (idő szerint)
+      const arrivedToday = (arrivals ?? []).map((a) => ({ name: names[a.user_id] ?? '?', at: a.arrived_at, outside: a.outside_geofence }))
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
 
       // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
@@ -312,7 +315,7 @@ export default function Dashboard() {
       }
 
       return {
-        perCar, flags, pendingPhoto,
+        perCar, flags, pendingPhoto, arrivedToday,
         crews: perCar.length, openIssues: issues?.length ?? 0, fuelToday: fuel?.length ?? 0, inspToday: inspCars.size,
         lastCheckin: (checkins ?? []).map((c) => c.checked_in_at).sort().slice(-1)[0] ?? null,
       }
@@ -352,6 +355,20 @@ export default function Dashboard() {
                   ? <Link key={i} to={meta.to} style={{ textDecoration: 'none', color: 'inherit' }}>{row}</Link>
                   : <div key={i}>{row}</div>
               })}
+            </div>
+          )}
+
+          {data.arrivedToday.length > 0 && (
+            <div className="card stack" style={{ gap: 6 }}>
+              <div className="card-title" style={{ margin: 0 }}><Icon name="map-pin" />Ma érkezett az Alzába ({data.arrivedToday.length})</div>
+              <div className="grid-2" style={{ gap: 4 }}>
+                {data.arrivedToday.map((a, i) => (
+                  <div key={i} className="between" style={{ gap: 6 }}>
+                    <span className="small" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                    <span className="tiny num" style={{ flexShrink: 0 }}>{new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}{a.outside ? ' ⚠' : ''}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
