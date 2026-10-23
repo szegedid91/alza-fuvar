@@ -55,6 +55,16 @@ export async function getCrewForDay(carId: string, date: string, openOnly = fals
   }))
 }
 
+// Van-e aznap betanuló beosztva az autóra (bármelyik körben) — a létszám ilyenkor +1.
+// (A munkatárs csak a saját beosztás-sorát látja; a betanulót tartalmazó sor
+// pont azé, aki vele ül, így a becsekkolási ellenőrzésnél látszik.)
+export async function traineeScheduled(carId: string, date: string): Promise<boolean> {
+  const { data, error } = await supabase.from('shifts').select('id')
+    .eq('car_id', carId).eq('work_date', date).not('trainee_id', 'is', null).limit(1)
+  if (error) { console.error('Betanuló lekérési hiba:', error.message); return false }
+  return (data ?? []).length > 0
+}
+
 // Van-e MA ellenőrző fotósor az autón (bárkitől) — a becsekkolás ettől teljes
 export async function countInspectionsToday(carId: string, date: string): Promise<number> {
   const { count, error } = await supabase.from('car_inspections')

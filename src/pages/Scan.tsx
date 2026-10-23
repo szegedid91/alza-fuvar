@@ -12,7 +12,7 @@ import WaiverRequest from '../components/WaiverRequest'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
-import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, type Car, type CrewMember, type InspectionRequirement } from '../lib/checkin'
+import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, traineeScheduled, type Car, type CrewMember, type InspectionRequirement } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
@@ -112,7 +112,8 @@ export default function Scan() {
     try {
       others = (await getCrewForDay(car.id, todayISO(), true)).filter((c) => c.user_id !== profile?.id)
     } catch { /* offline: nem tudjuk ellenőrizni — a flush után az Áttekintés jelzi */ }
-    const capacity = crewSizeFor(cars, categories, car.id)
+    // betanulóval az autón eggyel többen lehetnek
+    const capacity = crewSizeFor(cars, categories, car.id) + ((await traineeScheduled(car.id, todayISO())) ? 1 : 0)
     if (others.length >= capacity) {
       setPendingConflict({ car, manual, others, capacity })
       return
@@ -308,7 +309,7 @@ export default function Scan() {
   // Mai eseményeknél elég az óra:perc — a dátum csak zaj
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
   // A mai autó létszáma és akik most rajta vannak (nem jelentkeztek ki)
-  const capacity = today?.car?.category?.crew_size === 1 ? 1 : 2
+  const capacity = (today?.car?.category?.crew_size === 1 ? 1 : 2) + (today?.traineeOnCar ? 1 : 0)
   const openCrewCount = (today?.crew ?? []).filter((c) => !c.checked_out_at).length
 
   return (

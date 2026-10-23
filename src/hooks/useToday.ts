@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO } from '../lib/labels'
-import { getCrewForDay, countInspectionsToday, type CarWithCategory, type CrewMember } from '../lib/checkin'
+import { getCrewForDay, countInspectionsToday, traineeScheduled, type CarWithCategory, type CrewMember } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
 
 export interface TodayState {
@@ -12,7 +12,9 @@ export interface TodayState {
   car: CarWithCategory | null
   crew: CrewMember[]
   // A mai beosztott szerep a beosztásból (nem a profilból) — a menedzser dönti el.
-  assignedRole: 'driver' | 'loader' | null
+  assignedRole: 'driver' | 'loader' | 'trainee' | null
+  // Van-e ma betanuló beosztva a mai autóra (a Box 1 fős létszáma ilyenkor +1)
+  traineeOnCar: boolean
   // A becsekkolás teljessége: van-e MA ellenőrző fotósor az autón (bárkitől).
   // Fotó nélkül csak vezetői továbbengedéssel (checkin.inspection_waived_at) mehet tovább a nap.
   inspectionDone: boolean
@@ -45,10 +47,10 @@ export function useToday() {
           .maybeSingle(),
         supabase
           .from('shifts')
-          .select('driver_id, loader_id')
+          .select('driver_id, loader_id, trainee_id')
           .eq('workspace_id', currentWorkspaceId!)
           .eq('work_date', date)
-          .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id}`)
+          .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id},trainee_id.eq.${profile!.id}`)
           .limit(1)
           .maybeSingle(),
       ])
@@ -60,13 +62,15 @@ export function useToday() {
       const row = ci as unknown as (Tables<'check_ins'> & { car: CarWithCategory | null }) | null
       const checkin = row ? ({ ...row, car: undefined } as unknown as Tables<'check_ins'>) : null
       const car = row?.car ?? null
-      const [crew, inspCount] = car ? await Promise.all([getCrewForDay(car.id, date), countInspectionsToday(car.id, date)]) : [[], 0]
+      const [crew, inspCount, traineeOnCar] = car
+        ? await Promise.all([getCrewForDay(car.id, date), countInspectionsToday(car.id, date), traineeScheduled(car.id, date)])
+        : [[], 0, false]
 
       // Mai beosztott szerep a shiftből
-      const assignedRole: 'driver' | 'loader' | null =
-        shift?.driver_id === profile!.id ? 'driver' : shift?.loader_id === profile!.id ? 'loader' : null
+      const assignedRole: 'driver' | 'loader' | 'trainee' | null =
+        shift?.driver_id === profile!.id ? 'driver' : shift?.loader_id === profile!.id ? 'loader' : shift?.trainee_id === profile!.id ? 'trainee' : null
 
-      return { date, checkin, car, crew, assignedRole, inspectionDone: inspCount > 0 }
+      return { date, checkin, car, crew, assignedRole, inspectionDone: inspCount > 0, traineeOnCar }
     },
   })
 }

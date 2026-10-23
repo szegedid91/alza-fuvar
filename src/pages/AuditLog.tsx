@@ -71,15 +71,18 @@ function describe(
 
     case 'shifts': {
       const date = s(d, 'work_date') ? formatDate(s(d, 'work_date')) : ''
-      const who = [nm(s(d, 'driver_id')), nm(s(d, 'loader_id'))].filter(Boolean).join(' + ')
+      const trainee = nm(s(d, 'trainee_id'))
+      const who = [nm(s(d, 'driver_id')), nm(s(d, 'loader_id'))].filter(Boolean).join(' + ') + (trainee ? ` + betanuló: ${trainee}` : '')
       const car = plate(s(d, 'car_id'))
-      const where = [date, car, who].filter(Boolean).join(' · ')
+      const round = s(d, 'round') === '2' ? '2. kör' : ''
+      const where = [date, car, round, who].filter(Boolean).join(' · ')
       if (action === 'INSERT') return `Beosztás létrehozva — ${where}`
       if (action === 'DELETE') return `Beosztás törölve — ${where}`
       const ch: string[] = []
       if (o && n) {
         if (s(o, 'driver_id') !== s(n, 'driver_id')) ch.push(`sofőr: ${nm(s(o, 'driver_id')) ?? '—'} → ${nm(s(n, 'driver_id')) ?? '—'}`)
         if (s(o, 'loader_id') !== s(n, 'loader_id')) ch.push(`rakodó: ${nm(s(o, 'loader_id')) ?? '—'} → ${nm(s(n, 'loader_id')) ?? '—'}`)
+        if (s(o, 'trainee_id') !== s(n, 'trainee_id')) ch.push(`betanuló: ${nm(s(o, 'trainee_id')) ?? '—'} → ${nm(s(n, 'trainee_id')) ?? '—'}`)
         if (s(o, 'car_id') !== s(n, 'car_id')) ch.push(`autó: ${plate(s(o, 'car_id')) ?? '—'} → ${plate(s(n, 'car_id')) ?? '—'}`)
       }
       return `Beosztás módosítva — ${date}${car ? ` · ${car}` : ''}${ch.length ? ': ' + ch.join(', ') : ''}`
@@ -210,7 +213,7 @@ function describe(
 }
 
 // A leírásokhoz szükséges személy-azonosítók összegyűjtése a régi/új sorokból
-const ID_KEYS = ['driver_id', 'loader_id', 'user_id', 'partner_id', 'requested_by', 'reported_by', 'actor_id']
+const ID_KEYS = ['driver_id', 'loader_id', 'trainee_id', 'user_id', 'partner_id', 'requested_by', 'reported_by', 'actor_id']
 
 export default function AuditLog() {
   const { data: cars } = useQuery({

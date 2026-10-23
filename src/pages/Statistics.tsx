@@ -56,6 +56,7 @@ interface UserStat {
   days: number
   driverDays: number
   loaderDays: number
+  traineeDays: number
   hoursMs: number
   daysWithHours: number
   incidents: number
@@ -101,7 +102,7 @@ export default function Statistics() {
         fetchAll((f, t) => supabase.from('check_ins')
           .select('user_id, car_id, work_date, checked_in_at, checked_out_at, switch_reason, prev_car_id, outside_geofence, out_outside_geofence')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date')
+        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -125,7 +126,7 @@ export default function Statistics() {
       const u = (id: string): UserStat => {
         if (!users.has(id)) {
           users.set(id, {
-            id, name: '', days: 0, driverDays: 0, loaderDays: 0, hoursMs: 0, daysWithHours: 0,
+            id, name: '', days: 0, driverDays: 0, loaderDays: 0, traineeDays: 0, hoursMs: 0, daysWithHours: 0,
             incidents: 0, switches: 0,
             issues: 0, inspections: 0, cleanings: 0, outside: 0, assignedDays: 0, missedDays: 0, advances: 0, swapRequests: 0,
           })
@@ -134,10 +135,11 @@ export default function Statistics() {
       }
 
       // Napi szerep a beosztásból (beosztás nélküli nap = rakodó, mint a bérszámításban)
-      const roleByUserDay = new Map<string, 'driver' | 'loader'>()
+      const roleByUserDay = new Map<string, 'driver' | 'loader' | 'trainee'>()
       for (const s of shifts ?? []) {
+        if (s.trainee_id && !roleByUserDay.has(`${s.trainee_id}|${s.work_date}`)) roleByUserDay.set(`${s.trainee_id}|${s.work_date}`, 'trainee')
+        if (s.loader_id && roleByUserDay.get(`${s.loader_id}|${s.work_date}`) !== 'driver') roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
         if (s.driver_id) roleByUserDay.set(`${s.driver_id}|${s.work_date}`, 'driver')
-        if (s.loader_id) roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
       }
 
       // Becsekkolások: napok, órák, cserék, geofence; autónként használat
@@ -158,7 +160,9 @@ export default function Statistics() {
           seenDay.add(key)
           const row = u(c.user_id)
           row.days++
-          if ((roleByUserDay.get(key) ?? 'loader') === 'driver') row.driverDays++
+          const daily = roleByUserDay.get(key) ?? 'loader'
+          if (daily === 'driver') row.driverDays++
+          else if (daily === 'trainee') row.traineeDays++
           else row.loaderDays++
         }
         const row = u(c.user_id)
@@ -192,7 +196,7 @@ export default function Statistics() {
       const today = todayISO()
       const assignedDay = new Set<string>()
       for (const s of shifts ?? []) {
-        for (const id of [s.driver_id, s.loader_id]) {
+        for (const id of [s.driver_id, s.loader_id, s.trainee_id]) {
           if (!id) continue
           const k = `${id}|${s.work_date}`
           if (assignedDay.has(k)) continue
@@ -260,7 +264,7 @@ export default function Statistics() {
   async function exportXlsx() {
     if (!data) return
     await exportRowsToXlsx(`statisztika_${range.start}_${range.endExclusive}.xlsx`, 'Statisztika', data.userRows.map((r) => ({
-      'Munkatárs': r.name, 'Napok': r.days, 'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays,
+      'Munkatárs': r.name, 'Napok': r.days, 'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays, 'Betanuló nap': r.traineeDays,
       'Órák': Math.round((r.hoursMs / 3600000) * 10) / 10,
       'Esemény': r.incidents, 'Autócsere': r.switches, 'Hibabejelentés': r.issues,
       'Ellenőrzés': r.inspections, 'Takarítás': r.cleanings,
@@ -372,7 +376,7 @@ export default function Statistics() {
                 <span className={`badge ${r.days > 0 ? 'primary' : ''}`}>{r.days} nap</span>
               </div>
               <div className="grid-2 pay-grid small">
-                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó</span></div>
+                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó{r.traineeDays > 0 ? ` / ${r.traineeDays} betanuló` : ''}</span></div>
                 <div className="between">
                   <span className="muted">Átlag munkaidő</span>
                   <span>{r.daysWithHours > 0 ? `${formatHours(Math.round(r.hoursMs / r.daysWithHours))}/nap` : '—'}</span>

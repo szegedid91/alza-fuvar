@@ -10,7 +10,8 @@ export const roleLabel: Record<Enums<'user_role'>, string> = {
 }
 
 // Napi (beosztás szerinti) szerep címkéje — a shiftből származik, nem a profilból.
-export const dailyRoleLabel = { driver: 'Sofőr', loader: 'Rakodó' } as const
+export const dailyRoleLabel = { driver: 'Sofőr', loader: 'Rakodó', trainee: 'Betanuló' } as const
+export type DailyRole = keyof typeof dailyRoleLabel
 
 // Egységes "munkatárs" (sofőr/rakodó) szerep felismerése.
 // A driver/loader régi értékek visszafelé kompatibilisek maradnak.

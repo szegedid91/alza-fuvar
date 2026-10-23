@@ -232,14 +232,14 @@ export default function Dashboard() {
         await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
           supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
-          supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('shifts').select('car_id, driver_id, loader_id, trainee_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
         ])
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
-      const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id])])
+      const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id])])
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
 
       // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
@@ -270,7 +270,7 @@ export default function Dashboard() {
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
       // beosztva de nincs becsekkolva
       for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) {
-        const who = [sh.driver_id, sh.loader_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
+        const who = [sh.driver_id, sh.loader_id, sh.trainee_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
         flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}${who ? ` — ${who}` : ''}` })
       }
       // fotó nélküli (nem teljes) becsekkolások — a vezető engedheti tovább

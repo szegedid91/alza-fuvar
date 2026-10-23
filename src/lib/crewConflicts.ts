@@ -25,13 +25,17 @@ export interface CrewConflict {
 }
 
 export async function findCrewConflicts(workspaceId: string, date: string): Promise<CrewConflict[]> {
-  const [{ data: cars, error: carErr }, { data: cis, error: ciErr }] = await Promise.all([
+  const [{ data: cars, error: carErr }, { data: cis, error: ciErr }, { data: trShifts, error: shErr }] = await Promise.all([
     supabase.from('cars').select('id, plate, category:car_categories(name, crew_size)').eq('workspace_id', workspaceId),
     supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, crew_conflict')
       .eq('workspace_id', workspaceId).eq('work_date', date).is('checked_out_at', null).order('checked_in_at'),
+    // betanulóval az autón eggyel többen lehetnek
+    supabase.from('shifts').select('car_id').eq('workspace_id', workspaceId).eq('work_date', date).not('trainee_id', 'is', null),
   ])
   if (carErr) throw carErr
   if (ciErr) throw ciErr
+  if (shErr) throw shErr
+  const traineeCars = new Set((trShifts ?? []).map((s) => s.car_id))
 
   const carMap = new Map((cars ?? []).map((c) => [c.id, c as unknown as { id: string; plate: string; category: { name: string; crew_size: number } | null }]))
   const byCar = new Map<string, NonNullable<typeof cis>>()
@@ -43,7 +47,7 @@ export async function findCrewConflicts(workspaceId: string, date: string): Prom
   const conflicts: CrewConflict[] = []
   for (const [carId, rows] of byCar) {
     const car = carMap.get(carId)
-    const capacity = car?.category?.crew_size === 1 ? 1 : 2
+    const capacity = (car?.category?.crew_size === 1 ? 1 : 2) + (traineeCars.has(carId) ? 1 : 0)
     if (rows.length <= capacity) continue
     conflicts.push({
       carId, plate: car?.plate ?? '?', category: car?.category?.name ?? null, capacity,

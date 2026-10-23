@@ -81,7 +81,7 @@ export default function ShiftEditor() {
           .not('switch_reason', 'is', null).order('id').range(f, t)),
       ])
       const ids = [
-        ...(shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id]),
+        ...(shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]),
         ...(incidents ?? []).map((i) => i.user_id),
         ...(cleanings ?? []).map((c) => c.user_id),
         ...(geoCk ?? []).map((c) => c.user_id),
@@ -108,7 +108,7 @@ export default function ShiftEditor() {
   const monthCounts = useMemo(() => {
     const byUser = new Map<string, Set<string>>()
     for (const s of cal?.shifts ?? []) {
-      for (const uid of [s.driver_id, s.loader_id]) {
+      for (const uid of [s.driver_id, s.loader_id, s.trainee_id]) {
         if (!uid) continue
         if (!byUser.has(uid)) byUser.set(uid, new Set())
         byUser.get(uid)!.add(s.work_date)
@@ -205,11 +205,18 @@ export default function ShiftEditor() {
     return evs.sort((a, b) => b.sort.localeCompare(a.sort))
   }, [carFilter, cal, nameOf])
 
+  // Egy beosztás-sor emberei röviden: sofőr (+ rakodó) (+ betanuló)
+  const crewText = (s: Shift): string => {
+    const parts = [shortName(nameOf[s.driver_id ?? ''])]
+    if (crewOf(s.car_id) === 2 || s.loader_id) parts.push(shortName(nameOf[s.loader_id ?? '']))
+    let t = parts.join(' + ')
+    if (s.trainee_id) t += ` + bet.: ${shortName(nameOf[s.trainee_id])}`
+    return t
+  }
   const pairOf = (date: string, carId: string): string => {
-    const s = (shiftsByDay.get(date) ?? []).find((x) => x.car_id === carId)
-    if (!s) return 'nincs beosztás'
-    if (crewOf(carId) === 1 && !s.loader_id) return shortName(nameOf[s.driver_id ?? ''])
-    return `${shortName(nameOf[s.driver_id ?? ''])} + ${shortName(nameOf[s.loader_id ?? ''])}`
+    const ss = (shiftsByDay.get(date) ?? []).filter((x) => x.car_id === carId).sort((a, b) => (a.round ?? 1) - (b.round ?? 1))
+    if (ss.length === 0) return 'nincs beosztás'
+    return ss.map((s) => (ss.length > 1 ? `${s.round ?? 1}. kör: ${crewText(s)}` : crewText(s))).join(' · ')
   }
 
   const dayNames = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V']
@@ -258,7 +265,8 @@ export default function ShiftEditor() {
             const ds = (carFilter ? all.filter((s) => s.car_id === carFilter) : all)
               .slice()
               .sort((a, b) => catRank(a.car_id) - catRank(b.car_id)
-                || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? ''))
+                || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? '')
+                || (a.round ?? 1) - (b.round ?? 1))
             // A nap be nem osztott autóihoz / autó nélküli eseményekhez tartozó jelzők alul összegezve
             const shiftCarIds = new Set(ds.map((s) => s.car_id))
             const rest: Marker = { incident: false, issue: false, clean: false, geo: false, sw: false }
@@ -288,9 +296,9 @@ export default function ShiftEditor() {
                 {ds.slice(0, 3).map((s, ci, arr) => {
                   const full = !!s.driver_id && (!!s.loader_id || crewOf(s.car_id) === 1)
                   const chipIcons = iconsOf(markers.get(`${date}|${s.car_id}`), 9)
-                  const label = carFilter
-                    ? `${shortName(nameOf[s.driver_id ?? ''])}+${shortName(nameOf[s.loader_id ?? ''])}`
-                    : carOf(s.car_id)?.plate ?? '?'
+                  const label = (s.round === 2 ? '2.k ' : '') + (carFilter
+                    ? crewText(s).replace(' + ', '+')
+                    : carOf(s.car_id)?.plate ?? '?')
                   const catBreak = ci > 0 && catRank(arr[ci - 1].car_id) !== catRank(s.car_id)
                   return (
                     <Fragment key={s.id}>
@@ -301,7 +309,7 @@ export default function ShiftEditor() {
                         background: full ? 'rgba(20,184,166,.22)' : 'rgba(234,179,8,.25)',
                         overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                       }}
-                      title={`${carOf(s.car_id)?.plate ?? ''}: ${nameOf[s.driver_id ?? ''] ?? '—'} + ${nameOf[s.loader_id ?? ''] ?? '—'}`}
+                      title={`${carOf(s.car_id)?.plate ?? ''}${s.round === 2 ? ' (2. kör)' : ''}: ${nameOf[s.driver_id ?? ''] ?? '—'}${s.loader_id ? ` + ${nameOf[s.loader_id] ?? '—'}` : ''}${s.trainee_id ? ` + betanuló: ${nameOf[s.trainee_id] ?? '—'}` : ''}`}
                     >
                       {label}{chipIcons && <> {chipIcons}</>}
                     </div>
@@ -333,7 +341,8 @@ export default function ShiftEditor() {
         const dShifts = (shiftsByDay.get(d) ?? []).filter((x) => carOk(x.car_id))
           .slice()
           .sort((a, b) => catRank(a.car_id) - catRank(b.car_id)
-            || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? ''))
+            || (carOf(a.car_id)?.plate ?? '').localeCompare(carOf(b.car_id)?.plate ?? '')
+            || (a.round ?? 1) - (b.round ?? 1))
         const inc = (cal.incidents ?? []).filter((i) => i.work_date === d && carOk(i.car_id))
         const iss = (cal.issues ?? []).filter((i) => localDateOf(i.created_at) === d && carOk(i.car_id))
         const cln = (cal.cleanings ?? []).filter((c) => c.work_date === d && carOk(c.car_id))
@@ -355,9 +364,12 @@ export default function ShiftEditor() {
             </div>
             {empty && <div className="tiny muted">Ezen a napon nincs beosztás és esemény. Koppints egy másik napra a naptárban.</div>}
             {dShifts.length > 0 && (() => {
-              // Kategóriánként hány autó ment aznap
+              // Kategóriánként hány autó ment aznap (a 2. kör ugyanaz az autó — nem számol duplán)
               const counts = new Map<string, number>()
+              const seenCar = new Set<string>()
               for (const x of dShifts) {
+                if (seenCar.has(x.car_id)) continue
+                seenCar.add(x.car_id)
                 const n = catName(x.car_id) ?? 'Kategória nélkül'
                 counts.set(n, (counts.get(n) ?? 0) + 1)
               }
@@ -367,7 +379,7 @@ export default function ShiftEditor() {
                   {[...counts.entries()].map(([n, c]) => (
                     <span key={n} className="badge primary">{n}: {c} db</span>
                   ))}
-                  <span className="badge">összesen {dShifts.length} autó</span>
+                  <span className="badge">összesen {new Set(dShifts.map((x) => x.car_id)).size} autó</span>
                 </div>
               )
             })()}
@@ -379,11 +391,12 @@ export default function ShiftEditor() {
               <div className="between" style={{ gap: 8 }}>
                 <span className="small" style={{ fontWeight: 700 }}>
                   <span className="tiny muted" style={{ fontWeight: 400 }}>{catName(x.car_id) ? `${catName(x.car_id)} · ` : ''}</span>
-                  <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {plate(x.car_id)} {iconsOf(markers.get(`${d}|${x.car_id}`), 12)}
+                  <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {plate(x.car_id)} {x.round === 2 && <span className="badge primary" style={{ fontSize: 10, padding: '0 6px' }}>2. kör</span>} {iconsOf(markers.get(`${d}|${x.car_id}`), 12)}
                 </span>
-                <span className="small muted">
+                <span className="small muted" style={{ textAlign: 'right' }}>
                   {nameOf[x.driver_id ?? ''] ?? '—'}
                   {crewOf(x.car_id) === 2 || x.loader_id ? ` + ${nameOf[x.loader_id ?? ''] ?? '—'}` : ''}
+                  {x.trainee_id && <span className="tiny" style={{ display: 'block' }}>betanuló: {nameOf[x.trainee_id] ?? '—'}</span>}
                 </span>
               </div>
               </Fragment>

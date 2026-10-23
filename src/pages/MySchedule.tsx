@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { resolveContacts, telHref } from '../lib/names'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { todayISO, formatDate, formatHuf, swapStatusLabel } from '../lib/labels'
+import { todayISO, formatDate, formatHuf, swapStatusLabel, dailyRoleLabel, type DailyRole } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
@@ -48,13 +48,13 @@ export default function MySchedule() {
         .from('shifts')
         .select('*, car:cars(plate,label,category:car_categories(name))')
         .eq('workspace_id', currentWorkspaceId!)
-        .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id}`)
+        .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id},trainee_id.eq.${profile!.id}`)
         .gte('work_date', weekDays[0])
         .lte('work_date', weekDays[6])
         .order('work_date')
       if (error) throw error
       const rows = data ?? []
-      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id]))
+      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]))
       return rows.map((s) => ({ ...s, _contacts: contacts }))
     },
   })
@@ -67,12 +67,12 @@ export default function MySchedule() {
         .from('shifts')
         .select('*, car:cars(plate,label)')
         .eq('workspace_id', currentWorkspaceId!)
-        .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id}`)
+        .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id},trainee_id.eq.${profile!.id}`)
         .gte('work_date', today)
         .order('work_date')
       if (error) throw error
       const rows = data ?? []
-      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id]))
+      const contacts = await resolveContacts(rows.flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]))
       return rows.map((s) => ({ ...s, _contacts: contacts }))
     },
   })
@@ -255,12 +255,15 @@ export default function MySchedule() {
         </div>
         <div className="stack" style={{ gap: 0 }}>
           {weekDays.map((dISO, i) => {
-            const sh = (weekShifts ?? []).find((s) => s.work_date === dISO)
+            const dayShifts = (weekShifts ?? []).filter((s) => s.work_date === dISO)
+            const sh = dayShifts[0]
             const isToday = dISO === today
             const car = sh?.car as unknown as { plate: string; label: string | null; category: { name: string } | null } | null
             const contacts = (sh?._contacts ?? {}) as Record<string, Contact>
-            const iAmDriver = sh?.driver_id === profile?.id
-            const partnerId = sh ? (iAmDriver ? sh.loader_id : sh.driver_id) : null
+            const me = profile?.id
+            const myRole: DailyRole = sh?.driver_id === me ? 'driver' : sh?.loader_id === me ? 'loader' : 'trainee'
+            // Társ: a páros másik tagja; betanulónak a sofőr
+            const partnerId = sh ? (myRole === 'driver' ? (sh.loader_id ?? sh.trainee_id) : sh.driver_id) : null
             return (
               <div
                 key={dISO}
@@ -288,7 +291,7 @@ export default function MySchedule() {
                     <span className="small muted">Szabadnap</span>
                   )}
                 </div>
-                {sh && <span className="badge primary">{iAmDriver ? 'Sofőr' : 'Rakodó'}</span>}
+                {sh && <span className="badge primary">{dailyRoleLabel[myRole]}{dayShifts.length > 1 ? ' · 2 kör' : sh.round === 2 ? ' · 2. kör' : ''}</span>}
               </div>
             )
           })}
@@ -336,10 +339,15 @@ export default function MySchedule() {
         const car = s.car as unknown as { plate: string; label: string | null } | null
         const contacts = (s._contacts ?? {}) as Record<string, Contact>
         const iAmDriver = s.driver_id === profile?.id
-        const partnerId = iAmDriver ? s.loader_id : s.driver_id
-        const partner = partnerId ? contacts[partnerId]?.name ?? null : null
-        const partnerTel = partnerId ? telHref(contacts[partnerId]?.phone) : null
-        const myRole = iAmDriver ? 'Sofőr' : 'Rakodó'
+        const iAmLoader = s.loader_id === profile?.id
+        const roleKey: DailyRole = iAmDriver ? 'driver' : iAmLoader ? 'loader' : 'trainee'
+        // Cserepartner csak sofőr↔rakodó között; a betanuló a sofőrrel ül
+        const partnerId = iAmDriver ? s.loader_id : iAmLoader ? s.driver_id : null
+        const shownPartnerId = partnerId ?? (roleKey === 'trainee' ? (s.driver_id ?? s.loader_id) : null)
+        const partner = shownPartnerId ? contacts[shownPartnerId]?.name ?? null : null
+        const partnerTel = shownPartnerId ? telHref(contacts[shownPartnerId]?.phone) : null
+        const traineeName = s.trainee_id && s.trainee_id !== profile?.id ? contacts[s.trainee_id]?.name ?? 'betanuló' : null
+        const myRole = dailyRoleLabel[roleKey]
         // Legutóbbi cserekérés ehhez a shifthez
         const swap = (swaps ?? []).find((r) => r.shift_id === s.id)
         return (
@@ -352,8 +360,9 @@ export default function MySchedule() {
                 </div>
                 <div className="muted small"><span className="num">{car?.plate ?? '–'}</span>{car?.label ? ` · ${car.label}` : ''}</div>
               </div>
-              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : 'package'} />{myRole}</span>
+              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{s.round === 2 ? ' · 2. kör' : ''}</span>
             </div>
+            {traineeName && <div className="between"><span className="muted small">Betanuló veletek</span><span className="small">{traineeName}</span></div>}
             <div className="between">
               <span className="muted small">Társ</span>
               {partnerTel ? (

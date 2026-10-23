@@ -19,10 +19,15 @@ import type { Tables } from '../../lib/database.types'
 type Car = Tables<'cars'>
 type Shift = Tables<'shifts'>
 
-// Azonos sormagasság a fix és a görgethető táblázatban (2 kompakt mező + padding)
-const ROW_H = 80
-const ROW_H_SINGLE = 46 // 1 fős kategória: csak egy mező
+// Azonos sormagasság a fix és a görgethető táblázatban: mezőnként 34 px + 12 px
+// cella-padding; két körnél két blokk (+ a kör felirata) egymás alatt
+const FIELD_H = 34
+const BLOCK_PAD = 12
+const ROUND_LABEL_H = 11
 const HEAD_H = 36
+type Field = 'driver_id' | 'loader_id' | 'trainee_id'
+const FIELD_LABEL: Record<Field, string> = { driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló' }
+const FIELD_PH: Record<Field, string> = { driver_id: '— sofőr —', loader_id: '— rakodó —', trainee_id: '— betanuló —' }
 
 // ---- Heti táblázat-nézet: oszlopok = napok, sorok = autók (rendszám),
 // cellákban sofőr/rakodó választó — a megszokott Google Sheets-es munkamenet mintájára ----
@@ -93,8 +98,17 @@ export default function WeekTable() {
     },
   })
 
-  const shiftAt = (carId: string, date: string) =>
-    (shifts ?? []).find((s) => s.car_id === carId && s.work_date === date)
+  const shiftAt = (carId: string, date: string, round = 1) =>
+    (shifts ?? []).find((s) => s.car_id === carId && s.work_date === date && (s.round ?? 1) === round)
+
+  // Sor-módok: 2. kör (szezon) és betanuló mező — kézzel bekapcsolva, vagy ha a
+  // héten már van ilyen adat az autónál, automatikusan
+  const [roundCars, setRoundCars] = useState<string[]>([])
+  const [traineeCars, setTraineeCars] = useState<string[]>([])
+  const hasRound2 = (carId: string) => roundCars.includes(carId) || (shifts ?? []).some((s) => s.car_id === carId && s.round === 2)
+  const hasTrainee = (carId: string) => traineeCars.includes(carId) || (shifts ?? []).some((s) => s.car_id === carId && !!s.trainee_id)
+  const round2Count = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && s.round === 2).length
+  const traineeCount = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && !!s.trainee_id).length
 
   // Sorok: amelyik autónak van beosztása a héten + a kézzel hozzáadottak
   // Kategória szerint csoportosítva (kategória nélküliek a végén), azon belül rendszám szerint
@@ -110,13 +124,21 @@ export default function WeekTable() {
   const rowCarIds = useMemo(() => rowCars.map((c) => c.id), [rowCars])
   const categoryName = (id: string | null) => (categories ?? []).find((c) => c.id === id)?.name ?? null
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
-  // 1 fős kategóriánál is magas a sor, ha a héten valamelyik napon rakodó is
-  // van beírva (a cella olyankor két mezőt mutat — a két tábla sormagassága
-  // különben szétcsúszna)
-  const rowH = (carId: string) => (
-    crewOf(carId) === 1 && !(shifts ?? []).some((sh) => sh.car_id === carId && sh.loader_id)
-      ? ROW_H_SINGLE : ROW_H
-  )
+  // A cella mezői: sofőr, (rakodó — 2 fős kategória vagy ha be van töltve),
+  // (betanuló — ha a sor betanuló-módban van vagy be van töltve)
+  const fieldsOf = (carId: string, s?: Shift): Field[] => {
+    const f: Field[] = ['driver_id']
+    if (crewOf(carId) === 2 || s?.loader_id) f.push('loader_id')
+    if (hasTrainee(carId) || s?.trainee_id) f.push('trainee_id')
+    return f
+  }
+  // A sor magassága a hét legmagasabb cellájához igazodik (a két tábla
+  // sormagassága különben szétcsúszna)
+  const rowH = (carId: string) => {
+    const rounds = hasRound2(carId) ? 2 : 1
+    const maxFields = Math.max(...days.map((d) => Math.max(...[1, 2].map((r) => fieldsOf(carId, shiftAt(carId, d, r)).length))))
+    return rounds * (maxFields * FIELD_H + BLOCK_PAD + (rounds > 1 ? ROUND_LABEL_H : 0)) + (rounds - 1) * 6
+  }
   // Hány egymást követő sor tartozik ugyanabba a kategóriába (rowSpan-hoz)
   const groupSpan = (idx: number) => {
     const cat = rowCars[idx].category_id ?? ''
@@ -130,7 +152,7 @@ export default function WeekTable() {
   const weekCounts = useMemo(() => {
     const byUser = new Map<string, Set<string>>()
     for (const s of shifts ?? []) {
-      for (const uid of [s.driver_id, s.loader_id]) {
+      for (const uid of [s.driver_id, s.loader_id, s.trainee_id]) {
         if (!uid) continue
         if (!byUser.has(uid)) byUser.set(uid, new Set())
         byUser.get(uid)!.add(s.work_date)
@@ -146,34 +168,40 @@ export default function WeekTable() {
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
   }, [shifts, members])
 
-  // Ütközés: ugyanaz az ember aznap több helyre beosztva
+  // Ütközés: ugyanaz az ember aznap több AUTÓRA beosztva (ugyanannak az autónak
+  // a két köre nem ütközés — szezonban egy ember mehet mindkettőt)
   const dupSet = useMemo(() => {
-    const cnt = new Map<string, number>()
-    for (const s of shifts ?? []) for (const uid of [s.driver_id, s.loader_id]) {
-      if (uid) cnt.set(`${s.work_date}|${uid}`, (cnt.get(`${s.work_date}|${uid}`) ?? 0) + 1)
+    const carsOf = new Map<string, Set<string>>()
+    for (const s of shifts ?? []) for (const uid of [s.driver_id, s.loader_id, s.trainee_id]) {
+      if (!uid) continue
+      const k = `${s.work_date}|${uid}`
+      if (!carsOf.has(k)) carsOf.set(k, new Set())
+      carsOf.get(k)!.add(s.car_id)
     }
-    return new Set([...cnt.entries()].filter(([, n]) => n > 1).map(([k]) => k))
+    return new Set([...carsOf.entries()].filter(([, cs]) => cs.size > 1).map(([k]) => k))
   }, [shifts])
 
-  async function setCell(carId: string, date: string, field: 'driver_id' | 'loader_id', value: string) {
+  async function setCell(carId: string, date: string, round: number, field: Field, value: string) {
     if (!currentWorkspaceId || !profile) return
     setError(null)
     setBusyCell(`${carId}|${date}`)
     try {
-      const cur = shiftAt(carId, date)
-      const driver = field === 'driver_id' ? (value || null) : cur?.driver_id ?? null
-      const loader = field === 'loader_id' ? (value || null) : cur?.loader_id ?? null
-      if (!driver && !loader) {
-        // Mindkét mező üres → a napi beosztás törlődik
+      const cur = shiftAt(carId, date, round)
+      const next = {
+        driver_id: cur?.driver_id ?? null, loader_id: cur?.loader_id ?? null, trainee_id: cur?.trainee_id ?? null,
+        [field]: value || null,
+      }
+      if (!next.driver_id && !next.loader_id && !next.trainee_id) {
+        // Minden mező üres → a napi (köri) beosztás törlődik
         if (cur) {
           const { error } = await supabase.from('shifts').delete().eq('id', cur.id)
           if (error) throw error
         }
       } else {
         const { error } = await supabase.from('shifts').upsert({
-          workspace_id: currentWorkspaceId, work_date: date, car_id: carId,
-          driver_id: driver, loader_id: loader, created_by: profile.id,
-        }, { onConflict: 'car_id,work_date' })
+          workspace_id: currentWorkspaceId, work_date: date, car_id: carId, round,
+          ...next, created_by: profile.id,
+        }, { onConflict: 'car_id,work_date,round' })
         if (error) throw error
       }
       await qc.invalidateQueries({ queryKey: ['shift-week'] })
@@ -194,10 +222,10 @@ export default function WeekTable() {
     if (pErr) { setError(pErr.message); return }
     if ((prev ?? []).length === 0) { setCopyMsg('Az előző héten nincs beosztás.'); return }
     const rows = prev!.map((s) => ({
-      workspace_id: currentWorkspaceId, work_date: addDays(s.work_date, 7), car_id: s.car_id,
-      driver_id: s.driver_id, loader_id: s.loader_id, created_by: profile.id,
+      workspace_id: currentWorkspaceId, work_date: addDays(s.work_date, 7), car_id: s.car_id, round: s.round ?? 1,
+      driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, created_by: profile.id,
     }))
-    const { error } = await supabase.from('shifts').upsert(rows, { onConflict: 'car_id,work_date' })
+    const { error } = await supabase.from('shifts').upsert(rows, { onConflict: 'car_id,work_date,round' })
     if (error) { setError(error.message); return }
     setCopyMsg(`${rows.length} beosztás átmásolva az előző hétről.`)
     await qc.invalidateQueries({ queryKey: ['shift-week'] })
@@ -255,6 +283,7 @@ export default function WeekTable() {
     for (const sh of shifts ?? []) {
       if (sh.driver_id) ids.add(sh.driver_id)
       if (sh.loader_id) ids.add(sh.loader_id)
+      if (sh.trainee_id) ids.add(sh.trainee_id)
     }
     return ids
   }, [shifts])
@@ -268,16 +297,17 @@ export default function WeekTable() {
       const DAY_ABBR = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V']
       const dayIdx = (iso: string) => (new Date(`${iso}T12:00:00`).getDay() + 6) % 7
       const byUser = new Map<string, { date: string; text: string }[]>()
-      const add = (uid: string | null, date: string, carId: string, role: string) => {
+      const add = (uid: string | null, date: string, carId: string, role: string, round: number) => {
         if (!uid) return
         const plate = carOf(carId)?.plate ?? '?'
-        const single = crewOf(carId) === 1
-        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${single ? '' : ` (${role})`}` }
+        const single = crewOf(carId) === 1 && role !== 'betanuló'
+        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${round === 2 ? ' 2. kör' : ''}${single ? '' : ` (${role})`}` }
         byUser.set(uid, [...(byUser.get(uid) ?? []), entry])
       }
       for (const sh of list) {
-        add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr')
-        add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó')
+        add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr', sh.round ?? 1)
+        add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó', sh.round ?? 1)
+        add(sh.trainee_id, sh.work_date, sh.car_id, 'betanuló', sh.round ?? 1)
       }
       // Párhuzamosan megy minden címzettnek; a szerver megmondja, hány ESZKÖZRE
       // sikerült ténylegesen kézbesíteni — ezt írjuk ki, nem vak "kiküldve"-t.
@@ -404,28 +434,38 @@ export default function WeekTable() {
                     )}
                   <tr style={{ height: rowH(carId) }}>
                     {days.map((d) => {
-                      const s = shiftAt(carId, d)
                       const busy = busyCell === `${carId}|${d}`
                       const rowBg = rowIdx % 2 ? 'var(--bg-elev-2)' : 'var(--bg)'
-                      // 1 fős kategória: csak sofőr-mező (a rakodó akkor is látszik, ha korábbról be van töltve, hogy törölhető legyen)
-                      const fields: ('driver_id' | 'loader_id')[] = crewOf(carId) === 2 || s?.loader_id ? ['driver_id', 'loader_id'] : ['driver_id']
+                      const rounds = hasRound2(carId) ? [1, 2] : [1]
                       return (
                         <td key={d} style={{ verticalAlign: 'top', background: d === today ? 'rgba(20,184,166,.10)' : rowBg, borderRadius: 8, padding: 4, opacity: busy ? 0.55 : 1 }}>
-                          {fields.map((field) => {
-                            const val = (field === 'driver_id' ? s?.driver_id : s?.loader_id) ?? ''
-                            const dup = !!val && dupSet.has(`${d}|${val}`)
+                          {rounds.map((round) => {
+                            const s = shiftAt(carId, d, round)
+                            // 1 fős kategória: csak sofőr-mező (a rakodó/betanuló akkor is látszik, ha be van töltve, hogy törölhető legyen)
+                            const fields = fieldsOf(carId, s)
                             return (
-                              <div key={field} style={{ marginBottom: field === 'driver_id' && fields.length === 2 ? 3 : 0 }}>
-                                <PersonPicker
-                                  compact
-                                  value={val}
-                                  options={memberOptions}
-                                  placeholder={field === 'driver_id' ? ('— sofőr —') : '— rakodó —'}
-                                  disabled={busy}
-                                  danger={dup}
-                                  title={dup ? 'Ütközés: aznap máshova is be van osztva!' : field === 'driver_id' ? ('Sofőr') : 'Rakodó'}
-                                  onChange={(id) => void setCell(carId, d, field, id)}
-                                />
+                              <div key={round} style={{ marginBottom: round < rounds.length ? 6 : 0 }}>
+                                {rounds.length > 1 && (
+                                  <div className="tiny muted" style={{ fontSize: 9, lineHeight: `${ROUND_LABEL_H}px`, fontWeight: 700, paddingLeft: 2 }}>{round}. kör</div>
+                                )}
+                                {fields.map((field, fi) => {
+                                  const val = s?.[field] ?? ''
+                                  const dup = !!val && dupSet.has(`${d}|${val}`)
+                                  return (
+                                    <div key={field} style={{ marginBottom: fi < fields.length - 1 ? 3 : 0 }}>
+                                      <PersonPicker
+                                        compact
+                                        value={val}
+                                        options={memberOptions}
+                                        placeholder={FIELD_PH[field]}
+                                        disabled={busy}
+                                        danger={dup}
+                                        title={dup ? 'Ütközés: aznap másik autóra is be van osztva!' : FIELD_LABEL[field]}
+                                        onChange={(id) => void setCell(carId, d, round, field, id)}
+                                      />
+                                    </div>
+                                  )
+                                })}
                               </div>
                             )
                           })}
@@ -467,6 +507,25 @@ export default function WeekTable() {
                     ))}
                   </select>
                 </div>
+                {(() => {
+                  const cid = rowMenu.carId
+                  const r2 = hasRound2(cid); const n2 = round2Count(cid)
+                  const tr = hasTrainee(cid); const nt = traineeCount(cid)
+                  return (
+                    <div className="stack" style={{ gap: 6 }}>
+                      <button type="button" className={`btn sm ${r2 ? 'secondary' : 'ghost'}`} disabled={rowBusy || (r2 && n2 > 0)}
+                        title={r2 && n2 > 0 ? 'Előbb üresítsd ki a 2. kör mezőit' : undefined}
+                        onClick={() => setRoundCars((p) => (r2 ? p.filter((x) => x !== cid) : [...p, cid]))}>
+                        <Icon name="repeat" size={14} />{r2 ? `2. kör: bekapcsolva${n2 ? ` (${n2} nap)` : ''}` : '2. kör bekapcsolása (szezon)'}
+                      </button>
+                      <button type="button" className={`btn sm ${tr ? 'secondary' : 'ghost'}`} disabled={rowBusy || (tr && nt > 0)}
+                        title={tr && nt > 0 ? 'Előbb üresítsd ki a betanuló mezőket' : undefined}
+                        onClick={() => setTraineeCars((p) => (tr ? p.filter((x) => x !== cid) : [...p, cid]))}>
+                        <Icon name="user" size={14} />{tr ? `Betanuló mező: bekapcsolva${nt ? ` (${nt} nap)` : ''}` : 'Betanuló mező mutatása'}
+                      </button>
+                    </div>
+                  )
+                })()}
                 <ConfirmButton className="btn danger sm" confirmLabel={n > 0 ? `Igen, ${n} beosztás törlése` : 'Igen, kiveszem'} disabled={rowBusy}
                   onConfirm={() => void removeCarFromWeek(rowMenu.carId)}>
                   Kivétel a hétből{n > 0 ? ` (${n} beosztás törlődik)` : ''}
@@ -493,8 +552,8 @@ export default function WeekTable() {
           ))}
         </select>
         <div className="tiny muted">
-          A cella azonnal mentődik. Piros keret = az ember aznap két helyre is be van osztva.
-          Mező kiürítése törli a napi beosztást. A rendszámra koppintva az autó cserélhető vagy kivehető a hétből. Görgethető oldalra →
+          A cella azonnal mentődik. Piros keret = az ember aznap másik autóra is be van osztva.
+          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>2. kör</strong> (szezon, akár más emberrel) és <strong>betanuló</strong> mező bekapcsolása. Görgethető oldalra →
         </div>
       </div>
 

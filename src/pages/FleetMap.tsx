@@ -64,7 +64,7 @@ export default function FleetMap() {
       const ws = currentWorkspaceId!
       const [carsRes, shiftsRes, checkins, inspections, cleanings, fuel, incidents] = await Promise.all([
         supabase.from('cars').select('id, plate').eq('workspace_id', ws),
-        supabase.from('shifts').select('car_id, driver_id, loader_id').eq('workspace_id', ws).eq('work_date', today),
+        supabase.from('shifts').select('car_id, driver_id, loader_id, trainee_id').eq('workspace_id', ws).eq('work_date', today),
         fetchAll((f, t) => supabase.from('check_ins')
           .select('car_id, user_id, checked_in_at, checked_out_at, gps_lat, gps_lng, out_gps_lat, out_gps_lng')
           .eq('workspace_id', ws).eq('work_date', today).order('id').range(f, t)),
@@ -101,7 +101,7 @@ export default function FleetMap() {
       const shifts = shiftsRes.data ?? []
       const names = await resolveNames([
         ...validEvents.map((e) => e.userId),
-        ...shifts.flatMap((sh) => [sh.driver_id, sh.loader_id]),
+        ...shifts.flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id]),
       ])
 
       // Mai legénység autónként (sofőr + rakodó nevek)
@@ -113,12 +113,13 @@ export default function FleetMap() {
       }
       for (const sh of shifts) {
         if (!sh.car_id) continue
-        const crew = [sh.driver_id, sh.loader_id]
+        const crew = [sh.driver_id, sh.loader_id, sh.trainee_id]
           .filter((x): x is string => !!x)
           .map((id) => names[id] ?? 'munkatárs')
-        if (crew.length) crewByCar.set(sh.car_id, crew)
+        if (crew.length) crewByCar.set(sh.car_id, [...(crewByCar.get(sh.car_id) ?? []), ...crew])
         addPersonCar(sh.driver_id, sh.car_id)
         addPersonCar(sh.loader_id, sh.car_id)
+        addPersonCar(sh.trainee_id, sh.car_id)
       }
       for (const e of validEvents) addPersonCar(e.userId, e.carId)
 

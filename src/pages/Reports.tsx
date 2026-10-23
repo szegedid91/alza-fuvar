@@ -16,7 +16,7 @@ import Skeleton from '../components/Skeleton'
 // üzemanyag + karbantartási események.
 interface UserRow {
   id: string; name: string; days: number; hoursMs: number
-  driverDays: number; loaderDays: number
+  driverDays: number; loaderDays: number; traineeDays: number
   inspections: number; cleanings: number; issues: number; incidents: number
 }
 interface CarRow {
@@ -42,7 +42,7 @@ export default function Reports() {
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, car_id, work_date, checked_in_at, checked_out_at')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date')
+        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption, odometer_km')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -59,16 +59,17 @@ export default function Reports() {
       const cars = (carsRes.data ?? []) as unknown as { id: string; plate: string; category: { name: string } | null }[]
 
       // Napi szerep a beosztásból
-      const roleByUserDay = new Map<string, 'driver' | 'loader'>()
+      const roleByUserDay = new Map<string, 'driver' | 'loader' | 'trainee'>()
       for (const s of shifts ?? []) {
+        if (s.trainee_id && !roleByUserDay.has(`${s.trainee_id}|${s.work_date}`)) roleByUserDay.set(`${s.trainee_id}|${s.work_date}`, 'trainee')
+        if (s.loader_id && roleByUserDay.get(`${s.loader_id}|${s.work_date}`) !== 'driver') roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
         if (s.driver_id) roleByUserDay.set(`${s.driver_id}|${s.work_date}`, 'driver')
-        if (s.loader_id) roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
       }
 
       // Fejenkénti összesítés
       const users = new Map<string, UserRow>()
       const u = (id: string): UserRow => {
-        if (!users.has(id)) users.set(id, { id, name: '', days: 0, hoursMs: 0, driverDays: 0, loaderDays: 0, inspections: 0, cleanings: 0, issues: 0, incidents: 0 })
+        if (!users.has(id)) users.set(id, { id, name: '', days: 0, hoursMs: 0, driverDays: 0, loaderDays: 0, traineeDays: 0, inspections: 0, cleanings: 0, issues: 0, incidents: 0 })
         return users.get(id)!
       }
       const seenDay = new Set<string>()
@@ -85,6 +86,7 @@ export default function Reports() {
           // Ugyanaz a szabály, mint a bérszámításban: beosztás nélküli nap = rakodó
           const daily = roleByUserDay.get(key) ?? 'loader'
           if (daily === 'driver') row.driverDays++
+          else if (daily === 'trainee') row.traineeDays++
           else row.loaderDays++
         }
         const from = new Date(c.checked_in_at).getTime()
@@ -160,7 +162,7 @@ export default function Reports() {
     await exportRowsToXlsx(`riport_${ym}.xlsx`, `Riport ${ym}`, [
       ...data.userRows.map((r) => ({
         'Típus': 'Munkatárs', 'Név / rendszám': r.name, 'Napok': r.days, 'Órák': Math.round((r.hoursMs / 3600000) * 10) / 10,
-        'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays,
+        'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays, 'Betanuló nap': r.traineeDays,
         'Ellenőrzés': r.inspections, 'Takarítás': r.cleanings, 'Hibabejelentés': r.issues, 'Esemény': r.incidents,
         'Tankolás (db)': '', 'Liter': '', 'Üzemanyag (Ft)': '', 'Átlagfogyasztás': '', 'Km (hónap)': '', 'Nyitott hiba': '',
       })),
@@ -217,7 +219,7 @@ export default function Reports() {
                 <span className={`badge ${r.days > 0 ? 'primary' : ''}`}>{r.days} nap</span>
               </div>
               <div className="grid-2 pay-grid small">
-                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó</span></div>
+                <div className="between"><span className="muted">Szerep</span><span>{r.driverDays} sofőr / {r.loaderDays} rakodó{r.traineeDays > 0 ? ` / ${r.traineeDays} betanuló` : ''}</span></div>
                 <div className="between"><span className="muted">Órák</span><span>{r.hoursMs > 0 ? formatHours(r.hoursMs) : '—'}</span></div>
                 <div className="between"><span className="muted">Ellenőrzés / takarítás</span><span>{r.inspections} / {r.cleanings}</span></div>
                 <div className="between">

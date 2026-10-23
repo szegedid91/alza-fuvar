@@ -13,7 +13,7 @@ import Skeleton from '../components/Skeleton'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import type { Tables } from '../lib/database.types'
 
-interface WorkspaceRate { id: string; name: string; driver: number; loader: number }
+interface WorkspaceRate { id: string; name: string; driver: number; loader: number; trainee: number }
 
 // Havi zárás: zárolt hónapra a DB-trigger tiltja a bér-befolyásoló írásokat
 // (előleg/levonás, beosztás, becsekkolás, tankolás). Csak admin zárolhat/oldhat.
@@ -89,15 +89,15 @@ export default function Payroll() {
         // Státusz-szűrő NÉLKÜL: a hónap közben letiltott munkatársnak is jár a
         // ledolgozott napjaiért a bér — csak a bér nélküli inaktívakat hagyjuk ki lent
         supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)'),
-        supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate').order('name'),
+        supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate, trainee_day_rate').order('name'),
         // A hónapra ÉRVÉNYES napidíjak: minden olyan sor, ami a hónap kezdetéig
         // hatályba lépett — munkaterületenként a legutolsó számít
         supabase.from('workspace_rate_history')
-          .select('workspace_id, valid_from, driver_day_rate, loader_day_rate')
+          .select('workspace_id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate')
           .lte('valid_from', range.start).order('valid_from'),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, work_date, workspace_id')
+        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, reason')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -112,19 +112,21 @@ export default function Payroll() {
       if (rateHistRes.error) throw rateHistRes.error
       const rates: Record<string, WorkspaceRate> = {}
       for (const w of workspaces ?? []) {
-        rates[w.id] = { id: w.id, name: w.name, driver: Number(w.driver_day_rate ?? 0), loader: Number(w.loader_day_rate ?? 0) }
+        rates[w.id] = { id: w.id, name: w.name, driver: Number(w.driver_day_rate ?? 0), loader: Number(w.loader_day_rate ?? 0), trainee: Number(w.trainee_day_rate ?? 0) }
       }
       // valid_from szerint növekvő sorrendben jön: az utolsó illeszkedő nyer
       for (const r of rateHistRes.data ?? []) {
         const ws = rates[r.workspace_id]
-        if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0) }
+        if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0); ws.trainee = Number(r.trainee_day_rate ?? 0) }
       }
 
-      // Napi szerep a beosztásból: kulcs `${userId}|${date}` -> 'driver' | 'loader'
-      const roleByUserDay = new Map<string, 'driver' | 'loader'>()
+      // Napi szerep a beosztásból: kulcs `${userId}|${date}` -> 'driver' | 'loader' | 'trainee'
+      // (két körnél ugyanaz az ember ugyanúgy egy napot kap — a szerep a sofőr, ha bármelyik körben az)
+      const roleByUserDay = new Map<string, 'driver' | 'loader' | 'trainee'>()
       for (const s of shifts ?? []) {
+        if (s.trainee_id && !roleByUserDay.has(`${s.trainee_id}|${s.work_date}`)) roleByUserDay.set(`${s.trainee_id}|${s.work_date}`, 'trainee')
+        if (s.loader_id && roleByUserDay.get(`${s.loader_id}|${s.work_date}`) !== 'driver') roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
         if (s.driver_id) roleByUserDay.set(`${s.driver_id}|${s.work_date}`, 'driver')
-        if (s.loader_id) roleByUserDay.set(`${s.loader_id}|${s.work_date}`, 'loader')
       }
 
       // Ledolgozott napok usereként (a becsekkolásból, duplázás nélkül)
@@ -152,16 +154,19 @@ export default function Payroll() {
           const dayMap = daysByUser.get(p.id) ?? new Map<string, string>()
           let driverDays = 0
           let loaderDays = 0
+          let traineeDays = 0
           let base = 0
-          const workedDays: { date: string; role: 'driver' | 'loader'; rate: number }[] = []
+          const workedDays: { date: string; role: 'driver' | 'loader' | 'trainee'; rate: number }[] = []
           let driverPay = 0
           let loaderPay = 0
+          let traineePay = 0
           for (const [date, wsId] of dayMap) {
             const r = rates[wsId ?? p.workspace_id ?? '']
             // Ha nincs beosztott szerep aznap, rakodóként számoljuk (alacsonyabb díj)
             const daily = roleByUserDay.get(`${p.id}|${date}`) ?? 'loader'
-            const dayRate = daily === 'driver' ? (r?.driver ?? 0) : (r?.loader ?? 0)
+            const dayRate = daily === 'driver' ? (r?.driver ?? 0) : daily === 'trainee' ? (r?.trainee ?? 0) : (r?.loader ?? 0)
             if (daily === 'driver') { driverDays++; driverPay += dayRate }
+            else if (daily === 'trainee') { traineeDays++; traineePay += dayRate }
             else { loaderDays++; loaderPay += dayRate }
             base += dayRate
             workedDays.push({ date, role: daily, rate: dayRate })
@@ -173,9 +178,9 @@ export default function Payroll() {
           const deductions = dedByUser.get(p.id) ?? 0
           return {
             userId: p.id, name: p.full_name || p.email || '—', workspace: p.workspace?.name ?? '—',
-            workspaceId: p.workspace_id, driverDays, loaderDays, days: driverDays + loaderDays,
-            driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0,
-            driverPay, loaderPay,
+            workspaceId: p.workspace_id, driverDays, loaderDays, traineeDays, days: driverDays + loaderDays + traineeDays,
+            driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0, traineeRate: wsRate?.trainee ?? 0,
+            driverPay, loaderPay, traineePay,
             advances, deductions, base,
             status: p.status as string,
             earned: base - deductions,
@@ -196,8 +201,8 @@ export default function Payroll() {
     if (!data) return
     await exportRowsToXlsx(`ber_${ym}.xlsx`, `Bér ${ym}`, data.rows.map((r) => ({
       'Munkatárs': r.name, 'Munkaterület': r.workspace,
-      'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays, 'Ledolgozott nap': r.days,
-      'Sofőr napidíj': r.driverRate, 'Rakodó napidíj': r.loaderRate, 'Alapbér': r.base,
+      'Sofőr nap': r.driverDays, 'Rakodó nap': r.loaderDays, 'Betanuló nap': r.traineeDays, 'Ledolgozott nap': r.days,
+      'Sofőr napidíj': r.driverRate, 'Rakodó napidíj': r.loaderRate, 'Betanuló napidíj': r.traineeRate, 'Alapbér': r.base,
       'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
     })))
   }
@@ -295,13 +300,14 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   const [addFrom, setAddFrom] = useState(nowYm)
   const [driver, setDriver] = useState('')
   const [loader, setLoader] = useState('')
+  const [trainee, setTrainee] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const { data: history } = useQuery({
     queryKey: ['rate-history', ws.id],
     queryFn: async () => {
       const { data, error } = await supabase.from('workspace_rate_history')
-        .select('id, valid_from, driver_day_rate, loader_day_rate')
+        .select('id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate')
         .eq('workspace_id', ws.id)
         .order('valid_from', { ascending: false })
       if (error) throw error
@@ -313,16 +319,17 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
     mutationFn: async () => {
       const d = parseHuNumber(driver)
       const l = parseHuNumber(loader)
-      if (!Number.isFinite(d) || !Number.isFinite(l) || d < 0 || l < 0) {
+      const tr = trainee.trim() ? parseHuNumber(trainee) : 0
+      if (!Number.isFinite(d) || !Number.isFinite(l) || !Number.isFinite(tr) || d < 0 || l < 0 || tr < 0) {
         throw new Error('Érvénytelen összeg — írj be számot, pl. 25 000')
       }
       const { error } = await supabase.rpc('set_workspace_rate_from', {
-        p_workspace_id: ws.id, p_valid_from: `${addFrom}-01`, p_driver_rate: d, p_loader_rate: l,
+        p_workspace_id: ws.id, p_valid_from: `${addFrom}-01`, p_driver_rate: d, p_loader_rate: l, p_trainee_rate: tr,
       })
       if (error) throw error
     },
     onSuccess: () => {
-      setError(null); setDriver(''); setLoader(''); setOpen(false)
+      setError(null); setDriver(''); setLoader(''); setTrainee(''); setOpen(false)
       void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
       void qc.invalidateQueries({ queryKey: ['payroll'] })
     },
@@ -369,6 +376,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       <div className="grid-2 small">
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="truck" size={14} />Sofőr/nap</span><span className="num">{formatHuf(ws.driver)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="package" size={14} />Rakodó/nap</span><span className="num">{formatHuf(ws.loader)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="user" size={14} />Betanuló/nap</span><span className="num">{formatHuf(ws.trainee)}</span></div>
       </div>
       <div className="tiny muted" style={{ marginTop: -6 }}>Érvényes: {monthTitle(nowYm)}</div>
 
@@ -386,6 +394,10 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
             <div className="field">
               <label>Rakodó napidíj (Ft)</label>
               <input className="input" inputMode="decimal" value={loader} onChange={(e) => setLoader(e.target.value)} placeholder="pl. 20 000" />
+            </div>
+            <div className="field">
+              <label>Betanuló napidíj (Ft)</label>
+              <input className="input" inputMode="decimal" value={trainee} onChange={(e) => setTrainee(e.target.value)} placeholder="0 = nem fizetett" />
             </div>
           </div>
           <div className="tiny muted">
@@ -429,6 +441,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                       <span className="muted"> · </span>
                       <Icon name="package" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(r.loader_day_rate))}
                       {lPct && <span style={{ color: lPct.startsWith('+') ? 'var(--success)' : 'var(--danger)' }}> ({lPct})</span>}
+                      {Number(r.trainee_day_rate) > 0 && <><span className="muted"> · </span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(r.trainee_day_rate))}</>}
                     </span>
                     {isActive && <span className="badge primary">ekkor érvényes</span>}
                     {isFuture && <span className="badge warning">jövőbeli</span>}
@@ -480,6 +493,7 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
       <div className="grid-2 pay-grid small">
         <div className="between"><span className="muted">Sofőrként</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>
         <div className="between"><span className="muted">Rakodóként</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>
+        {row.traineeDays > 0 && <div className="between"><span className="muted">Betanulóként</span><span>{row.traineeDays} nap · {formatHuf(row.traineePay)}</span></div>}
         <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
         <div className="between"><span className="muted">Előleg</span><span style={{ color: row.advances > 0 ? 'var(--warning)' : undefined }}>{row.advances > 0 ? '−' : ''}{formatHuf(row.advances)}</span></div>

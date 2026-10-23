@@ -1402,6 +1402,8 @@ export type Database = {
           driver_id: string | null
           id: string
           loader_id: string | null
+          round: number
+          trainee_id: string | null
           work_date: string
           workspace_id: string
         }
@@ -1412,6 +1414,8 @@ export type Database = {
           driver_id?: string | null
           id?: string
           loader_id?: string | null
+          round?: number
+          trainee_id?: string | null
           work_date: string
           workspace_id: string
         }
@@ -1422,6 +1426,8 @@ export type Database = {
           driver_id?: string | null
           id?: string
           loader_id?: string | null
+          round?: number
+          trainee_id?: string | null
           work_date?: string
           workspace_id?: string
         }
@@ -1450,6 +1456,13 @@ export type Database = {
           {
             foreignKeyName: "shifts_loader_id_fkey"
             columns: ["loader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_trainee_id_fkey"
+            columns: ["trainee_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1551,6 +1564,7 @@ export type Database = {
           driver_day_rate: number
           id: string
           loader_day_rate: number
+          trainee_day_rate: number
           valid_from: string
           workspace_id: string
         }
@@ -1560,6 +1574,7 @@ export type Database = {
           driver_day_rate: number
           id?: string
           loader_day_rate: number
+          trainee_day_rate?: number
           valid_from: string
           workspace_id: string
         }
@@ -1569,6 +1584,7 @@ export type Database = {
           driver_day_rate?: number
           id?: string
           loader_day_rate?: number
+          trainee_day_rate?: number
           valid_from?: string
           workspace_id?: string
         }
@@ -1600,6 +1616,7 @@ export type Database = {
           loader_day_rate: number
           name: string
           photo_retention_days: number
+          trainee_day_rate: number
         }
         Insert: {
           created_at?: string
@@ -1611,6 +1628,7 @@ export type Database = {
           loader_day_rate?: number
           name: string
           photo_retention_days?: number
+          trainee_day_rate?: number
         }
         Update: {
           created_at?: string
@@ -1622,6 +1640,7 @@ export type Database = {
           loader_day_rate?: number
           name?: string
           photo_retention_days?: number
+          trainee_day_rate?: number
         }
         Relationships: []
       }
@@ -1711,6 +1730,7 @@ export type Database = {
         Args: {
           p_driver_rate: number
           p_loader_rate: number
+          p_trainee_rate?: number
           p_valid_from: string
           p_workspace_id: string
         }
