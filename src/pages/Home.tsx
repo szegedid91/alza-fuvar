@@ -4,7 +4,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
-import ArrivalCard from '../components/ArrivalCard'
+import StatusCard from '../components/StatusCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
 
@@ -90,7 +90,7 @@ export default function Home() {
         )}
       </div>
 
-      {isCrew && <ArrivalCard />}
+      {isCrew && <StatusCard />}
       {isCrew && <TodayStepper />}
 
       {isCrew && (

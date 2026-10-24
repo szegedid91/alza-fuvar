@@ -133,57 +133,6 @@ export type Database = {
         }
         Relationships: []
       }
-      arrivals: {
-        Row: {
-          arrived_at: string
-          created_at: string
-          gps_lat: number | null
-          gps_lng: number | null
-          id: string
-          outside_geofence: boolean
-          user_id: string
-          work_date: string
-          workspace_id: string
-        }
-        Insert: {
-          arrived_at?: string
-          created_at?: string
-          gps_lat?: number | null
-          gps_lng?: number | null
-          id?: string
-          outside_geofence?: boolean
-          user_id: string
-          work_date: string
-          workspace_id: string
-        }
-        Update: {
-          arrived_at?: string
-          created_at?: string
-          gps_lat?: number | null
-          gps_lng?: number | null
-          id?: string
-          outside_geofence?: boolean
-          user_id?: string
-          work_date?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "arrivals_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "arrivals_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       audit_log: {
         Row: {
           action: string
@@ -1527,6 +1476,76 @@ export type Database = {
           },
         ]
       }
+      status_events: {
+        Row: {
+          at: string
+          car_id: string | null
+          created_at: string
+          gps_lat: number | null
+          gps_lng: number | null
+          id: string
+          kind: Database["public"]["Enums"]["status_kind"]
+          note: string | null
+          outside_geofence: boolean
+          photo_path: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          at?: string
+          car_id?: string | null
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          kind: Database["public"]["Enums"]["status_kind"]
+          note?: string | null
+          outside_geofence?: boolean
+          photo_path?: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          at?: string
+          car_id?: string | null
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          kind?: Database["public"]["Enums"]["status_kind"]
+          note?: string | null
+          outside_geofence?: boolean
+          photo_path?: string | null
+          user_id?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_events_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       swap_requests: {
         Row: {
           created_at: string
@@ -1818,6 +1837,7 @@ export type Database = {
       inspection_reason: "day9" | "driver_change" | "manual"
       inspection_view: "front" | "rear" | "left" | "right" | "interior"
       pay_type: "daily" | "monthly"
+      status_kind: "arrived" | "departed" | "done" | "issue"
       swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
       user_status: "pending" | "active" | "disabled"
@@ -1955,6 +1975,7 @@ export const Constants = {
       inspection_reason: ["day9", "driver_change", "manual"],
       inspection_view: ["front", "rear", "left", "right", "interior"],
       pay_type: ["daily", "monthly"],
+      status_kind: ["arrived", "departed", "done", "issue"],
       swap_status: ["pending", "approved", "rejected"],
       user_role: ["driver", "loader", "manager", "admin", "crew"],
       user_status: ["pending", "active", "disabled"],
