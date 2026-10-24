@@ -1658,6 +1658,7 @@ export type Database = {
       }
       workspaces: {
         Row: {
+          arrival_whatsapp_group: string | null
           created_at: string
           driver_day_rate: number
           geo_lat: number | null
@@ -1670,6 +1671,7 @@ export type Database = {
           trainee_day_rate: number
         }
         Insert: {
+          arrival_whatsapp_group?: string | null
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1682,6 +1684,7 @@ export type Database = {
           trainee_day_rate?: number
         }
         Update: {
+          arrival_whatsapp_group?: string | null
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1766,6 +1769,10 @@ export type Database = {
           p_status: Database["public"]["Enums"]["user_status"]
           target_id: string
         }
+        Returns: undefined
+      }
+      set_workspace_arrival_group: {
+        Args: { p_link: string; p_workspace_id: string }
         Returns: undefined
       }
       set_workspace_geofence: {

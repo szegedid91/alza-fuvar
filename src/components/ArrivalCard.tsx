@@ -10,12 +10,28 @@ import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 
 // "Alzába érkeztem": egy koppintás rögzíti az érkezést (idő + GPS — a vezetők
-// az Áttekintésben látják), és megnyitja a WhatsAppot előre megírt üzenettel,
-// amit a futár a csoportba küld. (A WhatsApp nem enged app-ból csoportba írni,
-// ezért a küldés maga a futáré: csoport kiválasztása + küldés.)
+// az Áttekintésben látják), és megnyitja a WhatsAppot. Ha a munkaterületen be
+// van állítva a csoport meghívó-linkje, egyből a CSOPORT nyílik, és az üzenet
+// a vágólapra kerül (beillesztés + küldés); link nélkül a csoport-választó
+// nyílik a kész szöveggel. (A WhatsApp csoporthoz nem enged előre kitöltött
+// szöveget linkből, ezért a vágólap.)
 const arrivalText = (at: Date, name: string) =>
   `Megérkeztem az Alzába – ${at.toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' })} ${at.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })} – ${name}`
 const waUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`
+
+// Vágólapra másolás a koppintás pillanatában (csak felhasználói érintésre működik)
+function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => true, () => false)
+  } catch { /* alább a tartalék */ }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'
+    document.body.appendChild(ta); ta.select()
+    const ok = document.execCommand('copy'); ta.remove()
+    return Promise.resolve(ok)
+  } catch { return Promise.resolve(false) }
+}
 
 export default function ArrivalCard() {
   const { profile } = useAuth()
@@ -23,6 +39,9 @@ export default function ArrivalCard() {
   const qc = useQueryClient()
   const date = todayISO()
   const name = profile?.full_name || profile?.email || 'Munkatárs'
+  const groupLink = currentWorkspace?.arrival_whatsapp_group ?? null
+  // Csoport-linkkel a csoport nyílik (szöveg a vágólapon), anélkül a választó a szöveggel
+  const targetUrl = (text: string) => groupLink ?? waUrl(text)
 
   const { data: arrival, isLoading } = useQuery({
     queryKey: ['arrival', currentWorkspaceId, profile?.id, date],
@@ -48,7 +67,7 @@ export default function ArrivalCard() {
         id, table: 'arrivals', op: 'insert', label: 'Érkezés jelzése',
         values: { id, workspace_id: currentWorkspaceId, user_id: profile.id, work_date: date, arrived_at: at.toISOString(), gps_lat: gps.lat, gps_lng: gps.lng, outside_geofence: outside },
       })
-      toast.success('Érkezés rögzítve — a WhatsAppban válaszd ki a csoportot és küldd el.')
+      toast.success(groupLink ? 'Érkezés rögzítve — a csoportban: beillesztés, majd küldés.' : 'Érkezés rögzítve — a WhatsAppban válaszd ki a csoportot és küldd el.')
       void qc.invalidateQueries({ queryKey: ['arrival'] })
     } catch (e) {
       toast.error('Az érkezés rögzítése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba'))
@@ -75,8 +94,9 @@ export default function ArrivalCard() {
             <Icon name="x" size={14} />Visszavonás
           </ConfirmButton>
         </div>
-        <a className="btn ghost sm" href={waUrl(arrivalText(new Date(arrival.arrived_at), name))} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-          <Icon name="send" size={16} />WhatsApp-üzenet újra megnyitása
+        <a className="btn ghost sm" href={targetUrl(arrivalText(new Date(arrival.arrived_at), name))} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}
+          onClick={() => { if (groupLink) void copyText(arrivalText(new Date(arrival.arrived_at), name)).then((ok) => { if (ok) toast.info('Üzenet a vágólapon — a csoportban illeszd be és küldd el.') }) }}>
+          <Icon name="send" size={16} />{groupLink ? 'Csoport megnyitása (üzenet a vágólapon)' : 'WhatsApp-üzenet újra megnyitása'}
         </a>
       </div>
     )
@@ -84,15 +104,22 @@ export default function ArrivalCard() {
 
   return (
     <div className="card stack" style={{ gap: 8 }}>
-      <a className="btn" href={waUrl(arrivalText(new Date(), name))} target="_blank" rel="noopener noreferrer"
+      <a className="btn" href={targetUrl(arrivalText(new Date(), name))} target="_blank" rel="noopener noreferrer"
         style={{ textDecoration: 'none' }}
         // Az üzenet ideje a KOPPINTÁS pillanata (nem a kezdőlap betöltéséé) —
-        // a href-et a navigáció előtt frissítjük
-        onClick={(e) => { e.currentTarget.href = waUrl(arrivalText(new Date(), name)); void logArrival() }}>
+        // a href-et a navigáció előtt frissítjük; csoport-linknél a szöveg a vágólapra megy
+        onClick={(e) => {
+          const text = arrivalText(new Date(), name)
+          e.currentTarget.href = targetUrl(text)
+          if (groupLink) void copyText(text)
+          void logArrival()
+        }}>
         <Icon name="map-pin" />Alzába érkeztem
       </a>
       <p className="tiny muted" style={{ margin: 0, textAlign: 'center' }}>
-        Rögzíti az érkezés idejét (a vezetők látják), és megnyitja a WhatsAppot a kész üzenettel — ott válaszd ki a csoportot és küldd el.
+        {groupLink
+          ? 'Rögzíti az érkezés idejét (a vezetők látják), és megnyitja a csoportot — az üzenet a vágólapon: nyomd hosszan a beviteli mezőt, Beillesztés, Küldés.'
+          : 'Rögzíti az érkezés idejét (a vezetők látják), és megnyitja a WhatsAppot a kész üzenettel — ott válaszd ki a csoportot és küldd el.'}
       </p>
     </div>
   )

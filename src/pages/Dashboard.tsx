@@ -216,6 +216,59 @@ function GeofenceCard() {
   )
 }
 
+// "Alzába érkeztem" → WhatsApp-csoport: a meghívó-linkkel a gomb egyből a
+// csoportot nyitja (az üzenet a vágólapon), link nélkül a WhatsApp csoport-
+// választóját a kész szöveggel.
+function ArrivalGroupCard() {
+  const { currentWorkspaceId, currentWorkspace, reload } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const [link, setLink] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const current = currentWorkspace?.arrival_whatsapp_group ?? null
+
+  async function save(clear = false) {
+    if (!currentWorkspaceId) return
+    setBusy(true); setMsg(null)
+    const { error } = await supabase.rpc('set_workspace_arrival_group', { p_workspace_id: currentWorkspaceId, p_link: clear ? '' : link.trim() })
+    setBusy(false)
+    if (error) { setMsg('Hiba: ' + error.message); return }
+    setOpen(false)
+    await reload()
+  }
+
+  return (
+    <div className="card stack">
+      <div className="between">
+        <div className="card-title" style={{ margin: 0 }}><Icon name="send" />„Alzába érkeztem” → WhatsApp-csoport</div>
+        {!open && <button className="btn ghost sm" onClick={() => { setLink(current ?? ''); setOpen(true) }}>{current ? 'Módosítás' : 'Beállítás'}</button>}
+      </div>
+      {!open && (
+        <div className="tiny muted">
+          {current
+            ? 'Beállítva — a gomb egyből a csoportot nyitja, az üzenet a vágólapra kerül (beillesztés + küldés).'
+            : 'Nincs csoport-link — a gomb a WhatsApp csoport-választóját nyitja a kész üzenettel. Add meg a csoport meghívó-linkjét (WhatsApp → csoport → Meghívás linkkel), és a futárnak csak beillesztenie és küldenie kell.'}
+        </div>
+      )}
+      {open && (
+        <div className="stack">
+          <div className="field">
+            <label>Csoport meghívó-linkje</label>
+            <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://chat.whatsapp.com/…" inputMode="url" autoComplete="off" />
+          </div>
+          <div className="tiny muted">A linket a WhatsAppban a csoport adatlapján találod: „Meghívás linkkel” → „Link másolása”. Csak a csoport tagjainak nyílik meg közvetlenül a beszélgetés.</div>
+          {msg && <div className="alert error">{msg}</div>}
+          <div className="btn-grid">
+            <button className="btn ghost sm" onClick={() => setOpen(false)}>Mégse</button>
+            {current && <button className="btn danger sm" disabled={busy} onClick={() => void save(true)}>Törlés</button>}
+            <button className="btn sm" disabled={busy || !link.trim()} onClick={() => void save()}>Mentés</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
@@ -401,6 +454,7 @@ export default function Dashboard() {
           </div>
 
           <GeofenceCard />
+          <ArrivalGroupCard />
 
           {data.lastCheckin && (
             <div className="tiny muted row" style={{ justifyContent: 'center', gap: 6 }}>
