@@ -38,11 +38,11 @@ export function canShareFiles(): boolean {
     return typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [f] })
   } catch { return false }
 }
-export async function sharePhoto(blob: Blob, text: string, fileName: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
-  if (!canShareFiles()) return 'unsupported'
-  const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' })
+export async function sharePhotos(blobs: Blob[], text: string, baseName: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
+  if (!canShareFiles() || blobs.length === 0) return 'unsupported'
+  const files = blobs.map((b, i) => new File([b], `${baseName}-${i + 1}.jpg`, { type: b.type || 'image/jpeg' }))
   try {
-    await navigator.share({ files: [file], text })
+    await navigator.share({ files, text })
     return 'shared'
   } catch (e) {
     return e instanceof Error && e.name === 'AbortError' ? 'cancelled' : 'unsupported'

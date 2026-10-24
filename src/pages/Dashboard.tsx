@@ -284,6 +284,57 @@ function ArrivalGroupCard() {
   )
 }
 
+// Hiba-leírás sablonok: a futár a legördülőből választ; itt a vezető kezeli
+function TemplatesCard() {
+  const { currentWorkspaceId } = useWorkspace()
+  const { profile } = useAuth()
+  const qc = useQueryClient()
+  const [text, setText] = useState('')
+  const { data: templates } = useQuery({
+    queryKey: ['status-templates', currentWorkspaceId],
+    enabled: !!currentWorkspaceId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('status_templates').select('*')
+        .eq('workspace_id', currentWorkspaceId!).eq('kind', 'issue').order('sort_order').order('text')
+      if (error) throw error
+      return data ?? []
+    },
+  })
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ['status-templates'] })
+  const add = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('status_templates').insert({ workspace_id: currentWorkspaceId!, kind: 'issue', text: text.trim(), created_by: profile!.id })
+      if (error) throw error
+    },
+    onSuccess: () => { setText(''); invalidate() },
+    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+  })
+  const remove = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from('status_templates').delete().eq('id', id); if (error) throw error },
+    onSuccess: invalidate,
+    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+  })
+  return (
+    <div className="card stack" style={{ gap: 8 }}>
+      <div className="card-title" style={{ margin: 0 }}><Icon name="file-text" />Hiba-sablonok ({templates?.length ?? 0})</div>
+      <div className="tiny muted">A futár a „Hiba jelentése” űrlapon legördülőből választja; a saját szövegét ő is elmentheti sablonnak.</div>
+      {(templates ?? []).map((t) => (
+        <div key={t.id} className="between" style={{ gap: 8 }}>
+          <span className="small" style={{ minWidth: 0 }}>{t.text}</span>
+          <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" disabled={remove.isPending} onConfirm={() => remove.mutate(t.id)} style={{ minHeight: 28, padding: '0 8px' }}>
+            <Icon name="trash" size={14} />
+          </ConfirmButton>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input className="input" style={{ minHeight: 38, padding: '6px 10px', fontSize: 14 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Új sablon, pl. Box nem nyílik"
+          onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) add.mutate() }} />
+        <button className="btn sm auto" style={{ minHeight: 38 }} disabled={!text.trim() || add.isPending} onClick={() => add.mutate()} aria-label="Sablon hozzáadása"><Icon name="plus" size={16} /></button>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
@@ -304,13 +355,13 @@ export default function Dashboard() {
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
-          supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id').eq('workspace_id', ws).eq('work_date', today).order('at'),
+          supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
         ])
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
       const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id]), ...(statusEv ?? []).map((a) => a.user_id)])
       // Jelzések a csoportba (megérkeztem / kiindultam / járat kész / hiba) — idő szerint
-      const statusToday = (statusEv ?? []).map((a) => ({ id: a.id, name: names[a.user_id] ?? '?', kind: a.kind as StatusKind, at: a.at, outside: a.outside_geofence, note: a.note, photo: a.photo_path, plate: a.car_id ? carMap.get(a.car_id)?.plate ?? null : null }))
+      const statusToday = (statusEv ?? []).map((a) => ({ id: a.id, name: names[a.user_id] ?? '?', kind: a.kind as StatusKind, at: a.at, outside: a.outside_geofence, note: a.note, photos: [...((a.photos as { storage_path: string | null }[] | null) ?? []).map((p) => p.storage_path), a.photo_path].filter((p): p is string => !!p), plate: a.car_id ? carMap.get(a.car_id)?.plate ?? null : null }))
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
 
       // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
@@ -431,7 +482,11 @@ export default function Dashboard() {
               <div className="card-title" style={{ margin: 0 }}><Icon name="send" />Mai jelzések ({data.statusToday.length})</div>
               {data.statusToday.filter((a) => a.kind === 'issue').map((a) => (
                 <div key={a.id} className="row" style={{ gap: 10, alignItems: 'flex-start', borderLeft: '3px solid var(--danger)', paddingLeft: 10 }}>
-                  {a.photo && <div style={{ width: 72, flexShrink: 0 }}><PhotoThumb path={a.photo} /></div>}
+                  {a.photos.length > 0 && (
+                    <div className="row" style={{ gap: 4, flexShrink: 0, flexWrap: 'wrap', maxWidth: 160 }}>
+                      {a.photos.map((p) => <div key={p} style={{ width: 72 }}><PhotoThumb path={p} /></div>)}
+                    </div>
+                  )}
                   <div style={{ minWidth: 0 }}>
                     <div className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} style={{ color: 'var(--danger)', verticalAlign: -2 }} /> Hiba — {a.name}{a.plate ? ` (${a.plate})` : ''} · {new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</div>
                     <div className="small">{a.note || '(nincs leírás)'}</div>
@@ -482,6 +537,7 @@ export default function Dashboard() {
 
           <GeofenceCard />
           <ArrivalGroupCard />
+          <TemplatesCard />
 
           {data.lastCheckin && (
             <div className="tiny muted row" style={{ justifyContent: 'center', gap: 6 }}>

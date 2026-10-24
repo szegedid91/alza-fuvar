@@ -1476,6 +1476,45 @@ export type Database = {
           },
         ]
       }
+      status_event_photos: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          storage_path: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          storage_path?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          storage_path?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_event_photos_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "status_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_event_photos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       status_events: {
         Row: {
           at: string
@@ -1539,6 +1578,51 @@ export type Database = {
           },
           {
             foreignKeyName: "status_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      status_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: Database["public"]["Enums"]["status_kind"]
+          sort_order: number
+          text: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["status_kind"]
+          sort_order?: number
+          text: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["status_kind"]
+          sort_order?: number
+          text?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "status_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "status_templates_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
