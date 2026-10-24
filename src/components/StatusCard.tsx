@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -9,12 +9,13 @@ import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { groupTarget, copyText, canShareFiles, sharePhotos, statusText, STATUS_META, type StatusKind } from '../lib/groupMessage'
+import { signedUrl } from '../lib/photos'
 import PhotoSlot, { type CapturedPhoto } from './PhotoSlot'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
 
-type StatusEvent = Tables<'status_events'>
+type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_path: string | null }[] }
 type Template = Tables<'status_templates'>
 const MAX_PHOTOS = 5
 
@@ -35,13 +36,53 @@ export default function StatusCard() {
     queryKey: ['status-events', currentWorkspaceId, profile?.id, date],
     enabled: !!currentWorkspaceId && !!profile,
     queryFn: async () => {
-      const { data, error } = await supabase.from('status_events').select('*, photos:status_event_photos(id)')
+      const { data, error } = await supabase.from('status_events').select('*, photos:status_event_photos(id, storage_path)')
         .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', date).order('at')
       if (error) throw error
       return (data ?? []) as StatusEvent[]
     },
   })
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['status-events'] }) }
+
+  // Újraküldéshez a mai hiba-fotókat ELŐRE letöltjük: a megosztást a koppintás
+  // pillanatában kell indítani (a böngésző csak érintésre engedi), letöltésre
+  // várni már nem lehet
+  const [blobCache, setBlobCache] = useState<Record<string, Blob[]>>({})
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      for (const ev of events ?? []) {
+        if (ev.kind !== 'issue' || blobCache[ev.id]) continue
+        const paths = [...(ev.photos ?? []).map((p) => p.storage_path), ev.photo_path].filter((p): p is string => !!p)
+        if (paths.length === 0) continue
+        const blobs: Blob[] = []
+        for (const path of paths) {
+          try {
+            const url = await signedUrl(path, 600)
+            if (!url) continue
+            const r = await fetch(url)
+            if (r.ok) blobs.push(await r.blob())
+          } catch { /* egy hiányzó kép ne akassza meg a többit */ }
+        }
+        if (!cancelled && blobs.length) setBlobCache((prev) => ({ ...prev, [ev.id]: blobs }))
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events])
+
+  // Újraküldés: a már rögzített jelzést (szöveg + képek) még egyszer a csoportba
+  async function resend(ev: StatusEvent) {
+    const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)
+    const blobs = blobCache[ev.id]
+    if (ev.kind === 'issue' && blobs?.length) {
+      const res = await sharePhotos(blobs, text, `hiba-${date}`)
+      if (res === 'shared') toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.')
+      else if (res === 'unsupported') window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+      return
+    }
+    window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+  }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
   const lastOf = (kind: StatusKind) => [...(events ?? [])].reverse().find((e) => e.kind === kind) ?? null
 
@@ -223,12 +264,25 @@ export default function StatusCard() {
                 <span className="tiny row" style={{ gap: 6, minWidth: 0 }}>
                   <Icon name={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <strong>{hhmm(ev.at)}</strong> {meta.title}{ev.note ? ` — ${ev.note}` : ''}{(ev as StatusEvent & { photos?: { id: string }[] }).photos?.length ? ` · ${(ev as StatusEvent & { photos?: { id: string }[] }).photos!.length} fotó` : ev.photo_path ? ' · fotó' : ''}
+                    <strong>{hhmm(ev.at)}</strong> {meta.title}{ev.note ? ` — ${ev.note}` : ''}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}
                   </span>
                 </span>
-                <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={() => void undo(ev)} style={{ minHeight: 28, padding: '0 8px' }}>
-                  <Icon name="x" size={14} />
-                </ConfirmButton>
+                <span className="row" style={{ gap: 4, flexShrink: 0 }}>
+                  {ev.kind === 'issue' && (ev.photos?.length || ev.photo_path) ? (
+                    <button type="button" className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px' }} title="Újraküldés WhatsAppon (képekkel)"
+                      disabled={!blobCache[ev.id]} onClick={() => void resend(ev)}>
+                      <Icon name="send" size={14} />{blobCache[ev.id] ? 'Újraküldés' : 'Képek…'}
+                    </button>
+                  ) : (
+                    <a className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px', textDecoration: 'none' }} title="Újraküldés WhatsAppon"
+                      href={groupTarget(currentWorkspace, statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)).url} target="_blank" rel="noopener noreferrer">
+                      <Icon name="send" size={14} />Újraküldés
+                    </a>
+                  )}
+                  <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={() => void undo(ev)} style={{ minHeight: 28, padding: '0 8px' }}>
+                    <Icon name="x" size={14} />
+                  </ConfirmButton>
+                </span>
               </div>
             )
           })}
