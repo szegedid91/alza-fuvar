@@ -1,19 +1,16 @@
 // Csoportba küldés — EGY helyen: ha később más csatorna lesz (egy szám,
 // Telegram-bot), csak itt kell cserélni.
-// Jelenleg: WhatsApp. Csoport-linkkel a csoport nyílik (a szöveg a vágólapon),
-// link nélkül a WhatsApp csoport-választója a kész szöveggel. A WhatsApp
-// csoporthoz linkből nem enged előre kitöltött szöveget — ezért a vágólap.
+// Jelenleg: WhatsApp — a csoport-választó nyílik a KÉSZ szöveggel, a futár a
+// csoportot választja és küld. (Csoporthoz a WhatsApp linkből nem enged előre
+// kitöltött szöveget; a csoport-linkes + vágólapos mód a döntés szerint kikapcsolva.)
 import type { Tables } from './database.types'
 
 export type GroupWorkspace = Pick<Tables<'workspaces'>, 'arrival_whatsapp_group' | 'arrival_whatsapp_group_name'>
 
 export const waUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`
 
-export function groupTarget(ws: GroupWorkspace | null | undefined, text: string): { url: string; viaClipboard: boolean; groupName: string | null } {
-  const link = ws?.arrival_whatsapp_group ?? null
-  return link
-    ? { url: link, viaClipboard: true, groupName: ws?.arrival_whatsapp_group_name ?? null }
-    : { url: waUrl(text), viaClipboard: false, groupName: null }
+export function groupTarget(_ws: GroupWorkspace | null | undefined, text: string): { url: string; viaClipboard: boolean; groupName: string | null } {
+  return { url: waUrl(text), viaClipboard: false, groupName: null }
 }
 
 // Vágólapra másolás a koppintás pillanatában (csak felhasználói érintésre működik)

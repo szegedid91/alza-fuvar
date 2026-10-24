@@ -30,8 +30,6 @@ export default function StatusCard() {
   const date = todayISO()
   const name = profile?.full_name || profile?.email || 'Munkatárs'
   const plate = today?.car?.plate ?? null
-  const groupName = currentWorkspace?.arrival_whatsapp_group_name ?? null
-  const hasGroup = !!currentWorkspace?.arrival_whatsapp_group
 
   const { data: events } = useQuery({
     queryKey: ['status-events', currentWorkspaceId, profile?.id, date],
@@ -138,9 +136,7 @@ export default function StatusCard() {
     <div className="card stack" style={{ gap: 10 }}>
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="send" />Jelzés a csoportba</div>
-        {hasGroup
-          ? <span className="tiny row" style={{ gap: 4 }}><Icon name="check" size={14} style={{ color: 'var(--success)' }} /><strong>{groupName ?? 'csoport beállítva'}</strong></span>
-          : <span className="tiny muted">csoportot a WhatsAppban választod</span>}
+        <span className="tiny muted">a csoportot a WhatsAppban választod</span>
       </div>
 
       <div className="grid-3" style={{ gap: 8 }}>
@@ -239,9 +235,7 @@ export default function StatusCard() {
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        {hasGroup
-          ? 'A gomb rögzíti az időt (a vezetők látják) és megnyitja a csoportot — az üzenet a vágólapon: hosszan nyomd a mezőt, Beillesztés, Küldés.'
-          : 'A gomb rögzíti az időt (a vezetők látják) és megnyitja a WhatsAppot a kész üzenettel — válaszd ki a csoportot és küldd el.'}
+        A gomb rögzíti az időt (a vezetők látják) és megnyitja a WhatsAppot a kész üzenettel — válaszd ki a csoportot és küldd el. A hibánál a képek + a szöveg a megosztás-menün át mennek ugyanígy.
       </p>
     </div>
   )
