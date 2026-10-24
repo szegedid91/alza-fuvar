@@ -256,7 +256,7 @@ function ArrivalGroupCard() {
             <label>Csoport meghívó-linkje</label>
             <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://chat.whatsapp.com/…" inputMode="url" autoComplete="off" />
           </div>
-          <div className="tiny muted">A linket a WhatsAppban a csoport adatlapján találod: „Meghívás linkkel” → „Link másolása”. Csak a csoport tagjainak nyílik meg közvetlenül a beszélgetés.</div>
+          <div className="tiny muted">A linket a WhatsAppban a csoport adatlapján találod: „Meghívás linkkel” → „Link másolása”. Beillesztheted úgy, ahogy a WhatsApp adja (toldalékkal vagy kísérőszöveggel is) — csak a csoport-kód marad meg. Csak a csoport tagjainak nyílik meg közvetlenül a beszélgetés.</div>
           {msg && <div className="alert error">{msg}</div>}
           <div className="btn-grid">
             <button className="btn ghost sm" onClick={() => setOpen(false)}>Mégse</button>
