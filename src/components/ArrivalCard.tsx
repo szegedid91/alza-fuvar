@@ -40,6 +40,7 @@ export default function ArrivalCard() {
   const date = todayISO()
   const name = profile?.full_name || profile?.email || 'Munkatárs'
   const groupLink = currentWorkspace?.arrival_whatsapp_group ?? null
+  const groupName = currentWorkspace?.arrival_whatsapp_group_name ?? null
   // Csoport-linkkel a csoport nyílik (szöveg a vágólapon), anélkül a választó a szöveggel
   const targetUrl = (text: string) => groupLink ?? waUrl(text)
 
@@ -96,7 +97,7 @@ export default function ArrivalCard() {
         </div>
         <a className="btn ghost sm" href={targetUrl(arrivalText(new Date(arrival.arrived_at), name))} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}
           onClick={() => { if (groupLink) void copyText(arrivalText(new Date(arrival.arrived_at), name)).then((ok) => { if (ok) toast.info('Üzenet a vágólapon — a csoportban illeszd be és küldd el.') }) }}>
-          <Icon name="send" size={16} />{groupLink ? 'Csoport megnyitása (üzenet a vágólapon)' : 'WhatsApp-üzenet újra megnyitása'}
+          <Icon name="send" size={16} />{groupLink ? `${groupName ?? 'Csoport'} megnyitása (üzenet a vágólapon)` : 'WhatsApp-üzenet újra megnyitása'}
         </a>
       </div>
     )
@@ -116,6 +117,11 @@ export default function ArrivalCard() {
         }}>
         <Icon name="map-pin" />Alzába érkeztem
       </a>
+      {groupLink && (
+        <div className="tiny row" style={{ gap: 6, justifyContent: 'center' }}>
+          <Icon name="send" size={14} style={{ color: 'var(--success)' }} /><span className="muted">WhatsApp-csoport:</span><strong>{groupName ?? 'beállítva'}</strong>
+        </div>
+      )}
       <p className="tiny muted" style={{ margin: 0, textAlign: 'center' }}>
         {groupLink
           ? 'Rögzíti az érkezés idejét (a vezetők látják), és megnyitja a csoportot — az üzenet a vágólapon: nyomd hosszan a beviteli mezőt, Beillesztés, Küldés.'

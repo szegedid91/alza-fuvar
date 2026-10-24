@@ -223,14 +223,16 @@ function ArrivalGroupCard() {
   const { currentWorkspaceId, currentWorkspace, reload } = useWorkspace()
   const [open, setOpen] = useState(false)
   const [link, setLink] = useState('')
+  const [gname, setGname] = useState('')
   const [msg, setMsg] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const current = currentWorkspace?.arrival_whatsapp_group ?? null
+  const currentName = currentWorkspace?.arrival_whatsapp_group_name ?? null
 
   async function save(clear = false) {
     if (!currentWorkspaceId) return
     setBusy(true); setMsg(null)
-    const { error } = await supabase.rpc('set_workspace_arrival_group', { p_workspace_id: currentWorkspaceId, p_link: clear ? '' : link.trim() })
+    const { error } = await supabase.rpc('set_workspace_arrival_group', { p_workspace_id: currentWorkspaceId, p_link: clear ? '' : link.trim(), p_name: clear ? '' : gname.trim() })
     setBusy(false)
     if (error) { setMsg('Hiba: ' + error.message); return }
     setOpen(false)
@@ -241,17 +243,28 @@ function ArrivalGroupCard() {
     <div className="card stack">
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="send" />„Alzába érkeztem” → WhatsApp-csoport</div>
-        {!open && <button className="btn ghost sm" onClick={() => { setLink(current ?? ''); setOpen(true) }}>{current ? 'Módosítás' : 'Beállítás'}</button>}
+        {!open && <button className="btn ghost sm" onClick={() => { setLink(current ?? ''); setGname(currentName ?? ''); setOpen(true) }}>{current ? 'Módosítás' : 'Beállítás'}</button>}
       </div>
+      {!open && current && (
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <span className="badge success"><Icon name="check" />Csoport beállítva</span>
+          <span className="small" style={{ fontWeight: 700 }}>{currentName ?? 'névtelen csoport'}</span>
+          <a className="tiny muted" href={current} target="_blank" rel="noopener noreferrer">{current.replace('https://', '')}</a>
+        </div>
+      )}
       {!open && (
         <div className="tiny muted">
           {current
-            ? 'Beállítva — a gomb egyből a csoportot nyitja, az üzenet a vágólapra kerül (beillesztés + küldés).'
+            ? 'A futár gombja egyből ezt a csoportot nyitja, az üzenet a vágólapra kerül (beillesztés + küldés).'
             : 'Nincs csoport-link — a gomb a WhatsApp csoport-választóját nyitja a kész üzenettel. Add meg a csoport meghívó-linkjét (WhatsApp → csoport → Meghívás linkkel), és a futárnak csak beillesztenie és küldenie kell.'}
         </div>
       )}
       {open && (
         <div className="stack">
+          <div className="field">
+            <label>Csoport neve (ahogy a WhatsAppban hívják)</label>
+            <input className="input" value={gname} onChange={(e) => setGname(e.target.value)} placeholder="pl. Alza futárok" maxLength={80} autoComplete="off" />
+          </div>
           <div className="field">
             <label>Csoport meghívó-linkje</label>
             <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://chat.whatsapp.com/…" inputMode="url" autoComplete="off" />

@@ -1659,6 +1659,7 @@ export type Database = {
       workspaces: {
         Row: {
           arrival_whatsapp_group: string | null
+          arrival_whatsapp_group_name: string | null
           created_at: string
           driver_day_rate: number
           geo_lat: number | null
@@ -1672,6 +1673,7 @@ export type Database = {
         }
         Insert: {
           arrival_whatsapp_group?: string | null
+          arrival_whatsapp_group_name?: string | null
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1685,6 +1687,7 @@ export type Database = {
         }
         Update: {
           arrival_whatsapp_group?: string | null
+          arrival_whatsapp_group_name?: string | null
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1772,7 +1775,7 @@ export type Database = {
         Returns: undefined
       }
       set_workspace_arrival_group: {
-        Args: { p_link: string; p_workspace_id: string }
+        Args: { p_link: string; p_name?: string; p_workspace_id: string }
         Returns: undefined
       }
       set_workspace_geofence: {
