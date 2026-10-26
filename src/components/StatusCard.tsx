@@ -259,33 +259,40 @@ export default function StatusCard() {
         <div className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           {events!.map((ev) => {
             const meta = STATUS_META[ev.kind as StatusKind]
+            const hasPhotos = ev.kind === 'issue' && !!(ev.photos?.length || ev.photo_path)
+            const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)
+            const iconBtn = { minHeight: 32, minWidth: 32, padding: 0, width: 32, flexShrink: 0 } as const
             return (
-              <div key={ev.id} className="between" style={{ gap: 8 }}>
-                <span className="tiny row" style={{ gap: 6, minWidth: 0 }}>
-                  <Icon name={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <strong>{hhmm(ev.at)}</strong> {meta.title}{ev.note ? ` — ${ev.note}` : ''}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}
-                  </span>
-                </span>
+              <div key={ev.id} className="between" style={{ gap: 6, alignItems: 'flex-start' }}>
+                <div className="row" style={{ gap: 6, minWidth: 0, alignItems: 'flex-start', flex: 1 }}>
+                  <Icon name={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0, marginTop: 3 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="tiny"><strong>{hhmm(ev.at)}</strong> {meta.title}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}</div>
+                    {ev.note && (
+                      <div className="tiny muted" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.note}</div>
+                    )}
+                  </div>
+                </div>
                 <span className="row" style={{ gap: 4, flexShrink: 0 }}>
-                  {ev.kind === 'issue' && (ev.photos?.length || ev.photo_path) ? (
-                    <button type="button" className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px' }} title="Újraküldés WhatsAppon (képekkel)"
+                  {hasPhotos ? (
+                    <button type="button" className="btn ghost sm auto" style={iconBtn} aria-label="Újraküldés WhatsAppon (képekkel)" title="Újraküldés WhatsAppon (képekkel)"
                       disabled={!blobCache[ev.id]} onClick={() => void resend(ev)}>
-                      <Icon name="send" size={14} />{blobCache[ev.id] ? 'Újraküldés' : 'Képek…'}
+                      {blobCache[ev.id] ? <Icon name="send" size={15} /> : <div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
                     </button>
                   ) : (
-                    <a className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px', textDecoration: 'none' }} title="Újraküldés WhatsAppon"
-                      href={groupTarget(currentWorkspace, statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)).url} target="_blank" rel="noopener noreferrer">
-                      <Icon name="send" size={14} />Újraküldés
+                    <a className="btn ghost sm auto" style={{ ...iconBtn, textDecoration: 'none' }} aria-label="Újraküldés WhatsAppon" title="Újraküldés WhatsAppon"
+                      href={groupTarget(currentWorkspace, text).url} target="_blank" rel="noopener noreferrer">
+                      <Icon name="send" size={15} />
                     </a>
                   )}
-                  <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={() => void undo(ev)} style={{ minHeight: 28, padding: '0 8px' }}>
-                    <Icon name="x" size={14} />
+                  <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={() => void undo(ev)} style={{ minHeight: 32, padding: '0 8px', flexShrink: 0 }}>
+                    <Icon name="x" size={15} />
                   </ConfirmButton>
                 </span>
               </div>
             )
           })}
+          <div className="tiny muted" style={{ marginTop: 2 }}><Icon name="send" size={12} style={{ verticalAlign: -2 }} /> = újraküldés WhatsAppon · × = visszavonás</div>
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
