@@ -1138,10 +1138,11 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
-          email: string
+          email: string | null
           expires_at: string
           full_name: string | null
           id: string
+          placeholder_id: string | null
           role: Database["public"]["Enums"]["user_role"]
           used_at: string | null
           used_by: string | null
@@ -1150,10 +1151,11 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
-          email: string
+          email?: string | null
           expires_at?: string
           full_name?: string | null
           id?: string
+          placeholder_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           used_at?: string | null
           used_by?: string | null
@@ -1162,10 +1164,11 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
-          email?: string
+          email?: string | null
           expires_at?: string
           full_name?: string | null
           id?: string
+          placeholder_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           used_at?: string | null
           used_by?: string | null
@@ -1175,6 +1178,13 @@ export type Database = {
           {
             foreignKeyName: "invites_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invites_placeholder_id_fkey"
+            columns: ["placeholder_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1924,7 +1934,7 @@ export type Database = {
       status_kind: "arrived" | "departed" | "done" | "issue"
       swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
-      user_status: "pending" | "active" | "disabled"
+      user_status: "pending" | "active" | "disabled" | "invited"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2062,7 +2072,7 @@ export const Constants = {
       status_kind: ["arrived", "departed", "done", "issue"],
       swap_status: ["pending", "approved", "rejected"],
       user_role: ["driver", "loader", "manager", "admin", "crew"],
-      user_status: ["pending", "active", "disabled"],
+      user_status: ["pending", "active", "disabled", "invited"],
     },
   },
 } as const

@@ -23,6 +23,7 @@ export const statusLabel: Record<Enums<'user_status'>, string> = {
   pending: 'Jóváhagyásra vár',
   active: 'Aktív',
   disabled: 'Letiltva',
+  invited: 'Meghívva — még nem regisztrált',
 }
 
 export const adjustmentTypeLabel: Record<Enums<'adjustment_type'>, string> = {

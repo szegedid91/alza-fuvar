@@ -41,29 +41,42 @@ function InviteCard() {
     },
   })
 
+  // A meghívóval együtt helyőrző fiók is létrejön (manage-invite): a munkatárs
+  // azonnal beosztható, a regisztrációkor ugyanez a fiók aktiválódik
+  const invokeInvite = async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke('manage-invite', { body })
+    if (error) {
+      let msg = 'A művelet nem sikerült'
+      try { const b = await (error as { context?: Response }).context?.json(); if (b?.error) msg = b.error } catch { /* marad az általános */ }
+      throw new Error(msg)
+    }
+    if (data?.error) throw new Error(data.error)
+    return data
+  }
   const create = useMutation({
     mutationFn: async () => {
       const em = email.trim().toLowerCase()
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) throw new Error('Érvénytelen email-cím.')
-      const { error } = await supabase.from('invites').insert({
-        workspace_id: currentWorkspaceId!, email: em,
-        full_name: name.trim() || null, role, created_by: profile!.id,
-      })
-      if (error) throw error
+      if (!name.trim()) throw new Error('A név kötelező (ezzel kerül a beosztásba).')
+      if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) throw new Error('Érvénytelen email-cím.')
+      await invokeInvite({ action: 'create', workspace_id: currentWorkspaceId, full_name: name.trim(), email: em || null, role })
     },
     onSuccess: () => {
       setError(null); setName(''); setEmail(''); setRole('crew')
       void qc.invalidateQueries({ queryKey: ['invites'] })
+      void qc.invalidateQueries({ queryKey: ['ws-members'] })
+      void qc.invalidateQueries({ queryKey: ['members'] })
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'A meghívó létrehozása nem sikerült'),
   })
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('invites').delete().eq('id', id)
-      if (error) throw error
+    mutationFn: async (id: string) => { await invokeInvite({ action: 'delete', invite_id: id }) },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['invites'] })
+      void qc.invalidateQueries({ queryKey: ['ws-members'] })
+      void qc.invalidateQueries({ queryKey: ['members'] })
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['invites'] }),
+    onError: (e) => setError(e instanceof Error ? e.message : 'A törlés nem sikerült'),
   })
 
   const linkOf = (id: string) => `${window.location.origin}/meghivo/${id}`
@@ -125,7 +138,8 @@ function InviteCard() {
         <button className="btn ghost sm auto" onClick={() => setExpanded(false)}>Bezárás</button>
       </div>
       <p className="tiny muted" style={{ margin: 0 }}>
-        A meghívottnak csak jelszót kell beállítania a linken — azonnal aktív tag lesz, nem kell jóváhagyni.
+        A meghívott <strong>azonnal beosztható</strong> (a Beosztásban név szerint megjelenik), a linken csak jelszót kell beállítania —
+        aktív tag lesz, a már beírt beosztásai megmaradnak. Email nélkül is felvehető: akkor a regisztrációkor adja meg.
         A meghívó 7 napig érvényes és egyszer használható.
       </p>
       <div className="grid-2">
@@ -134,7 +148,7 @@ function InviteCard() {
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Kovács Béla" />
         </div>
         <div className="field">
-          <label>Email</label>
+          <label>Email (nem kötelező)</label>
           <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="bela@email.hu" />
         </div>
       </div>
@@ -147,8 +161,8 @@ function InviteCard() {
         </select>
       </div>
       {error && <div className="alert error">{error}</div>}
-      <button className="btn sm" disabled={create.isPending || !email.trim()} onClick={() => create.mutate()}>
-        <Icon name="plus" />Meghívó létrehozása
+      <button className="btn sm" disabled={create.isPending || !name.trim()} onClick={() => create.mutate()}>
+        <Icon name="plus" />{create.isPending ? 'Létrehozás…' : 'Munkatárs felvétele + meghívó'}
       </button>
 
       {(invites?.length ?? 0) > 0 && <div className="divider" />}
@@ -159,9 +173,12 @@ function InviteCard() {
             <div className="between">
               <div>
                 <div className="small" style={{ fontWeight: 700 }}>{inv.full_name || inv.email}</div>
-                <div className="tiny muted">{inv.email} · {roleLabel[inv.role]} · {formatDateTime(inv.created_at)}</div>
+                <div className="tiny muted">{inv.email ?? 'email nélkül'} · {roleLabel[inv.role]} · {formatDateTime(inv.created_at)}</div>
               </div>
-              <span className={`badge ${st.cls}`}>{st.label}</span>
+              <span className="row" style={{ gap: 4, flexShrink: 0 }}>
+                {!inv.used_at && inv.placeholder_id && <span className="badge" title="Már beosztható a Beosztásban"><Icon name="calendar" />beosztható</span>}
+                <span className={`badge ${st.cls}`}>{st.label}</span>
+              </span>
             </div>
             {!inv.used_at && (
               <div className="grid-3">
@@ -186,7 +203,7 @@ function InviteCard() {
                 <div className="tiny muted">Olvastasd be a telefonjával — a linken csak jelszót kell megadnia.</div>
               </div>
             )}
-            <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés" disabled={remove.isPending} onConfirm={() => remove.mutate(inv.id)}>
+            <ConfirmButton className="btn ghost sm auto" confirmLabel={inv.placeholder_id && !inv.used_at ? 'Törlés (a beosztásból is kikerül)' : 'Törlés'} disabled={remove.isPending} onConfirm={() => remove.mutate(inv.id)}>
               Törlés
             </ConfirmButton>
             <div className="divider" />
@@ -430,7 +447,7 @@ export default function Members() {
                     <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
                   </div>
                   {role !== 'crew' && <span className={`badge ${role === 'admin' ? 'warning' : 'primary'}`}>{role === 'admin' ? 'Admin' : roleLabel[role]}</span>}
-                  {disabled && <span className="badge danger">{statusLabel[m.status]}</span>}
+                  {disabled && <span className={`badge ${m.status === 'invited' ? 'warning' : 'danger'}`}>{m.status === 'invited' ? 'még nem regisztrált' : statusLabel[m.status]}</span>}
                   <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
                 {open && (
@@ -463,6 +480,8 @@ export default function Members() {
                           onConfirm={() => setStatus.mutate({ id: m.id, status: 'disabled' })}>
                           <Icon name="ban" />Letiltás
                         </ConfirmButton>
+                      ) : m.status === 'invited' ? (
+                        <div className="tiny muted">Előre felvett munkatárs — a meghívó linkjén regisztrál, akkor lesz aktív. A meghívó a Meghívók kártyán törölhető.</div>
                       ) : (
                         <button className="btn sm" disabled={setStatus.isPending}
                           onClick={() => setStatus.mutate({ id: m.id, status: 'active' })}><Icon name="check" />Aktiválás</button>

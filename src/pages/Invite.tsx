@@ -7,7 +7,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 
 interface InviteInfo {
-  email: string
+  email: string | null
   full_name: string | null
   workspace: string
   role: Enums<'user_role'>
@@ -21,6 +21,8 @@ export default function InvitePage({ token }: { token: string }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
+  // Email nélküli meghívónál a meghívott adja meg
+  const [emailIn, setEmailIn] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'form' | 'signing-in'>('form')
@@ -55,10 +57,12 @@ export default function InvitePage({ token }: { token: string }) {
     setError(null)
     if (password.length < 8) { setError('A jelszó legalább 8 karakter legyen.'); return }
     if (password !== password2) { setError('A két jelszó nem egyezik.'); return }
+    const email = (info.email ?? emailIn).trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('Adj meg egy érvényes email-címet.'); return }
     setBusy(true)
     try {
       const { data, error } = await supabase.functions.invoke('redeem-invite', {
-        body: { action: 'redeem', token, password },
+        body: { action: 'redeem', token, password, email },
       })
       if (error) {
         try {
@@ -71,7 +75,7 @@ export default function InvitePage({ token }: { token: string }) {
       if (data?.error) throw new Error(data.error)
       // Fiók kész — automatikus belépés, majd a főoldal
       setPhase('signing-in')
-      const { error: sErr } = await supabase.auth.signInWithPassword({ email: info.email, password })
+      const { error: sErr } = await supabase.auth.signInWithPassword({ email, password })
       if (sErr) throw new Error('A fiók elkészült, de a belépés nem sikerült: ' + sErr.message)
       window.location.href = '/'
     } catch (e) {
@@ -121,10 +125,17 @@ export default function InvitePage({ token }: { token: string }) {
               <strong>{info.workspace}</strong> munkaterülethez mint{' '}
               <strong>{roleLabel[info.role]}</strong>.
             </p>
-            <div className="between" style={{ gap: 10 }}>
-              <span className="muted small" style={{ flexShrink: 0 }}>Email</span>
-              <span className="small" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={info.email}>{info.email}</span>
-            </div>
+            {info.email ? (
+              <div className="between" style={{ gap: 10 }}>
+                <span className="muted small" style={{ flexShrink: 0 }}>Email</span>
+                <span className="small" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={info.email}>{info.email}</span>
+              </div>
+            ) : (
+              <div className="field">
+                <label htmlFor="ie">Email-címed (ezzel lépsz be)</label>
+                <input id="ie" className="input" type="email" value={emailIn} onChange={(e) => setEmailIn(e.target.value)} placeholder="te@email.hu" autoComplete="email" inputMode="email" />
+              </div>
+            )}
             <div className="field">
               <label htmlFor="ip">Jelszó</label>
               <div className="input-icon input-icon-right">
@@ -143,7 +154,7 @@ export default function InvitePage({ token }: { token: string }) {
               {password2 && password === password2 && password.length >= 8 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
             </div>
             {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
-            <button className="btn" disabled={busy || !password || !password2} onClick={() => void redeem()}>
+            <button className="btn" disabled={busy || !password || !password2 || (!info.email && !emailIn.trim())} onClick={() => void redeem()}>
               <Icon name="log-in" />
               {phase === 'signing-in' ? 'Belépés…' : busy ? 'Fiók létrehozása…' : 'Jelszó beállítása és belépés'}
             </button>
