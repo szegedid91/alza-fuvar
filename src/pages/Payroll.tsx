@@ -78,10 +78,14 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
 
 export default function Payroll() {
   const [ym, setYm] = useState(currentYm())
+  // A napok alapja: a tényleges becsekkolások (alapértelmezés) vagy a tervezett beosztás
+  // (pl. a hónap előre modellezéséhez, amíg a munkatársak nem csekkolnak be)
+  const [basis, setBasis] = useState<'actual' | 'planned'>(() => (localStorage.getItem('alza-payroll-basis') === 'planned' ? 'planned' : 'actual'))
+  const changeBasis = (b: 'actual' | 'planned') => { setBasis(b); localStorage.setItem('alza-payroll-basis', b) }
   const range = useMemo(() => monthRange(ym), [ym])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
-    queryKey: ['payroll', ym, 'v4'],
+    queryKey: ['payroll', ym, basis, 'v5'],
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
@@ -144,12 +148,21 @@ export default function Payroll() {
         setRole(s.driver_id, s.work_date, isBox ? 'box' : 'driver')
       }
 
-      // Ledolgozott napok usereként (a becsekkolásból, duplázás nélkül)
+      // Ledolgozott napok usereként (duplázás nélkül): a becsekkolásból, vagy
+      // „beosztás alapján” módban a beosztásból (sofőr/rakodó/betanuló napjai)
       const daysByUser = new Map<string, Map<string, string>>() // userId -> (date -> workspaceId)
-      for (const c of checkins ?? []) {
-        if (!daysByUser.has(c.user_id)) daysByUser.set(c.user_id, new Map())
-        daysByUser.get(c.user_id)!.set(c.work_date, c.workspace_id)
+      const addDay = (uid: string | null, date: string, wsId: string) => {
+        if (!uid) return
+        if (!daysByUser.has(uid)) daysByUser.set(uid, new Map())
+        daysByUser.get(uid)!.set(date, wsId)
       }
+      if (basis === 'planned') {
+        for (const s of shifts ?? []) { addDay(s.driver_id, s.work_date, s.workspace_id); addDay(s.loader_id, s.work_date, s.workspace_id); addDay(s.trainee_id, s.work_date, s.workspace_id) }
+      } else {
+        for (const c of checkins ?? []) addDay(c.user_id, c.work_date, c.workspace_id)
+      }
+      const plannedPeople = new Set((shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]).filter((x): x is string => !!x))
+      const checkinCount = (checkins ?? []).length
 
       // Előleg/levonás tételesen is (dátum + indok) — a bérlap napi bontásához
       const advByUser = new Map<string, number>()
@@ -219,14 +232,14 @@ export default function Payroll() {
         .sort((a, b) => a.workspace.localeCompare(b.workspace) || a.name.localeCompare(b.name))
 
       const wsList: WorkspaceRate[] = Object.values(rates).sort((a, b) => a.name.localeCompare(b.name))
-      return { rows, workspaces: wsList }
+      return { rows, workspaces: wsList, plannedCount: plannedPeople.size, checkinCount }
     },
   })
 
   async function exportXlsx() {
     if (!data) return
     await exportRowsToXlsx(`ber_${ym}.xlsx`, `Bér ${ym}`, data.rows.map((r) => ({
-      'Munkatárs': r.name, 'Munkaterület': r.workspace,
+      'Munkatárs': r.name, 'Munkaterület': r.workspace, 'Alap': basis === 'planned' ? 'beosztás' : 'becsekkolás',
       'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, 'Ledolgozott nap': r.days,
       'XL sofőr napidíj': r.driverRate, 'XL rakodó napidíj': r.loaderRate, 'Box 1. kör díj': r.boxRate, 'Box 2. kör díj': r.boxRound2Rate, 'XL betanuló napidíj': r.traineeRate, 'Box betanuló napidíj': r.boxTraineeRate, 'Alapbér': r.base,
       'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
@@ -254,10 +267,24 @@ export default function Payroll() {
           <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />{monthTitle(ym)}</div>
           <button className="icon-btn" aria-label="Következő hónap" onClick={() => setYm(shiftMonth(ym, 1))}><Icon name="chevron-right" /></button>
         </div>
+        {/* Napok alapja: tényleges (becsekkolás) vagy tervezett (beosztás) */}
+        <div className="tabs compact" style={{ marginBottom: 0 }}>
+          <button className={basis === 'actual' ? 'active' : ''} onClick={() => changeBasis('actual')}><Icon name="qr-code" size={16} />Becsekkolás alapján</button>
+          <button className={basis === 'planned' ? 'active' : ''} onClick={() => changeBasis('planned')}><Icon name="calendar" size={16} />Beosztás alapján</button>
+        </div>
+        {data && basis === 'actual' && data.checkinCount === 0 && data.plannedCount > 0 && (
+          <div className="alert info row" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <Icon name="info" style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>Ebben a hónapban még nincs becsekkolás, de {data.plannedCount} munkatárs be van osztva — a tervezett bérhez válts „Beosztás alapján” nézetre.</span>
+          </div>
+        )}
+        {data && basis === 'planned' && (
+          <div className="tiny muted">Tervezett bér a beosztás szerint — a tényleges kifizetéshez a becsekkolások számítanak.</div>
+        )}
         {data && (
           <div className="grid-2">
-            <div><div className="tiny muted">Kifizetendő összesen</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
-            <div><div className="tiny muted">Ledolgozott napok</div><div className="num num-lg">{totals.days}</div></div>
+            <div><div className="tiny muted">{basis === 'planned' ? 'Tervezett összesen' : 'Kifizetendő összesen'}</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
+            <div><div className="tiny muted">{basis === 'planned' ? 'Beosztott napok' : 'Ledolgozott napok'}</div><div className="num num-lg">{totals.days}</div></div>
             <div><div className="tiny muted">Levonás</div><div className="num" style={{ color: totals.deductions > 0 ? 'var(--danger)' : undefined }}>{formatHuf(totals.deductions)}</div></div>
             <div><div className="tiny muted">Felvett előleg</div><div className="num">{formatHuf(totals.advances)}</div></div>
           </div>
