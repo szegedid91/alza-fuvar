@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { resolveNames } from '../lib/names'
 import {
   formatDateTime, formatDate, formatHuf,
-  roleLabel, statusLabel, adjustmentTypeLabel, carIssueStatusLabel, evidenceCategoryLabel,
+  roleLabel, statusLabel, adjustmentTypeLabel, carIssueStatusLabel, evidenceCategoryLabel, swapStatusLabel,
 } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 import Icon, { type IconName } from '../components/Icon'
@@ -16,12 +16,73 @@ const ENTITY_LABEL: Record<string, string> = {
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
+  route_names: 'Kör', status_templates: 'Hiba-sablon', invites: 'Meghívó',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
   check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder', box_sheets: 'package',
+  route_names: 'map', status_templates: 'file-text', invites: 'send',
+}
+
+// Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
+const FIELD_LABEL: Record<string, string> = {
+  driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Kör', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
+  user_id: 'Munkatárs', amount: 'Összeg', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
+  phone: 'Telefon', plate: 'Rendszám', label: 'Megnevezés', category_id: 'Kategória', active: 'Aktív', crew_size: 'Létszám (fő)', box_sheet: 'Box-lap',
+  sort_order: 'Sorrend', name: 'Név', code: 'Kód', text: 'Szöveg', driver_day_rate: 'XL sofőr napidíj', loader_day_rate: 'XL rakodó napidíj',
+  box_day_rate: 'Box 1. kör díj', box_round2_day_rate: 'Box 2. kör díj', trainee_day_rate: 'XL betanuló díj', box_trainee_day_rate: 'Box betanuló díj',
+  geo_lat: 'Telephely (szélesség)', geo_lng: 'Telephely (hosszúság)', geo_radius_m: 'Telephely sugár (m)', photo_retention_days: 'Kép-megőrzés (nap)',
+  arrival_whatsapp_group: 'WhatsApp-csoport link', arrival_whatsapp_group_name: 'WhatsApp-csoport neve', checked_in_at: 'Becsekkolás ideje',
+  checked_out_at: 'Kijelentkezés ideje', inspection_waived_at: 'Fotó nélkül továbbengedve', inspection_waived_by: 'Továbbengedte',
+  inspection_waive_note: 'Továbbengedés megjegyzés', switch_reason: 'Autócsere oka', prev_car_id: 'Előző autó', manual_checkin: 'Kézi becsekkolás',
+  crew_conflict: 'Létszám-ütközés', outside_geofence: 'Telephelyen kívül (be)', out_outside_geofence: 'Telephelyen kívül (ki)', odometer_km: 'Km-óra',
+  liters: 'Liter', fuel_date: 'Tankolás dátuma', location: 'Hely', note: 'Megjegyzés', resolved_by: 'Megoldotta', resolved_at: 'Megoldva',
+  category: 'Kategória', ym: 'Hónap', locked_by: 'Zárolta', pay_type: 'Bértípus', pay_amount: 'Bér', workspace_id: 'Munkaterület',
+  approved_by: 'Jóváhagyta', approved_at: 'Jóváhagyva', start_time: 'Indulás', end_time: 'Végzés', expires_at: 'Lejárat', used_at: 'Felhasználva',
+  used_by: 'Felhasználta', placeholder_id: 'Helyőrző fiók', partner_decision: 'Társ döntése', decided_by: 'Döntött', decided_at: 'Döntés ideje',
+  partner_id: 'Társ', requested_by: 'Kérte', shift_id: 'Beosztás', evidence_id: 'Bizonyíték', submitted_at: 'Lezárva',
+}
+// Technikai mezők, amik nem érdekesek a naplóban
+const NOISE = new Set(['id', 'created_at', 'updated_at', 'created_by', 'gps_lat', 'gps_lng', 'out_gps_lat', 'out_gps_lng', 'crew_key',
+  'inspection_alert_sent_at', 'inspection_crew_reminders', 'inspection_crew_reminded_at', 'inspection_help_requested_at', 'qr_token',
+  'photo_path', 'storage_path', 'ocr_location', 'ocr_date', 'ocr_amount', 'ocr_liters', 'taken_at', 'verified', 'consumption', 'km_warning', 'workspace_id'])
+const ENUM_LABELS: Record<string, Record<string, string>> = {
+  'profiles.status': statusLabel as Record<string, string>, 'profiles.role': roleLabel as Record<string, string>, 'invites.role': roleLabel as Record<string, string>,
+  'car_issues.status': carIssueStatusLabel as Record<string, string>, 'adjustments.type': adjustmentTypeLabel as Record<string, string>,
+  'evidence_photos.category': evidenceCategoryLabel as Record<string, string>, 'swap_requests.status': swapStatusLabel as Record<string, string>,
+  'swap_requests.partner_decision': swapStatusLabel as Record<string, string>, 'box_sheets.status': { draft: 'Piszkozat', submitted: 'Lezárva' },
+}
+interface Lookups { nm: (id: string | null) => string | null; plate: (id: string | null) => string | null; route: (id: string | null) => string | null; cat: (id: string | null) => string | null }
+function fmtValue(entity: string, key: string, v: unknown, lk: Lookups): string {
+  if (v == null || v === '') return '—'
+  if (typeof v === 'boolean') return v ? 'igen' : 'nem'
+  const sv = String(v)
+  const enumMap = ENUM_LABELS[`${entity}.${key}`]
+  if (enumMap) return enumMap[sv] ?? sv
+  if (key === 'car_id' || key === 'prev_car_id') return lk.plate(sv) ?? sv.slice(0, 8)
+  if (key === 'route_id') return lk.route(sv) ?? sv.slice(0, 8)
+  if (key === 'category_id') return lk.cat(sv) ?? sv.slice(0, 8)
+  if (key.endsWith('_id') || key.endsWith('_by')) return lk.nm(sv) ?? sv.slice(0, 8)
+  if (/_rate$|^amount$|^pay_amount$/.test(key)) return formatHuf(Number(v))
+  if (key.endsWith('_at')) return formatDateTime(sv)
+  if (key === 'work_date' || key === 'fuel_date') return formatDate(sv)
+  if (key === 'start_time' || key === 'end_time') return sv.slice(0, 5)
+  return sv
+}
+// Mezőnkénti különbség: UPDATE-nél a változott mezők (miről mire), INSERT/DELETE-nél a fontosabb mezők értékei
+function fieldDiff(entity: string, action: string, detail: Detail, lk: Lookups): { label: string; from: string | null; to: string }[] {
+  const o = detail?.old ?? null, n = detail?.new ?? null
+  const label = (k: string) => FIELD_LABEL[k] ?? k.replace(/_/g, ' ')
+  if (action === 'UPDATE' && o && n) {
+    const keys = [...new Set([...Object.keys(o), ...Object.keys(n)])].filter((k) => !NOISE.has(k))
+    return keys.filter((k) => String(o[k] ?? '') !== String(n[k] ?? '')).map((k) => ({ label: label(k), from: fmtValue(entity, k, o[k], lk), to: fmtValue(entity, k, n[k], lk) }))
+  }
+  const d = action === 'DELETE' ? o : n
+  if (!d) return []
+  return Object.keys(d).filter((k) => !NOISE.has(k) && d[k] != null && d[k] !== '' && d[k] !== false && d[k] !== 0)
+    .map((k) => ({ label: label(k), from: null, to: fmtValue(entity, k, d[k], lk) }))
 }
 
 type Row = Record<string, unknown> | null | undefined
@@ -74,18 +135,11 @@ function describe(
       const trainee = nm(s(d, 'trainee_id'))
       const who = [nm(s(d, 'driver_id')), nm(s(d, 'loader_id'))].filter(Boolean).join(' + ') + (trainee ? ` + betanuló: ${trainee}` : '')
       const car = plate(s(d, 'car_id'))
-      const round = s(d, 'round') === '2' ? '2. kör' : ''
+      const round = s(d, 'round') === '2' ? '2. kör' : s(d, 'route_id') ? '1. kör' : ''
       const where = [date, car, round, who].filter(Boolean).join(' · ')
       if (action === 'INSERT') return `Beosztás létrehozva — ${where}`
       if (action === 'DELETE') return `Beosztás törölve — ${where}`
-      const ch: string[] = []
-      if (o && n) {
-        if (s(o, 'driver_id') !== s(n, 'driver_id')) ch.push(`sofőr: ${nm(s(o, 'driver_id')) ?? '—'} → ${nm(s(n, 'driver_id')) ?? '—'}`)
-        if (s(o, 'loader_id') !== s(n, 'loader_id')) ch.push(`rakodó: ${nm(s(o, 'loader_id')) ?? '—'} → ${nm(s(n, 'loader_id')) ?? '—'}`)
-        if (s(o, 'trainee_id') !== s(n, 'trainee_id')) ch.push(`betanuló: ${nm(s(o, 'trainee_id')) ?? '—'} → ${nm(s(n, 'trainee_id')) ?? '—'}`)
-        if (s(o, 'car_id') !== s(n, 'car_id')) ch.push(`autó: ${plate(s(o, 'car_id')) ?? '—'} → ${plate(s(n, 'car_id')) ?? '—'}`)
-      }
-      return `Beosztás módosítva — ${date}${car ? ` · ${car}` : ''}${ch.length ? ': ' + ch.join(', ') : ''}`
+      return `Beosztás módosítva — ${[date, car, round].filter(Boolean).join(' · ')}`
     }
 
     case 'profiles': {
@@ -201,6 +255,19 @@ function describe(
       return `Kategória ${name}${ch.length ? ' — ' + ch.join(', ') : ' módosítva'}`
     }
 
+    case 'route_names': {
+      const code = s(d, 'code') ?? '?'
+      return action === 'INSERT' ? `Új kör: ${code}` : action === 'DELETE' ? `Kör törölve: ${code}` : `Kör módosítva: ${code}`
+    }
+    case 'status_templates': {
+      const t = s(d, 'text') ?? ''
+      return action === 'INSERT' ? `Új hiba-sablon: ${t}` : action === 'DELETE' ? `Hiba-sablon törölve: ${t}` : `Hiba-sablon módosítva: ${t}`
+    }
+    case 'invites': {
+      const who = s(d, 'full_name') ?? s(d, 'email') ?? 'munkatárs'
+      return action === 'INSERT' ? `Meghívó / előre felvett munkatárs: ${who}` : `Meghívó törölve: ${who}`
+    }
+
     case 'payroll_locks': {
       const month = s(d, 'ym') ?? ''
       if (action === 'DELETE') return `Hónap feloldva${month ? `: ${month}` : ''}`
@@ -213,7 +280,7 @@ function describe(
 }
 
 // A leírásokhoz szükséges személy-azonosítók összegyűjtése a régi/új sorokból
-const ID_KEYS = ['driver_id', 'loader_id', 'trainee_id', 'user_id', 'partner_id', 'requested_by', 'reported_by', 'actor_id']
+const ID_KEYS = ['driver_id', 'loader_id', 'trainee_id', 'user_id', 'partner_id', 'requested_by', 'reported_by', 'actor_id', 'inspection_waived_by', 'resolved_by', 'locked_by', 'decided_by', 'placeholder_id', 'used_by', 'approved_by']
 
 export default function AuditLog() {
   const { data: cars } = useQuery({
@@ -250,6 +317,12 @@ export default function AuditLog() {
   })
 
   const plateOf = (id: string | null) => (id ? cars?.find((c) => c.id === id)?.plate ?? null : null)
+  const { data: routes } = useQuery({ queryKey: ['audit-routes'], queryFn: async () => { const { data, error } = await supabase.from('route_names').select('id, code'); if (error) throw error; return data ?? [] } })
+  const { data: cats } = useQuery({ queryKey: ['audit-cats'], queryFn: async () => { const { data, error } = await supabase.from('car_categories').select('id, name'); if (error) throw error; return data ?? [] } })
+  const routeOf = (id: string | null) => (id ? routes?.find((r) => r.id === id)?.code ?? null : null)
+  const catOf = (id: string | null) => (id ? cats?.find((c) => c.id === id)?.name ?? null : null)
+  // Hosszú változás-listák kinyitása bejegyzésenként
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set())
 
   // Szűrő: típus szerint (a chipeken a darabszám), alapból minden
   const [entityFilter, setEntityFilter] = useState('')
@@ -268,7 +341,7 @@ export default function AuditLog() {
   return (
     <div className="stack">
       <h2>Napló</h2>
-      <p className="small muted" style={{ margin: 0 }}>A módosítások nyomon követése (bér, beosztás, cserék, felhasználók, autók, kategóriák, beállítások, vezetői kijelentkeztetés) — az utolsó 100 bejegyzés.</p>
+      <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, körök, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 100 bejegyzés.</p>
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
@@ -299,6 +372,9 @@ export default function AuditLog() {
             const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
             const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
             const tone = r.action === 'DELETE' ? 'var(--danger)' : r.action === 'INSERT' ? 'var(--success)' : 'var(--text-dim)'
+            const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf })
+            const open = openIds.has(r.id)
+            const shownDiff = open ? diff : diff.slice(0, 4)
             return (
               <div key={r.id} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
                 <Icon name={ENTITY_ICON[r.entity] ?? 'file-text'} size={18} style={{ color: tone, marginTop: 2 }} />
@@ -307,6 +383,24 @@ export default function AuditLog() {
                   <div className="tiny muted">
                     <span style={{ color: tone, fontWeight: 700 }}>{ACTION_LABEL[r.action] ?? r.action}</span> · {actorName}
                   </div>
+                  {shownDiff.length > 0 && (
+                    <div className="tiny" style={{ marginTop: 4, display: 'grid', gap: 2 }}>
+                      {shownDiff.map((f, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span className="muted">{f.label}:</span>
+                          {f.from != null ? (
+                            <span><s style={{ color: 'var(--text-dim)' }}>{f.from}</s> → <strong>{f.to}</strong></span>
+                          ) : <span>{f.to}</span>}
+                        </div>
+                      ))}
+                      {diff.length > 4 && (
+                        <button type="button" className="link-btn tiny" style={{ justifySelf: 'start', padding: 0 }}
+                          onClick={() => setOpenIds((p) => { const n = new Set(p); if (open) n.delete(r.id); else n.add(r.id); return n })}>
+                          {open ? 'kevesebb' : `+${diff.length - 4} további mező`}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <span className="tiny muted" style={{ flexShrink: 0 }}>{hhmm(r.created_at)}</span>
               </div>
