@@ -81,7 +81,7 @@ export default function Payroll() {
   const range = useMemo(() => monthRange(ym), [ym])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
-    queryKey: ['payroll', ym],
+    queryKey: ['payroll', ym, 'v3'],
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
@@ -322,7 +322,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   const [error, setError] = useState<string | null>(null)
 
   const { data: history } = useQuery({
-    queryKey: ['rate-history', ws.id],
+    queryKey: ['rate-history', ws.id, 'v2'],
     queryFn: async () => {
       const { data, error } = await supabase.from('workspace_rate_history')
         .select('id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate')
@@ -388,7 +388,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         <div className="card-title" style={{ margin: 0 }}><Icon name="banknote" />Napidíjak — {ws.name}</div>
         {isAdmin && (
           <button className="btn ghost sm" onClick={() => { setOpen((o) => !o); setError(null) }}>
-            {open ? 'Bezárás' : <><Icon name="plus" />Új díj hónaptól</>}
+            {open ? 'Bezárás' : <><Icon name="plus" />Emelés hónaptól</>}
           </button>
         )}
       </div>
@@ -406,7 +406,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}>
             <input type="checkbox" checked={asBase} onChange={(e) => setAsBase(e.target.checked)} style={{ width: 20, height: 20 }} />
-            <span className="small">Kezdeti díj — minden hónapra érvényes, amelyre nincs külön díj megadva</span>
+            <span className="small">Kezdeti (alap) díj — ezzel indul minden, amíg egy későbbi hónaptól nem emelsz</span>
           </label>
           {!asBase && (
             <div className="field">
@@ -437,8 +437,10 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
             </div>
           </div>
           <div className="tiny muted">
-            {asBase ? 'A kezdeti díj minden olyan hónapra számol, amelyre nincs külön „ettől a hónaptól” díj.' : `A bérszámítás ${addFrom.replace('-', '. ')}. hónaptól automatikusan ezzel számol.`}
-            Az ez elé eső hónapok változatlanok maradnak; zárolt hónapra nem lehet díjat állítani.
+            {asBase
+              ? 'A kezdeti díj a kiindulás: minden hónapra ez számít, amíg egy későbbi „ettől a hónaptól” emelés felül nem írja.'
+              : `${addFrom.replace('-', '. ')}. hónaptól ez a díj számít minden későbbi hónapra is, amíg újra nem módosítod — nem kell havonta beírni. Az ez elé eső hónapok változatlanok maradnak.`}
+            {' '}Zárolt hónapra nem lehet díjat állítani.
           </div>
           <button className="btn sm" disabled={save.isPending || !driver.trim() || !loader.trim()} onClick={() => save.mutate()}>
             {save.isPending ? 'Mentés…' : 'Mentés'}
@@ -449,7 +451,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       {error && <div className="alert error">{error}</div>}
 
       <div className="stack" style={{ gap: 6 }}>
-        <div className="tiny muted" style={{ fontWeight: 700 }}>Változások</div>
+        <div className="tiny muted" style={{ fontWeight: 700 }}>Emelések (onnantól érvényes, amíg újabb nincs)</div>
         {[...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([year, items]) => (
           <div key={year} className="stack" style={{ gap: 2 }}>
             <div className="small" style={{ fontWeight: 800, marginTop: 4 }}>{year}</div>
@@ -506,7 +508,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
               {activeRow?.id === base.id && <span className="badge primary">ekkor érvényes</span>}
               {isAdmin && (
                 <button className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px' }} title="Kezdeti díj módosítása"
-                  onClick={() => { setAsBase(true); setDriver(String(base.driver_day_rate)); setLoader(String(base.loader_day_rate)); setBox(String(base.box_day_rate)); setTrainee(String(base.trainee_day_rate)); setBoxTrainee(String(base.box_trainee_day_rate)); setOpen(true); setError(null) }}>
+                  onClick={() => { setAsBase(true); setDriver(String(base.driver_day_rate ?? 0)); setLoader(String(base.loader_day_rate ?? 0)); setBox(String(base.box_day_rate ?? 0)); setTrainee(String(base.trainee_day_rate ?? 0)); setBoxTrainee(String(base.box_trainee_day_rate ?? 0)); setOpen(true); setError(null) }}>
                   <Icon name="pencil" size={14} />
                 </button>
               )}
@@ -514,7 +516,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
           </div>
         )}
         {!base && isAdmin && (
-          <div className="tiny muted">Nincs kezdeti díj: az „Új díj hónaptól” gombbal, a „Kezdeti díj” pipával adható meg.</div>
+          <div className="tiny muted">Nincs kezdeti díj: az „Emelés hónaptól” gombbal, a „Kezdeti (alap) díj” pipával adható meg.</div>
         )}
         {rows.length === 0 && <div className="tiny muted">Még nincs rögzített napidíj.</div>}
       </div>
