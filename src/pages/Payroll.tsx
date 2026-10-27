@@ -124,28 +124,22 @@ export default function Payroll() {
         if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0); ws.trainee = Number(r.trainee_day_rate ?? 0); ws.box = Number(r.box_day_rate ?? 0); ws.boxTrainee = Number(r.box_trainee_day_rate ?? 0); ws.box2 = Number(r.box_round2_day_rate ?? 0) }
       }
 
-      // Napi szerep a beosztásból: kulcs `${userId}|${date}` -> XL sofőr / XL rakodó / Box sofőr / betanuló
-      // (két körnél ugyanaz az ember ugyanúgy egy napot kap — a szerep a sofőr, ha bármelyik körben az)
-      const roleByUserDay = new Map<string, PayRole>()
-      const rank: Record<PayRole, number> = { trainee: 0, box_trainee: 0, loader: 1, box: 2, driver: 2 }
-      const setRole = (uid: string | null, date: string, role: PayRole) => {
-        if (!uid) return
+      // Napi összetevők a beosztásból, kulcs `${userId}|${date}`: egy ember egy napon
+      // több dolgot is csinálhat (pl. XL sofőr ÉS Box 1. kör) — mindegyik külön díjat kap,
+      // a nap viszont egy napnak számít
+      type Comp = { xlDriver: boolean; xlLoader: boolean; boxR1: boolean; boxR2: boolean; xlTrainee: boolean; boxTrainee: boolean }
+      const compByUserDay = new Map<string, Comp>()
+      const compOf = (uid: string, date: string): Comp => {
         const k = `${uid}|${date}`
-        const cur = roleByUserDay.get(k)
-        if (!cur || rank[role] > rank[cur]) roleByUserDay.set(k, role)
+        let c = compByUserDay.get(k)
+        if (!c) { c = { xlDriver: false, xlLoader: false, boxR1: false, boxR2: false, xlTrainee: false, boxTrainee: false }; compByUserDay.set(k, c) }
+        return c
       }
-      // Box sofőr: mely köröket vitte aznap (a 2. körre külön díj jár)
-      const boxRounds = new Map<string, Set<number>>()
       for (const s of shifts ?? []) {
         const isBox = !!(s.car as unknown as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet
-        if (isBox && s.driver_id) {
-          const k = `${s.driver_id}|${s.work_date}`
-          if (!boxRounds.has(k)) boxRounds.set(k, new Set())
-          boxRounds.get(k)!.add(s.round ?? 1)
-        }
-        setRole(s.trainee_id, s.work_date, isBox ? 'box_trainee' : 'trainee')
-        setRole(s.loader_id, s.work_date, 'loader')
-        setRole(s.driver_id, s.work_date, isBox ? 'box' : 'driver')
+        if (s.driver_id) { const c = compOf(s.driver_id, s.work_date); if (isBox) { if ((s.round ?? 1) === 2) c.boxR2 = true; else c.boxR1 = true } else c.xlDriver = true }
+        if (s.loader_id) compOf(s.loader_id, s.work_date).xlLoader = true
+        if (s.trainee_id) { const c = compOf(s.trainee_id, s.work_date); if (isBox) c.boxTrainee = true; else c.xlTrainee = true }
       }
 
       // Ledolgozott napok usereként (duplázás nélkül): a becsekkolásból, vagy
@@ -187,7 +181,7 @@ export default function Payroll() {
           let boxTraineeDays = 0
           let boxRound2Days = 0
           let base = 0
-          const workedDays: { date: string; role: PayRole; rate: number; rounds?: number }[] = []
+          const workedDays: { date: string; role: PayRole; rate: number; rounds?: number; label?: string }[] = []
           let driverPay = 0
           let loaderPay = 0
           let traineePay = 0
@@ -196,19 +190,29 @@ export default function Payroll() {
           let boxRound2Pay = 0
           for (const [date, wsId] of dayMap) {
             const r = rates[wsId ?? p.workspace_id ?? '']
-            // Ha nincs beosztott szerep aznap, rakodóként számoljuk (alacsonyabb díj)
-            const daily = roleByUserDay.get(`${p.id}|${date}`) ?? 'loader'
-            // Box sofőr: 1. kör díja + (ha a 2. kört is vitte) a 2. kör díja
-            const rounds = daily === 'box' ? (boxRounds.get(`${p.id}|${date}`) ?? new Set([1])) : null
-            const r2 = rounds?.has(2) ? (r?.box2 ?? 0) : 0
-            const dayRate = daily === 'driver' ? (r?.driver ?? 0) : daily === 'box' ? (r?.box ?? 0) + r2 : daily === 'trainee' ? (r?.trainee ?? 0) : daily === 'box_trainee' ? (r?.boxTrainee ?? 0) : (r?.loader ?? 0)
-            if (daily === 'driver') { driverDays++; driverPay += dayRate }
-            else if (daily === 'box') { boxDays++; boxPay += (r?.box ?? 0); if (rounds?.has(2)) { boxRound2Days++; boxRound2Pay += r2 } }
-            else if (daily === 'trainee') { traineeDays++; traineePay += dayRate }
-            else if (daily === 'box_trainee') { boxTraineeDays++; boxTraineePay += dayRate }
-            else { loaderDays++; loaderPay += dayRate }
+            const c = compByUserDay.get(`${p.id}|${date}`)
+            let dayRate = 0
+            const parts: string[] = []
+            let role: PayRole = 'loader'
+            if (c?.xlDriver) { const v = r?.driver ?? 0; driverDays++; driverPay += v; dayRate += v; parts.push('XL sofőr'); role = 'driver' }
+            else if (c?.xlLoader) { const v = r?.loader ?? 0; loaderDays++; loaderPay += v; dayRate += v; parts.push('XL rakodó'); role = 'loader' }
+            if (c?.boxR1 || c?.boxR2) {
+              // Box sofőr: 1. kör díja + 2. kör díja (amelyiket vitte)
+              const b1 = c.boxR1 ? (r?.box ?? 0) : 0
+              const b2 = c.boxR2 ? (r?.box2 ?? 0) : 0
+              boxDays++; boxPay += b1; dayRate += b1 + b2
+              if (c.boxR2) { boxRound2Days++; boxRound2Pay += b2 }
+              parts.push(c.boxR1 && c.boxR2 ? 'Box sofőr (2 kör)' : c.boxR2 ? 'Box sofőr (2. kör)' : 'Box sofőr (1. kör)')
+              if (role !== 'driver') role = 'box'
+            }
+            if (c?.xlTrainee && !c.xlDriver && !c.xlLoader) { const v = r?.trainee ?? 0; traineeDays++; traineePay += v; dayRate += v; parts.push('XL betanuló'); if (parts.length === 1) role = 'trainee' }
+            if (c?.boxTrainee && !c.boxR1 && !c.boxR2) { const v = r?.boxTrainee ?? 0; boxTraineeDays++; boxTraineePay += v; dayRate += v; parts.push('Box betanuló'); if (parts.length === 1) role = 'box_trainee' }
+            if (parts.length === 0) {
+              // Ha nincs beosztott szerep aznap (becsekkolt, de nincs beosztva), rakodóként számoljuk (alacsonyabb díj)
+              const v = r?.loader ?? 0; loaderDays++; loaderPay += v; dayRate += v; parts.push('XL rakodó (beosztás nélkül)'); role = 'loader'
+            }
             base += dayRate
-            workedDays.push({ date, role: daily, rate: dayRate, rounds: rounds?.has(2) ? 2 : undefined })
+            workedDays.push({ date, role, rate: dayRate, rounds: c?.boxR1 && c?.boxR2 ? 2 : undefined, label: parts.join(' + ') })
           }
           workedDays.sort((a, b) => a.date.localeCompare(b.date))
           const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date)
@@ -217,7 +221,7 @@ export default function Payroll() {
           const deductions = dedByUser.get(p.id) ?? 0
           return {
             userId: p.id, name: p.full_name || p.email || '—', workspace: p.workspace?.name ?? '—',
-            workspaceId: p.workspace_id, driverDays, loaderDays, traineeDays, boxDays, boxTraineeDays, boxRound2Days, days: driverDays + loaderDays + traineeDays + boxDays + boxTraineeDays,
+            workspaceId: p.workspace_id, driverDays, loaderDays, traineeDays, boxDays, boxTraineeDays, boxRound2Days, days: dayMap.size,
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0, traineeRate: wsRate?.trainee ?? 0, boxRate: wsRate?.box ?? 0, boxTraineeRate: wsRate?.boxTrainee ?? 0, boxRound2Rate: wsRate?.box2 ?? 0,
             driverPay, loaderPay, traineePay, boxPay, boxTraineePay, boxRound2Pay,
             advances, deductions, base,
@@ -597,7 +601,7 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
       <div className="grid-2 pay-grid small">
         {row.driverDays > 0 && <div className="between"><span className="muted">XL sofőrként</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>}
         {row.loaderDays > 0 && <div className="between"><span className="muted">XL rakodóként</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>}
-        {row.boxDays > 0 && <div className="between"><span className="muted">Box sofőrként (1. kör)</span><span>{row.boxDays} nap · {formatHuf(row.boxPay)}</span></div>}
+        {row.boxDays > 0 && <div className="between"><span className="muted">Box sofőrként · 1. kör díj</span><span>{row.boxDays} nap · {formatHuf(row.boxPay)}</span></div>}
         {row.boxRound2Days > 0 && <div className="between"><span className="muted">Box 2. körök</span><span>{row.boxRound2Days} db · {formatHuf(row.boxRound2Pay)}</span></div>}
         {row.boxTraineeDays > 0 && <div className="between"><span className="muted">Box betanulóként</span><span>{row.boxTraineeDays} nap · {formatHuf(row.boxTraineePay)}</span></div>}
         {row.traineeDays > 0 && <div className="between"><span className="muted">XL betanulóként</span><span>{row.traineeDays} nap · {formatHuf(row.traineePay)}</span></div>}

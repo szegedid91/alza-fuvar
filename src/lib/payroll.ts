@@ -25,7 +25,8 @@ export function currentYm(): string {
 export type PayRole = 'driver' | 'loader' | 'box' | 'trainee' | 'box_trainee'
 export const payRoleLabel: Record<PayRole, string> = { driver: 'XL sofőr', loader: 'XL rakodó', box: 'Box sofőr', trainee: 'XL betanuló', box_trainee: 'Box betanuló' }
 // rounds: Box sofőrnél hány kört vitt aznap (1 vagy 2) — a 2. körre külön díj jár
-export interface WorkedDay { date: string; role: PayRole; rate: number; rounds?: number }
+// label: a nap összetevői szövegesen (pl. „XL sofőr + Box sofőr (1. kör)”), ha több dolgot csinált
+export interface WorkedDay { date: string; role: PayRole; rate: number; rounds?: number; label?: string }
 export interface AdjustmentItem { date: string; amount: number; reason: string | null }
 
 // Csapat-szintű, szerep szerinti napidíjak: a bér a napi beosztott szerep

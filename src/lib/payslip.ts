@@ -48,7 +48,7 @@ export function openPayslip(row: PayrollRow, ym: string): void {
     ${row.boxRound2Days > 0 ? `<tr><td>Box 2. körök</td><td>${row.boxRound2Days} db</td><td>${HUF(row.boxRound2Pay)}</td></tr>` : ''}
     ${row.traineeDays > 0 ? `<tr><td>XL betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}
     ${row.boxTraineeDays > 0 ? `<tr><td>Box betanuló napok</td><td>${row.boxTraineeDays} nap</td><td>${HUF(row.boxTraineePay)}</td></tr>` : ''}
-    <tr><td>Alapbér összesen</td><td>${row.days} ledolgozott nap</td><td>${HUF(row.base)}</td></tr>
+    <tr><td>Alapbér összesen</td><td>${row.days} nap</td><td>${HUF(row.base)}</td></tr>
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
     <tr class="total"><td>Járandóság összesen</td><td></td><td>${HUF(row.earned)}</td></tr>
   </table>
@@ -57,7 +57,7 @@ export function openPayslip(row: PayrollRow, ym: string): void {
   <h2>Ledolgozott napok (${row.workedDays.length})</h2>
   ${row.workedDays.length === 0 ? '<p class="none">Nem volt ledolgozott nap ebben a hónapban.</p>' : `
   <div class="days">
-    ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${payRoleLabel[w.role]}${w.rounds === 2 ? ' (2 kör)' : ''} · ${HUF(w.rate)}</span></div>`).join('')}
+    ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${esc(w.label ?? payRoleLabel[w.role])} · ${HUF(w.rate)}</span></div>`).join('')}
   </div>`}
 
   <h2>Levonások</h2>
