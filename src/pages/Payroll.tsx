@@ -417,23 +417,23 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
           <div className="grid-2">
             <div className="field">
               <label>XL sofőr napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={driver} onChange={(e) => setDriver(e.target.value)} placeholder="pl. 25 000" />
+              <input className="input" inputMode="decimal" value={driver} onFocus={(e) => e.target.select()} onChange={(e) => setDriver(e.target.value)} placeholder="pl. 25 000" />
             </div>
             <div className="field">
               <label>XL rakodó napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={loader} onChange={(e) => setLoader(e.target.value)} placeholder="pl. 20 000" />
+              <input className="input" inputMode="decimal" value={loader} onFocus={(e) => e.target.select()} onChange={(e) => setLoader(e.target.value)} placeholder="pl. 20 000" />
             </div>
             <div className="field">
               <label>Box sofőr napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={box} onChange={(e) => setBox(e.target.value)} placeholder="pl. 22 000" />
+              <input className="input" inputMode="decimal" value={box} onFocus={(e) => e.target.select()} onChange={(e) => setBox(e.target.value)} placeholder="pl. 22 000" />
             </div>
             <div className="field">
               <label>XL betanuló napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={trainee} onChange={(e) => setTrainee(e.target.value)} placeholder="0 = nem fizetett" />
+              <input className="input" inputMode="decimal" value={trainee} onFocus={(e) => e.target.select()} onChange={(e) => setTrainee(e.target.value)} placeholder="0 = nem fizetett" />
             </div>
             <div className="field">
               <label>Box betanuló napidíj (Ft)</label>
-              <input className="input" inputMode="decimal" value={boxTrainee} onChange={(e) => setBoxTrainee(e.target.value)} placeholder="0 = nem fizetett" />
+              <input className="input" inputMode="decimal" value={boxTrainee} onFocus={(e) => e.target.select()} onChange={(e) => setBoxTrainee(e.target.value)} placeholder="0 = nem fizetett" />
             </div>
           </div>
           <div className="tiny muted">
