@@ -295,7 +295,7 @@ export default function AuditLog() {
   const { data, isLoading } = useQuery({
     queryKey: ['audit'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(100)
+      const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(300)
       if (error) throw error
       const rows = data ?? []
       const ids = new Set<string>()
@@ -326,31 +326,59 @@ export default function AuditLog() {
 
   // Szűrő: típus szerint (a chipeken a darabszám), alapból minden
   const [entityFilter, setEntityFilter] = useState('')
+  // Keresés: név, rendszám, kör-kód, mezőérték — a megjelenített szövegben (feloldott nevekkel) keres,
+  // ékezet-függetlenül; több szó esetén mindnek illeszkednie kell (szókezdetre; egybetűs keresés — pl. „G” — csak a pontos G kört adja)
+  const [search, setSearch] = useState('')
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const terms = norm(search).split(/[^a-z0-9]+/).filter(Boolean)
+  const entries = (data ?? []).map((r) => {
+    const names = (r._names ?? {}) as Record<string, string>
+    const nm = (id: string | null) => (id ? names[id] ?? null : null)
+    const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
+    const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
+      ?? `${ENTITY_LABEL[r.entity] ?? r.entity} — ${ACTION_LABEL[r.action] ?? r.action}`
+    const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf })
+    // A rekord teljes tartalma is kereshető (pl. a sofőr neve akkor is, ha csak a kör változott)
+    const det = r.detail as Detail
+    const rec = det?.new ?? det?.old ?? {}
+    const lk = { nm, plate: plateOf, route: routeOf, cat: catOf }
+    const ctx = Object.keys(rec).filter((k) => !NOISE.has(k)).map((k) => fmtValue(r.entity, k, rec[k], lk))
+    const hay = norm([text, actorName, ENTITY_LABEL[r.entity] ?? r.entity, ...ctx, ...diff.flatMap((f) => [f.label, f.from ?? '', f.to])].join(' '))
+    const tokens = hay.split(/[^a-z0-9]+/).filter(Boolean)
+    return { r, actorName, text, diff, tokens }
+  })
+  const matched = entries.filter(({ tokens }) => terms.every((t) => tokens.some((tok) => (t.length === 1 ? tok === t : tok.startsWith(t)))))
   const counts = new Map<string, number>()
-  for (const r of data ?? []) counts.set(r.entity, (counts.get(r.entity) ?? 0) + 1)
-  const shown = (data ?? []).filter((r) => !entityFilter || r.entity === entityFilter)
+  for (const { r } of matched) counts.set(r.entity, (counts.get(r.entity) ?? 0) + 1)
+  const shown = matched.filter(({ r }) => !entityFilter || r.entity === entityFilter)
   // Napok szerint csoportosítva: a dátum egyszer, a sorokon csak az idő
   const byDay = new Map<string, typeof shown>()
-  for (const r of shown) {
-    const d = localDateOf(r.created_at)
+  for (const e of shown) {
+    const d = localDateOf(e.r.created_at)
     if (!byDay.has(d)) byDay.set(d, [])
-    byDay.get(d)!.push(r)
+    byDay.get(d)!.push(e)
   }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="stack">
       <h2>Napló</h2>
-      <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, körök, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 100 bejegyzés.</p>
+      <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, körök, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 300 bejegyzés.</p>
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
 
       {(data?.length ?? 0) > 0 && (
+        <div className="input-icon">
+          <Icon name="search" size={18} />
+          <input className="input" placeholder="Keresés: név, rendszám, kör (pl. G), érték…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
+      {(data?.length ?? 0) > 0 && (
         <div className="chips">
           <button type="button" className={`badge ${entityFilter === '' ? 'primary' : ''}`}
             style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
-            onClick={() => setEntityFilter('')}>Mind · {data!.length}</button>
+            onClick={() => setEntityFilter('')}>Mind · {matched.length}</button>
           {[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([ent, n]) => (
             <button key={ent} type="button" className={`badge ${entityFilter === ent ? 'primary' : ''}`}
               style={{ cursor: 'pointer', font: 'inherit', fontSize: 12, fontWeight: 700, minHeight: 32 }}
@@ -361,25 +389,23 @@ export default function AuditLog() {
         </div>
       )}
 
+      {!isLoading && (data?.length ?? 0) > 0 && shown.length === 0 && (
+        <div className="empty"><span className="ico"><Icon name="search" size={40} /></span>Nincs találat a szűrésre.</div>
+      )}
       {[...byDay.entries()].map(([day, rows]) => (
         <div key={day} className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="tiny muted" style={{ padding: '8px 12px', background: 'var(--bg-elev-2)', fontWeight: 700 }}>
             {formatDate(day)} · {new Date(`${day}T12:00:00`).toLocaleDateString('hu-HU', { weekday: 'long' })}
           </div>
-          {rows.map((r) => {
-            const names = (r._names ?? {}) as Record<string, string>
-            const nm = (id: string | null) => (id ? names[id] ?? null : null)
-            const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
-            const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
+          {rows.map(({ r, actorName, text, diff }) => {
             const tone = r.action === 'DELETE' ? 'var(--danger)' : r.action === 'INSERT' ? 'var(--success)' : 'var(--text-dim)'
-            const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf })
             const open = openIds.has(r.id)
             const shownDiff = open ? diff : diff.slice(0, 4)
             return (
               <div key={r.id} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
                 <Icon name={ENTITY_ICON[r.entity] ?? 'file-text'} size={18} style={{ color: tone, marginTop: 2 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="small">{text ?? `${ENTITY_LABEL[r.entity] ?? r.entity} — ${ACTION_LABEL[r.action] ?? r.action}`}</div>
+                  <div className="small">{text}</div>
                   <div className="tiny muted">
                     <span style={{ color: tone, fontWeight: 700 }}>{ACTION_LABEL[r.action] ?? r.action}</span> · {actorName}
                   </div>
