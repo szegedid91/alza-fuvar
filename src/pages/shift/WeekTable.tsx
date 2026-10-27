@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -50,6 +50,12 @@ export default function WeekTable() {
   const { data: routes } = useRoutes()
   const activeRoutes = useMemo(() => (routes ?? []).filter((r) => r.active), [routes])
   const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null
+  // Egy kört egy napon csak egy autó vihet: a más autónál már beírt körök foglaltak
+  const takenRoutes = (date: string, exceptCarId: string): Map<string, string> => {
+    const m = new Map<string, string>()
+    for (const s of shifts ?? []) if (s.work_date === date && s.route_id && s.car_id !== exceptCarId) m.set(s.route_id, carOf(s.car_id)?.plate ?? '?')
+    return m
+  }
   const [addedCars, setAddedCars] = useState<string[]>([])
   const memberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
   const [error, setError] = useState<string | null>(null)
@@ -220,7 +226,8 @@ export default function WeekTable() {
       await qc.invalidateQueries({ queryKey: ['shift-week'] })
       await qc.invalidateQueries({ queryKey: ['shift-cal'] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Mentési hiba')
+      const msg = e instanceof Error ? e.message : 'Mentési hiba'
+      setError(/ROUTE_TAKEN/.test(msg) ? msg.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem menthető: ') : msg)
     } finally {
       setBusyCell(null)
     }
@@ -246,6 +253,45 @@ export default function WeekTable() {
   }
 
   const carOf = (id: string) => (cars ?? []).find((c) => c.id === id)
+
+  // Ragadó nap-fejléc: lefelé görgetve a napok sávja a fejléc alatt marad.
+  // (A vízszintesen görgethető táblázatban a sticky thead nem működik, ezért
+  // egy fix sávot rajzolunk, és a görgetéssel együtt toljuk.)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const leftTableRef = useRef<HTMLTableElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const daysHeadRef = useRef<HTMLTableSectionElement>(null)
+  const [strip, setStrip] = useState<{ top: number; left: number; width: number; leftW: number; tableW: number; scrollLeft: number; cols: { left: number; width: number }[] } | null>(null)
+  useEffect(() => {
+    let raf = 0
+    const measure = () => {
+      raf = 0
+      const head = daysHeadRef.current, wrap = wrapRef.current, leftT = leftTableRef.current, sc = scrollRef.current
+      if (!head || !wrap || !leftT || !sc) { setStrip(null); return }
+      const topbar = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0
+      const headRect = head.getBoundingClientRect()
+      const wrapRect = wrap.getBoundingClientRect()
+      // csak amíg a táblázat a képernyőn van, és az eredeti fejléc már kigörgött
+      if (headRect.bottom >= topbar || wrapRect.bottom < topbar + 60) { setStrip(null); return }
+      const ths = [...head.querySelectorAll('th')] as HTMLElement[]
+      setStrip({
+        top: topbar, left: wrapRect.left, width: wrapRect.width, leftW: leftT.getBoundingClientRect().width,
+        tableW: sc.scrollWidth, scrollLeft: sc.scrollLeft,
+        cols: ths.map((th) => ({ left: th.offsetLeft, width: th.offsetWidth })),
+      })
+    }
+    const onChange = () => { if (!raf) raf = requestAnimationFrame(measure) }
+    window.addEventListener('scroll', onChange, { passive: true })
+    window.addEventListener('resize', onChange)
+    const sc = scrollRef.current
+    sc?.addEventListener('scroll', onChange, { passive: true })
+    onChange()
+    return () => {
+      window.removeEventListener('scroll', onChange); window.removeEventListener('resize', onChange)
+      sc?.removeEventListener('scroll', onChange)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [rowCarIds.length, days])
   const selStyle = { minHeight: 32, padding: '4px 6px', fontSize: 12, borderRadius: 8 } as const
 
   const weekShiftsOf = (carId: string) => (shifts ?? []).filter((x) => x.car_id === carId)
@@ -379,8 +425,23 @@ export default function WeekTable() {
 
         {/* Bal blokk (kategória + rendszám) FIXEN áll, csak a nap-oszlopok görgethetők.
             A két táblázat sorai azonos, rögzített magasságúak → mindig egy vonalban maradnak. */}
-        <div className="wk-wrap" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <table style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', flexShrink: 0 }}>
+        {strip && (
+          <div style={{ position: 'fixed', top: strip.top, left: strip.left, width: strip.width, zIndex: 15, display: 'flex', gap: 8, background: 'var(--bg)', borderBottom: '1px solid var(--border)', boxShadow: 'var(--shadow)', padding: '4px 0' }} aria-hidden="true">
+            <div className="wk-head" style={{ width: strip.leftW, flexShrink: 0, textAlign: 'right', paddingRight: 10, alignSelf: 'center' }}>Autó</div>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ position: 'relative', width: strip.tableW, height: HEAD_H, transform: `translateX(${-strip.scrollLeft}px)` }}>
+                {days.map((d, i) => strip.cols[i] && (
+                  <div key={d} className="wk-day" style={{ position: 'absolute', left: strip.cols[i].left, width: strip.cols[i].width, top: 0, fontSize: 11, padding: '3px 4px', borderRadius: 6, textAlign: 'center', background: d === today ? 'rgba(20,184,166,.14)' : undefined, fontWeight: 600, color: 'var(--text-dim)', minWidth: 0 }}>
+                    <div>{DAY_NAMES_LONG[i]}</div>
+                    <div className="muted">{d.slice(5).replace('-', '.')}.</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={wrapRef} className="wk-wrap" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <table ref={leftTableRef} style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', flexShrink: 0 }}>
             <thead>
               <tr style={{ height: HEAD_H }}>
                 <th className="wk-head wk-catcol"><span className="wk-cat-label">Kategória</span></th>
@@ -426,9 +487,9 @@ export default function WeekTable() {
             </tbody>
           </table>
 
-          <div style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
+          <div ref={scrollRef} style={{ overflowX: 'auto', flex: 1, minWidth: 0 }}>
             <table className="wk-days-table" style={{ borderCollapse: 'separate', borderSpacing: '3px 10px', width: '100%' }}>
-              <thead>
+              <thead ref={daysHeadRef}>
                 <tr style={{ height: HEAD_H }}>
                   {days.map((d, i) => (
                     <th key={d} className="wk-day" style={{ fontSize: 11, padding: '3px 4px', borderRadius: 6, background: d === today ? 'rgba(20,184,166,.14)' : undefined }}>
@@ -469,7 +530,7 @@ export default function WeekTable() {
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
                                           onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
                                           <option value="">— kör —</option>
-                                          {activeRoutes.map((r) => <option key={r.id} value={r.id}>{r.code}</option>)}
+                                          {activeRoutes.map((r) => { const by = takenRoutes(d, carId).get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> })}
                                           {s?.route_id && !activeRoutes.some((r) => r.id === s.route_id) && <option value={s.route_id}>{routeCode(s.route_id) ?? '?'}</option>}
                                         </select>
                                       )}
