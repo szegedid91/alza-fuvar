@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
+import { useRoutes } from '../hooks/useRoutes'
+import ConfirmButton from '../components/ConfirmButton'
 import { fetchAll } from '../lib/fetchAll'
 import { resolveNames } from '../lib/names'
 import { todayISO, formatDate, carIssueStatusLabel } from '../lib/labels'
@@ -31,6 +33,62 @@ interface MonthData {
   names: Record<string, string>
 }
 
+// Körök (R, G, I…) kezelése: a beosztás celláiban ezekből választható, ki melyik kört viszi
+function RoutesCard() {
+  const { currentWorkspaceId } = useWorkspace()
+  const qc = useQueryClient()
+  const { data: routes } = useRoutes()
+  const [code, setCode] = useState('')
+  const [open, setOpen] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); setErr(null) }
+  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : 'A művelet nem sikerült')
+  const add = useMutation({
+    mutationFn: async () => {
+      const c = code.trim().toUpperCase()
+      if (!c) return
+      const { error } = await supabase.from('route_names').insert({ workspace_id: currentWorkspaceId!, code: c, sort_order: (routes?.length ?? 0) + 1 })
+      if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'Ez a kör már létezik' : error.message)
+    },
+    onSuccess: () => { setCode(''); invalidate() }, onError: fail,
+  })
+  const remove = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from('route_names').delete().eq('id', id); if (error) throw error },
+    onSuccess: invalidate, onError: fail,
+  })
+  const list = routes ?? []
+  return (
+    <div className="card stack" style={{ gap: 8, padding: 12 }}>
+      <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', color: 'inherit', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen((o) => !o)}>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Körök{list.length ? ` (${list.map((r) => r.code).join(', ')})` : ''}</div>
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
+      </button>
+      {open && (
+        <>
+          <div className="tiny muted">A körök nevei (pl. R, G, I). A beosztás celláiban körönként választható, ki melyik kört viszi; a munkatárs a saját beosztásában látja.</div>
+          <div className="chips">
+            {list.map((r) => (
+              <span key={r.id} className="chip" style={{ gap: 4, paddingRight: 6 }}>
+                <strong>{r.code}</strong>
+                <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" disabled={remove.isPending} onConfirm={() => remove.mutate(r.id)} style={{ minHeight: 24, padding: '0 4px' }}>
+                  <Icon name="x" size={12} />
+                </ConfirmButton>
+              </span>
+            ))}
+            {list.length === 0 && <span className="tiny muted">Még nincs kör megadva.</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input className="input" style={{ minHeight: 38, padding: '6px 10px', fontSize: 14, maxWidth: 160 }} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Új kör neve, pl. R"
+              onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) add.mutate() }} />
+            <button className="btn sm auto" style={{ minHeight: 38 }} disabled={!code.trim() || add.isPending} onClick={() => add.mutate()} aria-label="Kör hozzáadása"><Icon name="plus" size={16} /></button>
+          </div>
+          {err && <div className="alert error">{err}</div>}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function ShiftEditor() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
@@ -48,6 +106,8 @@ export default function ShiftEditor() {
   const { data: members } = useMembers()
   const { data: cars } = useCars(true)
   const { data: categories } = useCarCategories()
+  const { data: routes } = useRoutes()
+  const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
 
   // A hónap beosztásai + eseményei egy lekérdezés-körben
@@ -208,8 +268,9 @@ export default function ShiftEditor() {
   // Egy beosztás-sor emberei röviden: sofőr (+ rakodó) (+ betanuló)
   const crewText = (s: Shift): string => {
     const parts = [shortName(nameOf[s.driver_id ?? ''])]
+    const rc = routeCode(s.route_id)
     if (crewOf(s.car_id) === 2 || s.loader_id) parts.push(shortName(nameOf[s.loader_id ?? '']))
-    let t = parts.join(' + ')
+    let t = (rc ? `[${rc}] ` : '') + parts.join(' + ')
     if (s.trainee_id) t += ` + bet.: ${shortName(nameOf[s.trainee_id])}`
     return t
   }
@@ -226,6 +287,7 @@ export default function ShiftEditor() {
       <h2>Beosztás — {currentWorkspace?.name}</h2>
 
       <SwapApprovals workspaceId={currentWorkspaceId} />
+      <RoutesCard />
 
       <div className="tabs" style={{ marginBottom: 0 }}>
         <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><Icon name="clipboard" size={18} />Heti táblázat</button>
@@ -391,7 +453,7 @@ export default function ShiftEditor() {
               <div className="between" style={{ gap: 8 }}>
                 <span className="small" style={{ fontWeight: 700 }}>
                   <span className="tiny muted" style={{ fontWeight: 400 }}>{catName(x.car_id) ? `${catName(x.car_id)} · ` : ''}</span>
-                  <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {plate(x.car_id)} {x.round === 2 && <span className="badge primary" style={{ fontSize: 10, padding: '0 6px' }}>2. kör</span>} {iconsOf(markers.get(`${d}|${x.car_id}`), 12)}
+                  <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {plate(x.car_id)} {routeCode(x.route_id) && <span className="badge" style={{ fontSize: 10, padding: '0 6px' }}>{routeCode(x.route_id)} kör</span>} {x.round === 2 && <span className="badge primary" style={{ fontSize: 10, padding: '0 6px' }}>2. kör</span>} {iconsOf(markers.get(`${d}|${x.car_id}`), 12)}
                 </span>
                 <span className="small muted" style={{ textAlign: 'right' }}>
                   {nameOf[x.driver_id ?? ''] ?? '—'}

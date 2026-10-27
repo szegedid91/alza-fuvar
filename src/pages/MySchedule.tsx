@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO, formatDate, formatHuf, swapStatusLabel, dailyRoleLabel, type DailyRole } from '../lib/labels'
 import CarTimeline, { type TimelineEntry } from '../components/CarTimeline'
+import { useRoutes } from '../hooks/useRoutes'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { weekLabel } from '../lib/calendar'
@@ -27,6 +28,8 @@ export default function MySchedule() {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const today = todayISO()
+  const { data: routes } = useRoutes()
+  const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null
 
   // Heti nézet: 0 = aktuális hét, -1 = előző, +1 = következő
   const [weekOffset, setWeekOffset] = useState(0)
@@ -291,7 +294,7 @@ export default function MySchedule() {
                     <span className="small muted">Szabadnap</span>
                   )}
                 </div>
-                {sh && <span className="badge primary">{dailyRoleLabel[myRole]}{dayShifts.length > 1 ? ' · 2 kör' : sh.round === 2 ? ' · 2. kör' : ''}</span>}
+                {sh && <span className="badge primary">{dailyRoleLabel[myRole]}{dayShifts.length > 1 ? ` · ${dayShifts.map((x) => routeCode(x.route_id) ?? `${x.round}.`).join('+')} kör` : routeCode(sh.route_id) ? ` · ${routeCode(sh.route_id)} kör` : sh.round === 2 ? ' · 2. kör' : ''}</span>}
               </div>
             )
           })}
@@ -360,7 +363,7 @@ export default function MySchedule() {
                 </div>
                 <div className="muted small"><span className="num">{car?.plate ?? '–'}</span>{car?.label ? ` · ${car.label}` : ''}</div>
               </div>
-              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{s.round === 2 ? ' · 2. kör' : ''}</span>
+              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{routeCode(s.route_id) ? ` · ${routeCode(s.route_id)} kör` : ''}{s.round === 2 ? ' · 2. kör' : ''}</span>
             </div>
             {traineeName && <div className="between"><span className="muted small">Betanuló veletek</span><span className="small">{traineeName}</span></div>}
             <div className="between">

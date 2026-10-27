@@ -6,6 +6,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useMembers } from '../../hooks/useMembers'
 import { useCars } from '../../hooks/useCars'
 import { useCarCategories } from '../../hooks/useCarCategories'
+import { useRoutes } from '../../hooks/useRoutes'
 import PersonPicker from '../../components/PersonPicker'
 import ConfirmButton from '../../components/ConfirmButton'
 import CarTimeline, { type TimelineEntry } from '../../components/CarTimeline'
@@ -45,6 +46,10 @@ export default function WeekTable() {
   const { data: cars } = useCars()
   const activeCars = useMemo(() => (cars ?? []).filter((c) => c.active), [cars])
   const { data: categories } = useCarCategories()
+  // Névvel ellátott körök (R, G, I…) — ha vannak, a cellában körönként választható
+  const { data: routes } = useRoutes()
+  const activeRoutes = useMemo(() => (routes ?? []).filter((r) => r.active), [routes])
+  const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null
   const [addedCars, setAddedCars] = useState<string[]>([])
   const memberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
   const [error, setError] = useState<string | null>(null)
@@ -137,7 +142,8 @@ export default function WeekTable() {
   const rowH = (carId: string) => {
     const rounds = hasRound2(carId) ? 2 : 1
     const maxFields = Math.max(...days.map((d) => Math.max(...[1, 2].map((r) => fieldsOf(carId, shiftAt(carId, d, r)).length))))
-    return rounds * (maxFields * FIELD_H + BLOCK_PAD + (rounds > 1 ? ROUND_LABEL_H : 0)) + (rounds - 1) * 6
+    const header = rounds > 1 || activeRoutes.length > 0 ? ROUND_LABEL_H + 10 : 0
+    return rounds * (maxFields * FIELD_H + BLOCK_PAD + header) + (rounds - 1) * 6
   }
   // Hány egymást követő sor tartozik ugyanabba a kategóriába (rowSpan-hoz)
   const groupSpan = (idx: number) => {
@@ -181,7 +187,7 @@ export default function WeekTable() {
     return new Set([...carsOf.entries()].filter(([, cs]) => cs.size > 1).map(([k]) => k))
   }, [shifts])
 
-  async function setCell(carId: string, date: string, round: number, field: Field, value: string) {
+  async function setCell(carId: string, date: string, round: number, field: Field | 'route_id', value: string, extra?: Partial<Pick<Shift, 'driver_id' | 'loader_id' | 'trainee_id'>>) {
     if (!currentWorkspaceId || !profile) return
     setError(null)
     setBusyCell(`${carId}|${date}`)
@@ -189,7 +195,9 @@ export default function WeekTable() {
       const cur = shiftAt(carId, date, round)
       const next = {
         driver_id: cur?.driver_id ?? null, loader_id: cur?.loader_id ?? null, trainee_id: cur?.trainee_id ?? null,
+        route_id: cur?.route_id ?? null,
         [field]: value || null,
+        ...(extra ?? {}),
       }
       if (!next.driver_id && !next.loader_id && !next.trainee_id) {
         // Minden mező üres → a napi (köri) beosztás törlődik
@@ -223,7 +231,7 @@ export default function WeekTable() {
     if ((prev ?? []).length === 0) { setCopyMsg('Az előző héten nincs beosztás.'); return }
     const rows = prev!.map((s) => ({
       workspace_id: currentWorkspaceId, work_date: addDays(s.work_date, 7), car_id: s.car_id, round: s.round ?? 1,
-      driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, created_by: profile.id,
+      driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, route_id: s.route_id, created_by: profile.id,
     }))
     const { error } = await supabase.from('shifts').upsert(rows, { onConflict: 'car_id,work_date,round' })
     if (error) { setError(error.message); return }
@@ -297,17 +305,18 @@ export default function WeekTable() {
       const DAY_ABBR = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V']
       const dayIdx = (iso: string) => (new Date(`${iso}T12:00:00`).getDay() + 6) % 7
       const byUser = new Map<string, { date: string; text: string }[]>()
-      const add = (uid: string | null, date: string, carId: string, role: string, round: number) => {
+      const add = (uid: string | null, date: string, carId: string, role: string, round: number, route: string | null) => {
         if (!uid) return
         const plate = carOf(carId)?.plate ?? '?'
         const single = crewOf(carId) === 1 && role !== 'betanuló'
-        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${round === 2 ? ' 2. kör' : ''}${single ? '' : ` (${role})`}` }
+        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${route ? ` ${route} kör` : ''}${round === 2 ? ' (2. kör)' : ''}${single ? '' : ` (${role})`}` }
         byUser.set(uid, [...(byUser.get(uid) ?? []), entry])
       }
       for (const sh of list) {
-        add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr', sh.round ?? 1)
-        add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó', sh.round ?? 1)
-        add(sh.trainee_id, sh.work_date, sh.car_id, 'betanuló', sh.round ?? 1)
+        const rc = routeCode(sh.route_id)
+        add(sh.driver_id, sh.work_date, sh.car_id, 'sofőr', sh.round ?? 1, rc)
+        add(sh.loader_id, sh.work_date, sh.car_id, 'rakodó', sh.round ?? 1, rc)
+        add(sh.trainee_id, sh.work_date, sh.car_id, 'betanuló', sh.round ?? 1, rc)
       }
       // Párhuzamosan megy minden címzettnek; a szerver megmondja, hány ESZKÖZRE
       // sikerült ténylegesen kézbesíteni — ezt írjuk ki, nem vak "kiküldve"-t.
@@ -445,8 +454,34 @@ export default function WeekTable() {
                             const fields = fieldsOf(carId, s)
                             return (
                               <div key={round} style={{ marginBottom: round < rounds.length ? 6 : 0 }}>
-                                {rounds.length > 1 && (
-                                  <div className="tiny muted" style={{ fontSize: 9, lineHeight: `${ROUND_LABEL_H}px`, fontWeight: 700, paddingLeft: 2 }}>{round}. kör</div>
+                                {(rounds.length > 1 || activeRoutes.length > 0) && (
+                                  <div className="between" style={{ gap: 4, minHeight: ROUND_LABEL_H + 10, marginBottom: 2 }}>
+                                    <span className="tiny muted" style={{ fontSize: 9, fontWeight: 700, paddingLeft: 2, whiteSpace: 'nowrap' }}>{rounds.length > 1 ? `${round}. kör` : 'kör'}</span>
+                                    <span className="row" style={{ gap: 3 }}>
+                                      {activeRoutes.length > 0 && (
+                                        // Melyik nevű kört viszi (R, G, I…)
+                                        <select className="select" value={s?.route_id ?? ''} disabled={busy} title="Kör neve"
+                                          style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
+                                          onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
+                                          <option value="">— kör —</option>
+                                          {activeRoutes.map((r) => <option key={r.id} value={r.id}>{r.code}</option>)}
+                                          {s?.route_id && !activeRoutes.some((r) => r.id === s.route_id) && <option value={s.route_id}>{routeCode(s.route_id) ?? '?'}</option>}
+                                        </select>
+                                      )}
+                                      {round === 2 && (() => {
+                                        const r1 = shiftAt(carId, d, 1)
+                                        const can = !!(r1?.driver_id || r1?.loader_id) && !s?.driver_id && !s?.loader_id
+                                        return can ? (
+                                          // Egy koppintás: az 1. kör embere(i) a 2. körre is
+                                          <button type="button" disabled={busy} title="Az 1. kör embere a 2. körre is"
+                                            style={{ border: '1px solid var(--border)', background: 'var(--primary-ghost)', color: 'var(--primary)', borderRadius: 6, height: 20, padding: '0 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                                            onClick={() => void setCell(carId, d, 2, 'driver_id', r1!.driver_id ?? '', { loader_id: r1!.loader_id ?? null })}>
+                                            <Icon name="arrow-down" size={10} />mint az 1.
+                                          </button>
+                                        ) : null
+                                      })()}
+                                    </span>
+                                  </div>
                                 )}
                                 {fields.map((field, fi) => {
                                   const val = s?.[field] ?? ''
@@ -553,7 +588,7 @@ export default function WeekTable() {
         </select>
         <div className="tiny muted">
           A cella azonnal mentődik. Piros keret = az ember aznap másik autóra is be van osztva.
-          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>2. kör</strong> (szezon, akár más emberrel) és <strong>betanuló</strong> mező bekapcsolása. Görgethető oldalra →
+          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>2. kör</strong> (szezon, akár más emberrel) és <strong>betanuló</strong> mező bekapcsolása. A 2. körnél a „mint az 1.” gomb átmásolja az 1. kör emberét. A kör neve (R, G, I…) a kis legördülőből választható. Görgethető oldalra →
         </div>
       </div>
 

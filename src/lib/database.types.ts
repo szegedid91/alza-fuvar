@@ -1137,7 +1137,7 @@ export type Database = {
       invites: {
         Row: {
           created_at: string
-          created_by: string
+          created_by: string | null
           email: string | null
           expires_at: string
           full_name: string | null
@@ -1150,7 +1150,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          created_by: string
+          created_by?: string | null
           email?: string | null
           expires_at?: string
           full_name?: string | null
@@ -1163,7 +1163,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          created_by?: string
+          created_by?: string | null
           email?: string | null
           expires_at?: string
           full_name?: string | null
@@ -1404,6 +1404,41 @@ export type Database = {
           },
         ]
       }
+      route_names: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          id: string
+          sort_order: number
+          workspace_id: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          workspace_id: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_names_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           car_id: string
@@ -1413,6 +1448,7 @@ export type Database = {
           id: string
           loader_id: string | null
           round: number
+          route_id: string | null
           trainee_id: string | null
           work_date: string
           workspace_id: string
@@ -1425,6 +1461,7 @@ export type Database = {
           id?: string
           loader_id?: string | null
           round?: number
+          route_id?: string | null
           trainee_id?: string | null
           work_date: string
           workspace_id: string
@@ -1437,6 +1474,7 @@ export type Database = {
           id?: string
           loader_id?: string | null
           round?: number
+          route_id?: string | null
           trainee_id?: string | null
           work_date?: string
           workspace_id?: string
@@ -1468,6 +1506,13 @@ export type Database = {
             columns: ["loader_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
             referencedColumns: ["id"]
           },
           {
