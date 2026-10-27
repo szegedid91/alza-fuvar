@@ -1769,6 +1769,7 @@ export type Database = {
       workspace_rate_history: {
         Row: {
           box_day_rate: number
+          box_round2_day_rate: number
           box_trainee_day_rate: number
           created_at: string
           created_by: string | null
@@ -1781,6 +1782,7 @@ export type Database = {
         }
         Insert: {
           box_day_rate?: number
+          box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
           created_by?: string | null
@@ -1793,6 +1795,7 @@ export type Database = {
         }
         Update: {
           box_day_rate?: number
+          box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
           created_by?: string | null
@@ -1825,6 +1828,7 @@ export type Database = {
           arrival_whatsapp_group: string | null
           arrival_whatsapp_group_name: string | null
           box_day_rate: number
+          box_round2_day_rate: number
           box_trainee_day_rate: number
           created_at: string
           driver_day_rate: number
@@ -1841,6 +1845,7 @@ export type Database = {
           arrival_whatsapp_group?: string | null
           arrival_whatsapp_group_name?: string | null
           box_day_rate?: number
+          box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
           driver_day_rate?: number
@@ -1857,6 +1862,7 @@ export type Database = {
           arrival_whatsapp_group?: string | null
           arrival_whatsapp_group_name?: string | null
           box_day_rate?: number
+          box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
           driver_day_rate?: number
@@ -1960,6 +1966,7 @@ export type Database = {
       set_workspace_rate_from: {
         Args: {
           p_box_rate?: number
+          p_box_round2_rate?: number
           p_box_trainee_rate?: number
           p_driver_rate: number
           p_loader_rate: number

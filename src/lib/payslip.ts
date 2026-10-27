@@ -44,7 +44,8 @@ export function openPayslip(row: PayrollRow, ym: string): void {
     <tr><th>Tétel</th><th>Mennyiség</th><th>Összeg</th></tr>
     <tr><td>XL sofőr napok</td><td>${row.driverDays} nap</td><td>${HUF(row.driverPay)}</td></tr>
     <tr><td>XL rakodó napok</td><td>${row.loaderDays} nap</td><td>${HUF(row.loaderPay)}</td></tr>
-    ${row.boxDays > 0 ? `<tr><td>Box sofőr napok</td><td>${row.boxDays} nap</td><td>${HUF(row.boxPay)}</td></tr>` : ''}
+    ${row.boxDays > 0 ? `<tr><td>Box sofőr napok (1. kör)</td><td>${row.boxDays} nap</td><td>${HUF(row.boxPay)}</td></tr>` : ''}
+    ${row.boxRound2Days > 0 ? `<tr><td>Box 2. körök</td><td>${row.boxRound2Days} db</td><td>${HUF(row.boxRound2Pay)}</td></tr>` : ''}
     ${row.traineeDays > 0 ? `<tr><td>XL betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}
     ${row.boxTraineeDays > 0 ? `<tr><td>Box betanuló napok</td><td>${row.boxTraineeDays} nap</td><td>${HUF(row.boxTraineePay)}</td></tr>` : ''}
     <tr><td>Alapbér összesen</td><td>${row.days} ledolgozott nap</td><td>${HUF(row.base)}</td></tr>
@@ -56,7 +57,7 @@ export function openPayslip(row: PayrollRow, ym: string): void {
   <h2>Ledolgozott napok (${row.workedDays.length})</h2>
   ${row.workedDays.length === 0 ? '<p class="none">Nem volt ledolgozott nap ebben a hónapban.</p>' : `
   <div class="days">
-    ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${payRoleLabel[w.role]} · ${HUF(w.rate)}</span></div>`).join('')}
+    ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${payRoleLabel[w.role]}${w.rounds === 2 ? ' (2 kör)' : ''} · ${HUF(w.rate)}</span></div>`).join('')}
   </div>`}
 
   <h2>Levonások</h2>
