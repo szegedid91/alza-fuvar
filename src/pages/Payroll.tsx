@@ -174,7 +174,7 @@ export default function Payroll() {
           let boxTraineeDays = 0
           let boxRound2Days = 0
           let base = 0
-          const workedDays: { date: string; role: PayRole; rate: number }[] = []
+          const workedDays: { date: string; role: PayRole; rate: number; rounds?: number }[] = []
           let driverPay = 0
           let loaderPay = 0
           let traineePay = 0
