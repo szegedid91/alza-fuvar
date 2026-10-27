@@ -50,10 +50,11 @@ export default function WeekTable() {
   const { data: routes } = useRoutes()
   const activeRoutes = useMemo(() => (routes ?? []).filter((r) => r.active), [routes])
   const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null
-  // Egy kört egy napon csak egy autó vihet: a más autónál már beírt körök foglaltak
-  const takenRoutes = (date: string, exceptCarId: string): Map<string, string> => {
+  // Egy kört egy napon KÖRÖNKÉNT csak egy autó vihet: az adott körben más autónál
+  // már beírt körök foglaltak (a másik körben szabadon választható)
+  const takenRoutes = (date: string, round: number, exceptCarId: string): Map<string, string> => {
     const m = new Map<string, string>()
-    for (const s of shifts ?? []) if (s.work_date === date && s.route_id && s.car_id !== exceptCarId) m.set(s.route_id, carOf(s.car_id)?.plate ?? '?')
+    for (const s of shifts ?? []) if (s.work_date === date && (s.round ?? 1) === round && s.route_id && s.car_id !== exceptCarId) m.set(s.route_id, carOf(s.car_id)?.plate ?? '?')
     return m
   }
   const [addedCars, setAddedCars] = useState<string[]>([])
@@ -530,7 +531,7 @@ export default function WeekTable() {
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
                                           onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
                                           <option value="">— kör —</option>
-                                          {activeRoutes.map((r) => { const by = takenRoutes(d, carId).get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> })}
+                                          {activeRoutes.map((r) => { const by = takenRoutes(d, round, carId).get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> })}
                                           {s?.route_id && !activeRoutes.some((r) => r.id === s.route_id) && <option value={s.route_id}>{routeCode(s.route_id) ?? '?'}</option>}
                                         </select>
                                       )}
