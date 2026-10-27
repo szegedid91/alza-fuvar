@@ -60,12 +60,12 @@ function RoutesCard() {
   return (
     <div className="card stack" style={{ gap: 8, padding: 12 }}>
       <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', color: 'inherit', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen((o) => !o)}>
-        <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Körök{list.length ? ` (${list.map((r) => r.code).join(', ')})` : ''}</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Box-körök{list.length ? ` (${list.map((r) => r.code).join(', ')})` : ''}</div>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
       </button>
       {open && (
         <>
-          <div className="tiny muted">A körök nevei (pl. R, G, I). A beosztás celláiban körönként választható, ki melyik kört viszi; a munkatárs a saját beosztásában látja.</div>
+          <div className="tiny muted">A Box-körök nevei (pl. R, G, I). A Box-autók celláiban körönként választható, ki melyik kört viszi; a munkatárs a saját beosztásában látja. XL-autónál nincs kör.</div>
           <div className="chips">
             {list.map((r) => (
               <span key={r.id} className="chip" style={{ gap: 4, paddingRight: 6 }}>

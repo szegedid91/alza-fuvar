@@ -22,7 +22,9 @@ export function currentYm(): string {
 
 // Napi részletek a bérlaphoz: mikor dolgozott és milyen szerepben,
 // mikor kapott előleget, és mi a levonás indoka.
-export interface WorkedDay { date: string; role: 'driver' | 'loader' | 'trainee'; rate: number }
+export type PayRole = 'driver' | 'loader' | 'box' | 'trainee'
+export const payRoleLabel: Record<PayRole, string> = { driver: 'XL sofőr', loader: 'XL rakodó', box: 'Box sofőr', trainee: 'Betanuló' }
+export interface WorkedDay { date: string; role: PayRole; rate: number }
 export interface AdjustmentItem { date: string; amount: number; reason: string | null }
 
 // Csapat-szintű, szerep szerinti napidíjak: a bér a napi beosztott szerep
@@ -36,16 +38,19 @@ export interface PayrollRow {
   driverDays: number
   loaderDays: number
   traineeDays: number
+  boxDays: number
   days: number
   driverRate: number
   loaderRate: number
   traineeRate: number
+  boxRate: number
   // A ténylegesen kiszámolt alapbér szerep szerint (a becsekkolás
   // munkaterületének napidíjával) — a napidíj × nap szorzat félrevezető
   // lenne annál, aki több munkaterületen dolgozott
   driverPay: number
   loaderPay: number
   traineePay: number
+  boxPay: number
   advances: number
   deductions: number
   base: number

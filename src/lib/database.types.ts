@@ -1768,6 +1768,7 @@ export type Database = {
       }
       workspace_rate_history: {
         Row: {
+          box_day_rate: number
           created_at: string
           created_by: string | null
           driver_day_rate: number
@@ -1778,6 +1779,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          box_day_rate?: number
           created_at?: string
           created_by?: string | null
           driver_day_rate: number
@@ -1788,6 +1790,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          box_day_rate?: number
           created_at?: string
           created_by?: string | null
           driver_day_rate?: number
@@ -1818,6 +1821,7 @@ export type Database = {
         Row: {
           arrival_whatsapp_group: string | null
           arrival_whatsapp_group_name: string | null
+          box_day_rate: number
           created_at: string
           driver_day_rate: number
           geo_lat: number | null
@@ -1832,6 +1836,7 @@ export type Database = {
         Insert: {
           arrival_whatsapp_group?: string | null
           arrival_whatsapp_group_name?: string | null
+          box_day_rate?: number
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1846,6 +1851,7 @@ export type Database = {
         Update: {
           arrival_whatsapp_group?: string | null
           arrival_whatsapp_group_name?: string | null
+          box_day_rate?: number
           created_at?: string
           driver_day_rate?: number
           geo_lat?: number | null
@@ -1947,6 +1953,7 @@ export type Database = {
       }
       set_workspace_rate_from: {
         Args: {
+          p_box_rate?: number
           p_driver_rate: number
           p_loader_rate: number
           p_trainee_rate?: number
