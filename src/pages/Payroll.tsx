@@ -407,7 +407,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         )}
       </div>
 
-      <div className="grid-2 small">
+      <div className="small" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '4px 16px' }}>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="truck" size={14} />XL sofőr/nap</span><span className="num">{formatHuf(ws.driver)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="package" size={14} />XL rakodó/nap</span><span className="num">{formatHuf(ws.loader)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="car" size={14} />Box 1. kör/nap</span><span className="num">{formatHuf(ws.box)}</span></div>
@@ -515,14 +515,12 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
           </div>
         ))}
         {base && (
-          <div className="between" style={{
-            padding: '6px 8px', borderRadius: 8, opacity: 0.85,
+          <div className="stack" style={{
+            gap: 4, padding: '6px 8px', borderRadius: 8, opacity: 0.85,
             background: activeRow?.id === base.id ? 'color-mix(in srgb, var(--primary) 10%, transparent)' : 'transparent',
           }}>
-            <span className="small">
-              <span className="muted" style={{ minWidth: 86, display: 'inline-block' }}>kezdeti díj</span>
-              <Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.driver_day_rate))}<span className="muted"> · </span><Icon name="package" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.loader_day_rate))}
-            </span>
+            <div className="between" style={{ gap: 6 }}>
+              <span className="small" style={{ fontWeight: 700 }}>kezdeti díj</span>
             <span className="row" style={{ gap: 6 }}>
               {activeRow?.id === base.id && <span className="badge primary">ekkor érvényes</span>}
               {isAdmin && (
@@ -531,6 +529,14 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                   <Icon name="pencil" size={14} />
                 </button>
               )}
+            </span>
+            </div>
+            <span className="small row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              <span><Icon name="truck" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.driver_day_rate))}</span>
+              <span><Icon name="package" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.loader_day_rate))}</span>
+              {Number(base.box_day_rate) > 0 && <span><Icon name="car" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.box_day_rate))}{Number(base.box_round2_day_rate) > 0 ? ` +${formatHuf(Number(base.box_round2_day_rate))}` : ''}</span>}
+              {Number(base.trainee_day_rate) > 0 && <span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> XL bet. {formatHuf(Number(base.trainee_day_rate))}</span>}
+              {Number(base.box_trainee_day_rate) > 0 && <span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> Box bet. {formatHuf(Number(base.box_trainee_day_rate))}</span>}
             </span>
           </div>
         )}
@@ -550,7 +556,8 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         <div>
           <div style={{ fontWeight: 800, fontSize: 16 }}>
             {row.name}
-            {row.status !== 'active' && <span className="badge danger" style={{ marginLeft: 6 }}>letiltott</span>}
+            {row.status === 'invited' && <span className="badge warning" style={{ marginLeft: 6 }}>még nem regisztrált</span>}
+            {row.status !== 'active' && row.status !== 'invited' && <span className="badge danger" style={{ marginLeft: 6 }}>letiltott</span>}
           </div>
           <div className="tiny muted">{row.workspace}</div>
         </div>
