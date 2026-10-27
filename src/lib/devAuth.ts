@@ -60,4 +60,5 @@ export const DEV_LOGIN_ENABLED = DEV_ACCOUNTS.length > 0
 
 // Helyben futunk, de egy fiók sincs beállítva → a bejelentkező oldalon
 // megmutatjuk, mit kell a .env.local-ba írni
-export const DEV_LOGIN_SETUP_HINT = LOCAL_ONLY && DEV_ACCOUNTS.length === 0
+// Csak a vite dev szerveren (npm run dev), a helyi előnézeti buildben nem
+export const DEV_LOGIN_SETUP_HINT = import.meta.env.DEV && DEV_ACCOUNTS.length === 0
