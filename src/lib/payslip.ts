@@ -45,7 +45,8 @@ export function openPayslip(row: PayrollRow, ym: string): void {
     <tr><td>XL sofőr napok</td><td>${row.driverDays} nap</td><td>${HUF(row.driverPay)}</td></tr>
     <tr><td>XL rakodó napok</td><td>${row.loaderDays} nap</td><td>${HUF(row.loaderPay)}</td></tr>
     ${row.boxDays > 0 ? `<tr><td>Box sofőr napok</td><td>${row.boxDays} nap</td><td>${HUF(row.boxPay)}</td></tr>` : ''}
-    ${row.traineeDays > 0 ? `<tr><td>Betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}
+    ${row.traineeDays > 0 ? `<tr><td>XL betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}
+    ${row.boxTraineeDays > 0 ? `<tr><td>Box betanuló napok</td><td>${row.boxTraineeDays} nap</td><td>${HUF(row.boxTraineePay)}</td></tr>` : ''}
     <tr><td>Alapbér összesen</td><td>${row.days} ledolgozott nap</td><td>${HUF(row.base)}</td></tr>
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
     <tr class="total"><td>Járandóság összesen</td><td></td><td>${HUF(row.earned)}</td></tr>
