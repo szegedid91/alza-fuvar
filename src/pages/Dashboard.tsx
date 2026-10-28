@@ -14,6 +14,7 @@ import Icon, { type IconName } from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import ConfirmButton from '../components/ConfirmButton'
 import PhotoThumb from '../components/PhotoThumb'
+import RouteProgressCard from '../components/RouteProgressCard'
 import { STATUS_META, type StatusKind } from '../lib/groupMessage'
 
 // Túl sokan egy autón (Box = 1 fő): ezt a vezetőnek kell rendeznie — vagy a
@@ -332,8 +333,13 @@ export default function Dashboard() {
       // nyitott autó-hibák
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
       // beosztva de nincs becsekkolva
+      // (a 2. kör ugyanazzal az emberrel nem jelzi kétszer)
+      const noshowSeen = new Set<string>()
       for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) {
         const who = [sh.driver_id, sh.loader_id, sh.trainee_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
+        const key = `${sh.car_id}|${who}`
+        if (noshowSeen.has(key)) continue
+        noshowSeen.add(key)
         flags.push({ kind: 'noshow', text: `Beosztva, de nincs becsekkolva: ${carMap.get(sh.car_id)?.plate ?? '?'}${who ? ` — ${who}` : ''}` })
       }
       // fotó nélküli (nem teljes) becsekkolások — a vezető engedheti tovább
@@ -387,6 +393,7 @@ export default function Dashboard() {
       <h2>Áttekintés — {currentWorkspace?.name}</h2>
       <CrewConflictsCard />
       {data && <PhotoPendingCard items={data.pendingPhoto} />}
+      <RouteProgressCard />
       {isLoading && <><Skeleton rows={2} /><Skeleton rows={3} /></>}
       {data && (
         <>
