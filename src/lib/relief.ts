@@ -67,43 +67,44 @@ export interface ReliefPlan {
   reliefEst: RouteEstimate
 }
 
-// n box kiválasztása az összes járatról egy új mentesítő járatra
-export function planRelief(routes: ReliefRoute[], n: number, depot: GeoPoint = DEPOT): ReliefPlan | null {
+// Mentesítő járat kiegyenlítéssel: a cél, hogy a járatok (az új mentesítővel együtt)
+// nagyjából ugyanannyi km-t és ugyanannyi időt fussanak. A mérce a becsült idő, ami a
+// km-ből és a boxok számából áll össze — így a km és az idő is kiegyenlítődik. Lépésenként
+// a leghosszabb járatról vesszük le azt a boxot, amelyikkel a legnagyobb járat ideje a
+// legjobban csökken, és addig folytatjuk, amíg a leghosszabb járat rövidül.
+export function planRelief(routes: ReliefRoute[], maxStops = 60, depot: GeoPoint = DEPOT): ReliefPlan | null {
   const pool = routes.flatMap((r) => r.stops.map((s) => ({ ...s, fromRouteId: r.id, fromCode: r.code })))
-  if (pool.length === 0 || n <= 0) return null
-  n = Math.min(n, pool.length - 1 > 0 ? pool.length - 1 : pool.length)
-  const estOf = (id: string, excluded: Set<string>) => estimateRoute(routes.find((r) => r.id === id)!.stops.filter((s) => !excluded.has(s.id)), depot)
+  if (pool.length < 2 || routes.length === 0) return null
   const before = routes.map((r) => ({ id: r.id, code: r.code, est: estimateRoute(r.stops, depot) }))
-  const avgMin = before.reduce((a, b) => a + b.est.minutes, 0) / Math.max(1, before.length)
-
-  // Mag: a legterheltebb járaton az a box, amelynek elhagyása a legtöbb percet spórolja (legnagyobb kitérő)
-  const heaviest = [...before].sort((a, b) => b.est.minutes - a.est.minutes)[0]
-  const heavyRoute = routes.find((r) => r.id === heaviest.id)!
-  let seed = heavyRoute.stops[0]
-  let bestSave = -Infinity
-  for (const s of heavyRoute.stops) {
-    const save = heaviest.est.minutes - estimateRoute(heavyRoute.stops.filter((x) => x.id !== s.id), depot).minutes
-    if (save > bestSave) { bestSave = save; seed = s }
-  }
-  const chosen = new Set<string>([seed.id])
-  const cluster: GeoPoint[] = [seed]
-  // Növesztés: mindig az a box jön, amelyik a legközelebb van a csoport valamelyik tagjához;
-  // a terheltebb járatok boxai előnyt kapnak, a már könnyű járatokról nem veszünk el többet
-  while (chosen.size < n) {
-    let best: (typeof pool)[number] | null = null, bestCost = Infinity
-    for (const c of pool) {
-      if (chosen.has(c.id)) continue
-      const routeNow = estOf(c.fromRouteId, chosen).minutes
-      if (routeNow < avgMin * 0.6 && before.length > 1) continue
-      const d = Math.min(...cluster.map((p) => haversineKm(p, c)))
-      const cost = d - 0.015 * (routeNow - avgMin)
-      if (cost < bestCost) { bestCost = cost; best = c }
+  const chosen = new Set<string>()
+  let relief: typeof pool = []
+  let reliefKm = 0
+  const kmOf = (r: ReliefRoute) => estimateRoute(r.stops.filter((s) => !chosen.has(s.id)), depot).minutes
+  while (chosen.size < Math.min(maxStops, pool.length - 1)) {
+    // a leghosszabb járat (a mentesítővel együtt mérve)
+    const kms = routes.map((r) => ({ r, km: kmOf(r) }))
+    const heaviest = kms.reduce((a, b) => (b.km > a.km ? b : a))
+    const currentMax = Math.max(heaviest.km, reliefKm)
+    if (reliefKm >= heaviest.km) break   // a mentesítő már a leghosszabb: tovább nem érdemes
+    // Jelöltek: a leghosszabb járat boxai. Elsődleges cél a leghosszabb járat idejének csökkentése;
+    // a közel egyformán jó jelöltek (4 percen belül) közül az jön, amelyik a mentesítőt a legkevésbé
+    // nyújtja meg — így a mentesítő egymáshoz közeli címekből áll össze, nem szóródik szét.
+    const others = Math.max(0, ...kms.filter((k) => k.r.id !== heaviest.r.id).map((k) => k.km))
+    const cands: { stop: ReliefStop; newMax: number; relief: typeof pool; reliefKm: number; grow: number }[] = []
+    for (const s of heaviest.r.stops) {
+      if (chosen.has(s.id)) continue
+      const rest = estimateRoute(heaviest.r.stops.filter((x) => !chosen.has(x.id) && x.id !== s.id), depot).minutes
+      const cand = orderStops([...relief, pool.find((p) => p.id === s.id)!], depot)
+      const candMin = estimateRoute(cand, depot).minutes
+      cands.push({ stop: s, newMax: Math.max(rest, candMin, others), relief: cand, reliefKm: candMin, grow: candMin - reliefKm })
     }
-    if (!best) break
-    chosen.add(best.id); cluster.push(best)
+    if (cands.length === 0) break
+    const bestMax = Math.min(...cands.map((c) => c.newMax))
+    if (bestMax >= currentMax - 0.5) break   // nem javít tovább (fél percnél kevesebb)
+    const best = cands.filter((c) => c.newMax <= bestMax + 4).sort((a, b) => a.grow - b.grow)[0]
+    chosen.add(best.stop.id); relief = best.relief; reliefKm = best.reliefKm
   }
-  const picked = pool.filter((p) => chosen.has(p.id))
-  const relief = orderStops(picked, depot)
+  if (relief.length === 0) return null
   const after = routes.map((r) => {
     const rest = r.stops.filter((s) => !chosen.has(s.id))
     return { id: r.id, code: r.code, est: estimateRoute(rest, depot), removed: r.stops.length - rest.length }

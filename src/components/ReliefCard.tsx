@@ -18,7 +18,6 @@ export default function ReliefCard() {
   const qc = useQueryClient()
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
-  const [n, setN] = useState<number | null>(null)
   const [plan, setPlan] = useState<ReliefPlan | null>(null)
   const [err, setErr] = useState<string | null>(null)
 
@@ -29,8 +28,6 @@ export default function ReliefCard() {
   })).filter((r) => r.stops.length > 0), [routes, stopsByRoute])
   const total = model.reduce((a, r) => a + r.stops.length, 0)
   const noCoords = (routes ?? []).reduce((a, r) => a + (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat == null).length, 0)
-  const defaultN = Math.max(3, Math.round(total / (model.length + 1)))
-  const size = n ?? defaultN
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); void qc.invalidateQueries({ queryKey: ['route-stops'] }) }
 
   const create = useMutation({
@@ -91,7 +88,7 @@ export default function ReliefCard() {
     <div className="card stack" style={{ gap: 10 }}>
       <div className="card-title" style={{ margin: 0 }}><Icon name="repeat" />Mentesítő járat</div>
       <p className="tiny muted" style={{ margin: 0 }}>
-        Ha sok a csomag: a javaslat az összes járat boxaiból (a korábbi mentesítőkét is beleértve) kivesz egy egymáshoz közeli csoportot — elsőbbséggel a terheltebb járatokról —, és új M-járatra teszi. A km és az idő becslés (légvonal × úttényező, {`${32} km/h`}, boxonként 7 perc), a járatok összevetésére való.
+        Ha sok a csomag: a javaslat úgy vesz le boxokat a járatokról (a korábbi mentesítőkről is), hogy az új M-járattal együtt a járatok nagyjából ugyanannyi km-t és ugyanannyi időt fussanak — mindig a leghosszabb járatról, az egymáshoz közeli címeket. A km és az idő becslés (légvonal × úttényező, 32 km/h, boxonként 7 perc), a járatok összevetésére való.
       </p>
       {model.length > 0 && (
         <div className="stack" style={{ gap: 4 }}>
@@ -104,14 +101,9 @@ export default function ReliefCard() {
           {noCoords > 0 && <div className="tiny muted">{noCoords} box koordináta nélkül — ezeket a javaslat nem tudja figyelembe venni.</div>}
         </div>
       )}
-      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label className="small" style={{ margin: 0 }}>Boxok száma az új járaton</label>
-        <input className="input" type="number" min={1} max={Math.max(1, total - 1)} value={size} style={{ width: 90, minHeight: 38 }}
-          onChange={(e) => setN(Math.max(1, Math.min(total - 1, Number(e.target.value) || 1)))} />
-        <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); setPlan(planRelief(model, size)) }}>
-          <Icon name="map" size={14} />Javaslat
-        </button>
-      </div>
+      <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(model); setPlan(pl); if (!pl) setErr('Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb járatot.') }}>
+        <Icon name="map" size={14} />Javaslat (km és idő kiegyenlítése)
+      </button>
       {plan && (
         <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           <div className="between">
