@@ -1411,6 +1411,7 @@ export type Database = {
           created_at: string
           id: string
           sort_order: number
+          stops_notified_at: string | null
           workspace_id: string
         }
         Insert: {
@@ -1419,6 +1420,7 @@ export type Database = {
           created_at?: string
           id?: string
           sort_order?: number
+          stops_notified_at?: string | null
           workspace_id: string
         }
         Update: {
@@ -1427,6 +1429,7 @@ export type Database = {
           created_at?: string
           id?: string
           sort_order?: number
+          stops_notified_at?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -2029,6 +2032,7 @@ export type Database = {
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }
+      merge_alza_box_duplicates: { Args: never; Returns: number }
       partner_decide_swap: {
         Args: { p_accept: boolean; p_request_id: string }
         Returns: undefined

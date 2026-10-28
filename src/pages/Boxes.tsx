@@ -144,6 +144,9 @@ function ImportCard() {
         const { error } = await supabase.from('alza_boxes').upsert(valid.slice(i, i + 200).map(toRow), { onConflict: 'parcel_shop_id' })
         if (error) throw error
       }
+      // A kézzel (az Alza előtt) felvett boxok összefésülése az importált sorral, ha a kódjuk egyezik
+      const { error: mergeErr } = await supabase.rpc('merge_alza_box_duplicates')
+      if (mergeErr) throw mergeErr
       // ami a mostani listában nincs benne, az megszűnt (inaktív — a régi lapokon marad a hivatkozás)
       let deactivated = 0
       if (valid.length >= 100) {
