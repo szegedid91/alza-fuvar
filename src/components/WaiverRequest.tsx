@@ -25,7 +25,7 @@ export default function WaiverRequest({ checkinId, requestedAt }: { checkinId: s
     <div className="stack" style={{ gap: 6 }}>
       {requestedAt && (
         <div className="tiny muted row" style={{ gap: 6 }}>
-          <Icon name="bell" size={14} />Engedély kérve {hhmm(requestedAt)} — a vezető az Áttekintésben engedélyezheti. Ha megtörtént, húzd le a frissítéshez.
+          <Icon name="bell" size={14} />Engedély kérve {hhmm(requestedAt)} — a vezető az Áttekintésben engedélyezheti. Amint megtörténik, értesítést kapsz, és ez az oldal magától a kezdőlapra lép.
         </div>
       )}
       <ConfirmButton className="btn ghost sm" confirmLabel="Biztos? Jelzés a vezetőknek" disabled={request.isPending} onConfirm={() => request.mutate()}>

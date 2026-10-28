@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import RequireCheckin from '../components/RequireCheckin'
 import PhotoSlot, { type CapturedPhoto } from '../components/PhotoSlot'
@@ -36,6 +37,18 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
+  // A vezetői továbbengedés azonnal ideérjen (nem csak a 15 mp-es frissítéssel)
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins'], [['today']])
+  // Ha a vezető időközben fotó nélkül továbbengedett: jelzés + vissza a kezdőlapra.
+  // Csak akkor, ha az engedély ITT, várakozás közben érkezett — aki engedély után
+  // szándékosan nyitja meg a fotózást, az maradhat.
+  const waivedAtStart = useRef(!!checkin.inspection_waived_at)
+  useEffect(() => {
+    if (waivedAtStart.current || !checkin.inspection_waived_at) return
+    toast.success('A vezető továbbengedett fotó nélkül — a becsekkolás kész, folytathatod a napot.')
+    navigate('/', { replace: true })
+  }, [checkin.inspection_waived_at, navigate])
   // Becsekkolás után ide érkezik a futár: a beolvasott autó + idő látszik, és
   // azonnal indulhat a fotózás
   const fromCheckin = !!(location.state as { fromCheckin?: boolean } | null)?.fromCheckin
@@ -122,10 +135,12 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
       }
       setPhotos({})
       setMsg('Kész: az ellenőrző fotók elmentve.')
-      toast.success('Ellenőrzés elmentve.')
+      toast.success('Becsekkolás kész — az ellenőrző fotók elmentve, jó munkát!')
       await qc.invalidateQueries({ queryKey: ['inspections', car.id] })
       await qc.invalidateQueries({ queryKey: ['inspections-today', car.id] })
       await qc.invalidateQueries({ queryKey: ['today'] })
+      // A fotósor a becsekkolás utolsó lépése: innen vissza a kezdőlapra, ahol a nap többi lépése van
+      navigate('/', { replace: true })
     } catch (e) {
       // Fél-kész ellenőrzés nem maradhat: a kötelező-ellenőrzés kapu hiányos
       // fotósorral is kinyílna. A már beírt sorokat visszagörgetjük.
