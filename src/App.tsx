@@ -39,6 +39,7 @@ const History = lazy(() => import('./pages/History'))
 const AuditLog = lazy(() => import('./pages/AuditLog'))
 const BoxSheet = lazy(() => import('./pages/BoxSheet'))
 const BoxSheets = lazy(() => import('./pages/BoxSheets'))
+const RoutesPage = lazy(() => import('./pages/Routes'))
 const Boxes = lazy(() => import('./pages/Boxes'))
 
 function FullScreenSpinner() {
@@ -126,6 +127,7 @@ export default function App() {
           {isManagerOrAdmin && <Route path="/tortenet" element={<History />} />}
           {isAdmin && <Route path="/naplo" element={<AuditLog />} />}
           {isManagerOrAdmin && <Route path="/box-lapok" element={<BoxSheets />} />}
+          {isManagerOrAdmin && <Route path="/jaratok" element={<RoutesPage />} />}
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

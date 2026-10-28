@@ -41,6 +41,7 @@ export default function Home() {
   const managerHub: HubItem[] = [
     { to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
     { to: '/beosztas-szerkeszto', icon: 'calendar', title: 'Beosztás', desc: 'Napi párosok, heti nézet' },
+    { to: '/jaratok', icon: 'map', title: 'Járatok', desc: 'Box-járatok, boxok sorrendje' },
     { to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
     { to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, tiltás' },
     { to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok kezelése' },
