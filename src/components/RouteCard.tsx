@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
-import { useRouteStops } from '../hooks/useRouteStops'
+import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, setNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
@@ -78,21 +78,36 @@ export default function RouteCard() {
         const stops = stopsByRoute?.get(sh.route_id) ?? []
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
         const idx = Math.min(run?.current_index ?? 0, stops.length)
-        const done = idx >= stops.length && stops.length > 0
-        const cur = stops[idx]
         const go = (index: number) => setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index })
         return (
-          <div key={sh.id} className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
+          <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
+            go={go} navApp={navApp} pickNav={pickNav} openList={openList} setOpenList={setOpenList} />
+        )
+      })}
+    </>
+  )
+}
+
+// A járat-kártya megjelenése — a futár kezdőlapján élesben, a vezetőnek pedig
+// előnézetként (Járatok oldal, helyi haladással) ugyanez a komponens
+export function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, pickNav, openList, setOpenList }: {
+  code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
+  go: (index: number) => void; navApp: NavApp; pickNav: (a: NavApp) => void; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
+}) {
+  const done = idx >= stops.length && stops.length > 0
+  const cur = stops[idx]
+  return (
+          <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
             <div className="between">
-              <div className="card-title" style={{ margin: 0 }}><Icon name="map" />{codeOf(sh.route_id)} járat{sh.round === 2 ? ' · 2. kör' : ''}</div>
-              <span className="badge num">{sh.plate}</span>
+              <div className="card-title" style={{ margin: 0 }}><Icon name="map" />{code} járat{round === 2 ? ' · 2. kör' : ''}</div>
+              <span className="badge num">{plate}</span>
             </div>
             {stops.length === 0 ? (
               <div className="tiny muted">Ehhez a járathoz még nincsenek boxok rendelve — a vezető a Beosztás oldalon, a „Járatok” kártyán adja meg.</div>
             ) : done ? (
               <div className="stack" style={{ gap: 6 }}>
                 <div className="badge success" style={{ alignSelf: 'flex-start' }}><Icon name="check-circle" />Mind a {stops.length} cím kész</div>
-                <button type="button" className="btn ghost sm auto" disabled={setIndex.isPending} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
+                <button type="button" className="btn ghost sm auto" disabled={busy} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
               </div>
             ) : cur ? (
               <>
@@ -111,8 +126,8 @@ export default function RouteCard() {
                   </a>
                 ) : <div className="tiny muted">Ehhez a boxhoz nincs koordináta a jegyzékben.</div>}
                 <div className="row" style={{ gap: 6 }}>
-                  <button type="button" className="btn ghost sm" disabled={setIndex.isPending || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={setIndex.isPending} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
+                  <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
               </>
             ) : null}
@@ -130,7 +145,7 @@ export default function RouteCard() {
                 {openList && (
                   <div className="stack" style={{ gap: 4 }}>
                     {stops.map((s, i) => (
-                      <button key={s.id} type="button" className="row" disabled={setIndex.isPending} onClick={() => go(i)}
+                      <button key={s.id} type="button" className="row" disabled={busy} onClick={() => go(i)}
                         style={{ gap: 6, alignItems: 'center', background: i === idx ? 'var(--primary-ghost)' : 'none', border: 'none', borderRadius: 6, padding: '4px 6px', color: 'inherit', textAlign: 'left', cursor: 'pointer', opacity: i < idx ? 0.6 : 1 }}>
                         <Icon name={i < idx ? 'check-circle' : i === idx ? 'navigation' : 'map-pin'} size={14} style={{ color: i < idx ? 'var(--success)' : i === idx ? 'var(--primary)' : 'var(--text-dim)' }} />
                         <span className="tiny" style={{ flex: 1, textDecoration: i < idx ? 'line-through' : 'none' }}>{i + 1}. {s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</span>
@@ -141,8 +156,5 @@ export default function RouteCard() {
               </>
             )}
           </div>
-        )
-      })}
-    </>
   )
 }
