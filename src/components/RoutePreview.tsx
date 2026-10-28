@@ -16,7 +16,7 @@ export default function RoutePreview() {
   const [navApp, setNav] = useState<NavApp>(getNavApp)
   const [openList, setOpenList] = useState(false)
   const route = routes?.find((r) => r.id === routeId) ?? null
-  const stops = route ? stopsByRoute?.get(route.id) ?? [] : []
+  const stops = route ? stopsByRoute?.[route.id] ?? [] : []
   return (
     <div className="card stack" style={{ gap: 10 }}>
       <div className="card-title" style={{ margin: 0 }}><Icon name="eye" />Futár-nézet előnézet</div>
@@ -24,7 +24,7 @@ export default function RoutePreview() {
       <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
         <select className="select" value={routeId} onChange={(e) => { setRouteId(e.target.value); setIdx(0); setOpenList(false) }} style={{ flex: 1, minWidth: 140 }}>
           <option value="">— járat —</option>
-          {(routes ?? []).map((r) => <option key={r.id} value={r.id}>{r.code}{r.is_relief ? ' (mentesítő)' : ''} · {(stopsByRoute?.get(r.id) ?? []).length} box</option>)}
+          {(routes ?? []).map((r) => <option key={r.id} value={r.id}>{r.code}{r.is_relief ? ' (mentesítő)' : ''} · {(stopsByRoute?.[r.id] ?? []).length} box</option>)}
         </select>
         <select className="select" value={round} onChange={(e) => setRound(Number(e.target.value))} style={{ width: 110 }}>
           <option value={1}>1. kör</option>

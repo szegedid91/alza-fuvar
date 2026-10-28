@@ -48,7 +48,7 @@ export default function RouteProgressCard() {
     <div className="card stack" style={{ gap: 8 }}>
       <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Járatok ma ({data.length})</div>
       {data.map((s) => {
-        const stops = stopsByRoute?.get(s.routeId) ?? []
+        const stops = stopsByRoute?.[s.routeId] ?? []
         const idx = Math.min(s.run?.current_index ?? 0, stops.length)
         const done = stops.length > 0 && idx >= stops.length
         const cur = stops[idx]

@@ -51,7 +51,7 @@ function RoutesCard() {
             {list.map((r) => (
               <span key={r.id} className={`chip ${editing === r.id ? 'active' : ''}`} style={{ gap: 4, paddingRight: 6 }}>
                 <button type="button" onClick={() => setEditing((e) => (e === r.id ? null : r.id))} style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', fontWeight: 700 }}>
-                  {r.code}{r.is_relief ? <span className="tiny muted"> (mentesítő)</span> : null} <span className="tiny muted">· {stopsByRoute?.get(r.id)?.length ?? 0} box</span>
+                  {r.code}{r.is_relief ? <span className="tiny muted"> (mentesítő)</span> : null} <span className="tiny muted">· {stopsByRoute?.[r.id]?.length ?? 0} box</span>
                 </button>
                 <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" disabled={remove.isPending} onConfirm={() => remove.mutate(r.id)} style={{ minHeight: 24, padding: '0 4px' }}>
                   <Icon name="x" size={12} />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -10,6 +10,7 @@ import { todayISO } from '../lib/labels'
 import { getNavApp, setNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import BoxCard from './BoxCard'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -75,7 +76,7 @@ export default function RouteCard() {
   return (
     <>
       {myShifts.map((sh) => {
-        const stops = stopsByRoute?.get(sh.route_id) ?? []
+        const stops = stopsByRoute?.[sh.route_id] ?? []
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
         const idx = Math.min(run?.current_index ?? 0, stops.length)
         const go = (index: number) => setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index })
@@ -96,6 +97,9 @@ export function RouteCardView({ code, round, plate, stops, idx, busy = false, go
 }) {
   const done = idx >= stops.length && stops.length > 0
   const cur = stops[idx]
+  // A box adatlapja (fotó, „hol található” leírás, megjegyzés) a navigálás mellett egy koppintásra
+  const [showBox, setShowBox] = useState(false)
+  useEffect(() => { setShowBox(false) }, [idx])
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
             <div className="between">
@@ -119,12 +123,19 @@ export function RouteCardView({ code, round, plate, stops, idx, busy = false, go
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
                   <div className="small muted">{cur.box.address}</div>
                   {cur.box.description && <div className="tiny muted" style={{ marginTop: 4 }}><Icon name="info" size={12} />{cur.box.description}</div>}
+                  {cur.box.notes && <div className="small" style={{ marginTop: 6, padding: '6px 8px', borderRadius: 8, background: 'var(--warning-ghost, rgba(245,158,11,0.12))', color: 'var(--warning)', fontWeight: 600 }}><Icon name="key" size={14} />{cur.box.notes}</div>}
                 </div>
-                {cur.box.lat != null && cur.box.lng != null ? (
-                  <a className="btn" href={navUrl(navApp, cur.box.lat, cur.box.lng)} target="_blank" rel="noopener noreferrer">
-                    <Icon name="navigation" />Navigálás ({NAV_LABEL[navApp]})
-                  </a>
-                ) : <div className="tiny muted">Ehhez a boxhoz nincs koordináta a jegyzékben.</div>}
+                <div className="row" style={{ gap: 6 }}>
+                  {cur.box.lat != null && cur.box.lng != null ? (
+                    <a className="btn" style={{ flex: 2 }} href={navUrl(navApp, cur.box.lat, cur.box.lng)} target="_blank" rel="noopener noreferrer">
+                      <Icon name="navigation" />Navigálás ({NAV_LABEL[navApp]})
+                    </a>
+                  ) : <div className="tiny muted" style={{ flex: 2 }}>Ehhez a boxhoz nincs koordináta a jegyzékben.</div>}
+                  <button type="button" className={`btn ${showBox ? 'secondary' : 'ghost'}`} style={{ flex: 1 }} onClick={() => setShowBox((o) => !o)} aria-expanded={showBox}>
+                    <Icon name="package" />Box
+                  </button>
+                </div>
+                {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
                   <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>

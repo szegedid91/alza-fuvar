@@ -11,17 +11,17 @@ export type RouteStop = Tables<'route_stops'> & { box: AlzaBox }
 export function useRouteStops() {
   const { currentWorkspaceId } = useWorkspace()
   return useQuery({
-    queryKey: ['route-stops', currentWorkspaceId],
+    queryKey: ['route-stops', currentWorkspaceId, 'v2'],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const { data, error } = await supabase.from('route_stops').select('*, box:alza_boxes(*)')
         .eq('workspace_id', currentWorkspaceId!).order('sort_order').order('created_at')
       if (error) throw error
-      const byRoute = new Map<string, RouteStop[]>()
+      // Sima objektum (nem Map): a perzisztált query-cache JSON-ként menti, Map-ből üres objektum lenne
+      const byRoute: Record<string, RouteStop[]> = {}
       for (const row of (data ?? []) as unknown as RouteStop[]) {
         if (!row.box) continue
-        if (!byRoute.has(row.route_id)) byRoute.set(row.route_id, [])
-        byRoute.get(row.route_id)!.push(row)
+        ;(byRoute[row.route_id] ??= []).push(row)
       }
       return byRoute
     },

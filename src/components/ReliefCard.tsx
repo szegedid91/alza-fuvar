@@ -25,12 +25,12 @@ export default function ReliefCard() {
 
   const model: ReliefRoute[] = useMemo(() => (routes ?? []).map((r) => ({
     id: r.id, code: r.code, isRelief: !!r.is_relief,
-    stops: (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat != null && s.box.lng != null)
+    stops: (stopsByRoute?.[r.id] ?? []).filter((s) => s.box.lat != null && s.box.lng != null)
       .map((s) => ({ id: s.id, boxId: s.box_id, code: s.box.code, name: s.box.name, lat: s.box.lat!, lng: s.box.lng! })),
   })).filter((r) => r.stops.length > 0), [routes, stopsByRoute])
   const selectedModel = model.filter((r) => !excluded.has(r.id))
   const total = selectedModel.reduce((a, r) => a + r.stops.length, 0)
-  const noCoords = (routes ?? []).reduce((a, r) => a + (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat == null).length, 0)
+  const noCoords = (routes ?? []).reduce((a, r) => a + (stopsByRoute?.[r.id] ?? []).filter((s) => s.box.lat == null).length, 0)
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); void qc.invalidateQueries({ queryKey: ['route-stops'] }) }
 
   const create = useMutation({
@@ -41,7 +41,7 @@ export default function ReliefCard() {
         .insert({ workspace_id: currentWorkspaceId!, code, sort_order: (routes?.length ?? 0) + 1, is_relief: true }).select('id').single()
       if (error) throw error
       // az átkerülő megállók eredeti helye megmarad (feloszlatáshoz)
-      const all = routes!.flatMap((r) => stopsByRoute?.get(r.id) ?? [])
+      const all = routes!.flatMap((r) => stopsByRoute?.[r.id] ?? [])
       const rows = plan.relief.map((s, i) => {
         const orig = all.find((x) => x.id === s.id)
         return { workspace_id: currentWorkspaceId!, route_id: rn.id, box_id: s.boxId, sort_order: i + 1, moved_from_route_id: s.fromRouteId, moved_from_order: orig?.sort_order ?? null }
@@ -52,7 +52,7 @@ export default function ReliefCard() {
       if (del.error) throw del.error
       // a megmaradt megállók újrasorszámozása az érintett járatokon
       for (const r of routes!) {
-        const rest = (stopsByRoute?.get(r.id) ?? []).filter((s) => !plan.relief.some((x) => x.id === s.id))
+        const rest = (stopsByRoute?.[r.id] ?? []).filter((s) => !plan.relief.some((x) => x.id === s.id))
         await Promise.all(rest.map((s, i) => (s.sort_order === i + 1 ? null : supabase.from('route_stops').update({ sort_order: i + 1 }).eq('id', s.id))))
       }
       return code
@@ -63,13 +63,13 @@ export default function ReliefCard() {
 
   const dissolve = useMutation({
     mutationFn: async (routeId: string) => {
-      const stops: RouteStop[] = stopsByRoute?.get(routeId) ?? []
+      const stops: RouteStop[] = stopsByRoute?.[routeId] ?? []
       // vissza az eredeti járatra (a lista végére, az eredeti sorrendjük szerint), ha ott még nincs
       const byOrigin = new Map<string, RouteStop[]>()
       for (const s of stops) if (s.moved_from_route_id) { if (!byOrigin.has(s.moved_from_route_id)) byOrigin.set(s.moved_from_route_id, []); byOrigin.get(s.moved_from_route_id)!.push(s) }
       for (const [origId, list] of byOrigin) {
         if (!routes?.some((r) => r.id === origId)) continue
-        const existing = stopsByRoute?.get(origId) ?? []
+        const existing = stopsByRoute?.[origId] ?? []
         let next = (existing.length ? Math.max(...existing.map((s) => s.sort_order)) : 0) + 1
         const rows = list.sort((a, b) => (a.moved_from_order ?? 0) - (b.moved_from_order ?? 0))
           .filter((s) => !existing.some((e) => e.box_id === s.box_id))
@@ -144,7 +144,7 @@ export default function ReliefCard() {
           <div className="tiny muted" style={{ fontWeight: 700 }}>Meglévő mentesítő járatok</div>
           {reliefRoutes.map((r) => (
             <div key={r.id} className="between" style={{ gap: 8 }}>
-              <span className="small"><strong>{r.code}</strong> · {(stopsByRoute?.get(r.id) ?? []).length} box</span>
+              <span className="small"><strong>{r.code}</strong> · {(stopsByRoute?.[r.id] ?? []).length} box</span>
               <ConfirmButton className="btn ghost sm auto" confirmLabel="Feloszlatom, a boxok visszakerülnek" disabled={busy} onConfirm={() => dissolve.mutate(r.id)}>
                 <Icon name="x" size={14} />Feloszlatás
               </ConfirmButton>

@@ -19,7 +19,10 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const { data: boxes } = useAlzaBoxes()
   const [q, setQ] = useState('')
   const [err, setErr] = useState<string | null>(null)
-  const stops: RouteStop[] = stopsByRoute?.get(route.id) ?? []
+  // Box-megjegyzés (pl. kapukód, hol van az épületen belül) — a jegyzékben tárolódik, minden járaton látszik
+  const [noteFor, setNoteFor] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const stops: RouteStop[] = stopsByRoute?.[route.id] ?? []
   const { data: allRoutes } = useRoutes()
   const fromCode = (id: string) => allRoutes?.find((r) => r.id === id)?.code ?? '?'
   const used = new Set(stops.map((s) => s.box_id))
@@ -38,6 +41,13 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const remove = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('route_stops').delete().eq('id', id); if (error) throw error },
     onSuccess: invalidate, onError: fail,
+  })
+  const saveNote = useMutation({
+    mutationFn: async ({ boxId, notes }: { boxId: string; notes: string }) => {
+      const { error } = await supabase.from('alza_boxes').update({ notes: notes.trim() || null }).eq('id', boxId)
+      if (error) throw error
+    },
+    onSuccess: () => { setNoteFor(null); void qc.invalidateQueries({ queryKey: ['alza-boxes'] }); invalidate() }, onError: fail,
   })
   // Csere a szomszéddal: a két sor sort_order-je helyet cserél
   const move = useMutation({
@@ -104,7 +114,7 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const results = nq.length >= 2
     ? (boxes ?? []).filter((b) => !used.has(b.id) && (normalize(b.code).includes(nq) || normalize(b.name).includes(nq) || normalize(b.address).includes(nq))).slice(0, 8)
     : []
-  const busy = add.isPending || remove.isPending || move.isPending || reorder.isPending
+  const busy = add.isPending || remove.isPending || move.isPending || reorder.isPending || saveNote.isPending
 
   return (
     <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
@@ -113,7 +123,7 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
         <span className="tiny muted">{stops.length} box</span>
       </div>
       {stops.length === 0 && <div className="tiny muted">Még nincs box a járaton — keress rá kódra vagy névre, és add hozzá sorrendben.</div>}
-      {stops.length > 1 && <div className="tiny muted">Sorrend: a <Icon name="grip" size={12} /> fogantyúnál megfogva húzd a kívánt helyre (ujjal is), vagy a nyilakkal lépkedj.</div>}
+      {stops.length > 1 && <div className="tiny muted">Sorrend: a <Icon name="grip" size={12} /> fogantyúnál megfogva húzd a kívánt helyre (ujjal is), vagy a nyilakkal lépkedj. A <Icon name="pencil" size={12} /> gombbal megjegyzést írhatsz a boxhoz (kapukód, hol található) — a futár az aktuális címnél látja.</div>}
       {stops.map((s, i) => (
         <div key={s.id} ref={(el) => { rowRefs.current[i] = el }} className="row"
           style={{ gap: 6, alignItems: 'center', borderRadius: 8, padding: '2px 4px',
@@ -130,7 +140,18 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="small" style={{ fontWeight: 700, lineHeight: 1.25 }}>{s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</div>
             <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.box.address}{s.moved_from_route_id ? ` · átkerült: ${fromCode(s.moved_from_route_id)}` : ''}</div>
+            {s.box.notes && noteFor !== s.box.id && <div className="tiny" style={{ color: 'var(--warning)' }}><Icon name="key" size={11} />{s.box.notes}</div>}
+            {noteFor === s.box.id && (
+              <div className="row" style={{ gap: 4, marginTop: 4 }}>
+                <input className="input" style={{ minHeight: 34, fontSize: 13, flex: 1 }} value={noteText} autoFocus placeholder="Megjegyzés a futárnak: pl. kapukód 1234#, 2. emelet, portán kérni…"
+                  onChange={(ev) => setNoteText(ev.target.value)} onKeyDown={(ev) => { if (ev.key === 'Enter') saveNote.mutate({ boxId: s.box.id, notes: noteText }); if (ev.key === 'Escape') setNoteFor(null) }} />
+                <button type="button" className="btn sm auto" style={{ minHeight: 34 }} disabled={busy} onClick={() => saveNote.mutate({ boxId: s.box.id, notes: noteText })}><Icon name="check" size={14} /></button>
+                <button type="button" className="btn ghost sm auto" style={{ minHeight: 34 }} onClick={() => setNoteFor(null)}><Icon name="x" size={14} /></button>
+              </div>
+            )}
           </div>
+          <button type="button" className="icon-btn" style={{ minWidth: 30, minHeight: 30, padding: 0, color: s.box.notes ? 'var(--warning)' : undefined }} aria-label="Megjegyzés a boxhoz" title="Megjegyzés (kapukód, hol van)" disabled={busy}
+            onClick={() => { setNoteFor(s.box.id); setNoteText(s.box.notes ?? '') }}><Icon name="pencil" size={14} /></button>
           <button type="button" className="icon-btn" style={{ minWidth: 30, minHeight: 30, padding: 0 }} aria-label="Feljebb" disabled={busy || i === 0} onClick={() => move.mutate({ idx: i, dir: -1 })}><Icon name="chevron-up" size={16} /></button>
           <button type="button" className="icon-btn" style={{ minWidth: 30, minHeight: 30, padding: 0 }} aria-label="Lejjebb" disabled={busy || i === stops.length - 1} onClick={() => move.mutate({ idx: i, dir: 1 })}><Icon name="chevron-down" size={16} /></button>
           <ConfirmButton className="btn ghost sm auto" confirmLabel="Levétel?" disabled={busy} onConfirm={() => remove.mutate(s.id)} style={{ minHeight: 28, padding: '0 6px' }}>
