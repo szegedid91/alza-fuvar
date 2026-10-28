@@ -1410,6 +1410,7 @@ export type Database = {
           code: string
           created_at: string
           id: string
+          is_relief: boolean
           sort_order: number
           stops_notified_at: string | null
           workspace_id: string
@@ -1419,6 +1420,7 @@ export type Database = {
           code: string
           created_at?: string
           id?: string
+          is_relief?: boolean
           sort_order?: number
           stops_notified_at?: string | null
           workspace_id: string
@@ -1428,6 +1430,7 @@ export type Database = {
           code?: string
           created_at?: string
           id?: string
+          is_relief?: boolean
           sort_order?: number
           stops_notified_at?: string | null
           workspace_id?: string
@@ -1512,6 +1515,8 @@ export type Database = {
           box_id: string
           created_at: string
           id: string
+          moved_from_order: number | null
+          moved_from_route_id: string | null
           route_id: string
           sort_order: number
           workspace_id: string
@@ -1520,6 +1525,8 @@ export type Database = {
           box_id: string
           created_at?: string
           id?: string
+          moved_from_order?: number | null
+          moved_from_route_id?: string | null
           route_id: string
           sort_order?: number
           workspace_id: string
@@ -1528,6 +1535,8 @@ export type Database = {
           box_id?: string
           created_at?: string
           id?: string
+          moved_from_order?: number | null
+          moved_from_route_id?: string | null
           route_id?: string
           sort_order?: number
           workspace_id?: string
@@ -1538,6 +1547,13 @@ export type Database = {
             columns: ["box_id"]
             isOneToOne: false
             referencedRelation: "alza_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_moved_from_route_id_fkey"
+            columns: ["moved_from_route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
             referencedColumns: ["id"]
           },
           {

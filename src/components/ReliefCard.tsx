@@ -1,0 +1,159 @@
+import { useMemo, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../lib/supabase'
+import { useWorkspace } from '../context/WorkspaceContext'
+import { useRoutes } from '../hooks/useRoutes'
+import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
+import { planRelief, estimateRoute, fmtMin, nextReliefCode, type ReliefRoute, type ReliefPlan } from '../lib/relief'
+import { toast } from '../lib/toast'
+import ConfirmButton from './ConfirmButton'
+import Icon from './Icon'
+
+// Mentesítő járat: ha sok a csomag, n boxot leveszünk a járatokról (a terheltebbekről
+// elsőbbséggel, egymáshoz közeli címeket), és új M-járatra tesszük. Többször is
+// futtatható — mindig az összes járat (a korábbi mentesítők is) boxait nézi.
+// Feloszlatásnál a boxok visszakerülnek az eredeti járatukra.
+export default function ReliefCard() {
+  const { currentWorkspaceId } = useWorkspace()
+  const qc = useQueryClient()
+  const { data: routes } = useRoutes()
+  const { data: stopsByRoute } = useRouteStops()
+  const [n, setN] = useState<number | null>(null)
+  const [plan, setPlan] = useState<ReliefPlan | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const model: ReliefRoute[] = useMemo(() => (routes ?? []).map((r) => ({
+    id: r.id, code: r.code, isRelief: !!r.is_relief,
+    stops: (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat != null && s.box.lng != null)
+      .map((s) => ({ id: s.id, boxId: s.box_id, code: s.box.code, name: s.box.name, lat: s.box.lat!, lng: s.box.lng! })),
+  })).filter((r) => r.stops.length > 0), [routes, stopsByRoute])
+  const total = model.reduce((a, r) => a + r.stops.length, 0)
+  const noCoords = (routes ?? []).reduce((a, r) => a + (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat == null).length, 0)
+  const defaultN = Math.max(3, Math.round(total / (model.length + 1)))
+  const size = n ?? defaultN
+  const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); void qc.invalidateQueries({ queryKey: ['route-stops'] }) }
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!plan) return
+      const code = nextReliefCode((routes ?? []).map((r) => r.code))
+      const { data: rn, error } = await supabase.from('route_names')
+        .insert({ workspace_id: currentWorkspaceId!, code, sort_order: (routes?.length ?? 0) + 1, is_relief: true }).select('id').single()
+      if (error) throw error
+      // az átkerülő megállók eredeti helye megmarad (feloszlatáshoz)
+      const all = routes!.flatMap((r) => stopsByRoute?.get(r.id) ?? [])
+      const rows = plan.relief.map((s, i) => {
+        const orig = all.find((x) => x.id === s.id)
+        return { workspace_id: currentWorkspaceId!, route_id: rn.id, box_id: s.boxId, sort_order: i + 1, moved_from_route_id: s.fromRouteId, moved_from_order: orig?.sort_order ?? null }
+      })
+      const ins = await supabase.from('route_stops').insert(rows)
+      if (ins.error) throw ins.error
+      const del = await supabase.from('route_stops').delete().in('id', plan.relief.map((s) => s.id))
+      if (del.error) throw del.error
+      // a megmaradt megállók újrasorszámozása az érintett járatokon
+      for (const r of routes!) {
+        const rest = (stopsByRoute?.get(r.id) ?? []).filter((s) => !plan.relief.some((x) => x.id === s.id))
+        await Promise.all(rest.map((s, i) => (s.sort_order === i + 1 ? null : supabase.from('route_stops').update({ sort_order: i + 1 }).eq('id', s.id))))
+      }
+      return code
+    },
+    onSuccess: (code) => { toast.success(`Mentesítő járat létrehozva: ${code} — a beosztásban már választható.`); setPlan(null); invalidate() },
+    onError: (e) => setErr(e instanceof Error ? e.message : 'Nem sikerült létrehozni'),
+  })
+
+  const dissolve = useMutation({
+    mutationFn: async (routeId: string) => {
+      const stops: RouteStop[] = stopsByRoute?.get(routeId) ?? []
+      // vissza az eredeti járatra (a lista végére, az eredeti sorrendjük szerint), ha ott még nincs
+      const byOrigin = new Map<string, RouteStop[]>()
+      for (const s of stops) if (s.moved_from_route_id) { if (!byOrigin.has(s.moved_from_route_id)) byOrigin.set(s.moved_from_route_id, []); byOrigin.get(s.moved_from_route_id)!.push(s) }
+      for (const [origId, list] of byOrigin) {
+        if (!routes?.some((r) => r.id === origId)) continue
+        const existing = stopsByRoute?.get(origId) ?? []
+        let next = (existing.length ? Math.max(...existing.map((s) => s.sort_order)) : 0) + 1
+        const rows = list.sort((a, b) => (a.moved_from_order ?? 0) - (b.moved_from_order ?? 0))
+          .filter((s) => !existing.some((e) => e.box_id === s.box_id))
+          .map((s) => ({ workspace_id: currentWorkspaceId!, route_id: origId, box_id: s.box_id, sort_order: next++ }))
+        if (rows.length) { const { error } = await supabase.from('route_stops').insert(rows); if (error) throw error }
+      }
+      const unlink = await supabase.from('shifts').update({ route_id: null }).eq('route_id', routeId)
+      if (unlink.error) throw unlink.error
+      const { error } = await supabase.from('route_names').delete().eq('id', routeId)
+      if (error) throw error
+    },
+    onSuccess: () => { toast.success('Mentesítő járat feloszlatva — a boxok visszakerültek az eredeti járatukra.'); setPlan(null); invalidate() },
+    onError: (e) => setErr(e instanceof Error ? e.message : 'Nem sikerült feloszlatni'),
+  })
+
+  const reliefRoutes = (routes ?? []).filter((r) => r.is_relief)
+  const busy = create.isPending || dissolve.isPending
+  return (
+    <div className="card stack" style={{ gap: 10 }}>
+      <div className="card-title" style={{ margin: 0 }}><Icon name="repeat" />Mentesítő járat</div>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        Ha sok a csomag: a javaslat az összes járat boxaiból (a korábbi mentesítőkét is beleértve) kivesz egy egymáshoz közeli csoportot — elsőbbséggel a terheltebb járatokról —, és új M-járatra teszi. A km és az idő becslés (légvonal × úttényező, {`${32} km/h`}, boxonként 7 perc), a járatok összevetésére való.
+      </p>
+      {model.length > 0 && (
+        <div className="stack" style={{ gap: 4 }}>
+          {model.map((r) => { const e = estimateRoute(r.stops); return (
+            <div key={r.id} className="between tiny">
+              <span><strong>{r.code}</strong>{r.isRelief ? <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>mentesítő</span> : null} · {e.stops} box</span>
+              <span className="muted">{Math.round(e.km)} km · {fmtMin(e.minutes)}</span>
+            </div>
+          ) })}
+          {noCoords > 0 && <div className="tiny muted">{noCoords} box koordináta nélkül — ezeket a javaslat nem tudja figyelembe venni.</div>}
+        </div>
+      )}
+      <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <label className="small" style={{ margin: 0 }}>Boxok száma az új járaton</label>
+        <input className="input" type="number" min={1} max={Math.max(1, total - 1)} value={size} style={{ width: 90, minHeight: 38 }}
+          onChange={(e) => setN(Math.max(1, Math.min(total - 1, Number(e.target.value) || 1)))} />
+        <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); setPlan(planRelief(model, size)) }}>
+          <Icon name="map" size={14} />Javaslat
+        </button>
+      </div>
+      {plan && (
+        <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div className="between">
+            <span className="small" style={{ fontWeight: 700 }}>Új járat: {nextReliefCode((routes ?? []).map((r) => r.code))} · {plan.relief.length} box</span>
+            <span className="tiny muted">{Math.round(plan.reliefEst.km)} km · {fmtMin(plan.reliefEst.minutes)}</span>
+          </div>
+          {plan.relief.map((s, i) => (
+            <div key={s.id} className="tiny" style={{ display: 'flex', gap: 6 }}>
+              <span className="muted" style={{ width: 22, textAlign: 'right' }}>{i + 1}.</span>
+              <span style={{ flex: 1 }}>{s.code ? `${s.code} · ` : ''}{s.name}</span>
+              <span className="badge" style={{ fontSize: 10 }}>{s.fromCode}-ről</span>
+            </div>
+          ))}
+          <div className="tiny muted" style={{ fontWeight: 700 }}>A többi járat a levétel után:</div>
+          {plan.after.map((a) => { const b = plan.before.find((x) => x.id === a.id)!; return (
+            <div key={a.id} className="between tiny">
+              <span><strong>{a.code}</strong> · {a.est.stops} box{a.removed ? <span className="muted"> (−{a.removed})</span> : null}</span>
+              <span className="muted">{Math.round(b.est.km)} → {Math.round(a.est.km)} km · {fmtMin(b.est.minutes)} → {fmtMin(a.est.minutes)}</span>
+            </div>
+          ) })}
+          <div className="row" style={{ gap: 6 }}>
+            <ConfirmButton className="btn sm" confirmLabel="Biztos? Létrehozom és leveszem a boxokat" disabled={busy} onConfirm={() => create.mutate()}>
+              <Icon name="check" size={14} />Létrehozás
+            </ConfirmButton>
+            <button type="button" className="btn ghost sm auto" disabled={busy} onClick={() => setPlan(null)}>Mégse</button>
+          </div>
+        </div>
+      )}
+      {reliefRoutes.length > 0 && (
+        <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div className="tiny muted" style={{ fontWeight: 700 }}>Meglévő mentesítő járatok</div>
+          {reliefRoutes.map((r) => (
+            <div key={r.id} className="between" style={{ gap: 8 }}>
+              <span className="small"><strong>{r.code}</strong> · {(stopsByRoute?.get(r.id) ?? []).length} box</span>
+              <ConfirmButton className="btn ghost sm auto" confirmLabel="Feloszlatom, a boxok visszakerülnek" disabled={busy} onConfirm={() => dissolve.mutate(r.id)}>
+                <Icon name="x" size={14} />Feloszlatás
+              </ConfirmButton>
+            </div>
+          ))}
+        </div>
+      )}
+      {err && <div className="alert error">{err}</div>}
+    </div>
+  )
+}

@@ -5,6 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops } from '../hooks/useRouteStops'
 import RouteStopsEditor from '../components/RouteStopsEditor'
+import ReliefCard from '../components/ReliefCard'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 
@@ -49,7 +50,7 @@ function RoutesCard() {
             {list.map((r) => (
               <span key={r.id} className={`chip ${editing === r.id ? 'active' : ''}`} style={{ gap: 4, paddingRight: 6 }}>
                 <button type="button" onClick={() => setEditing((e) => (e === r.id ? null : r.id))} style={{ background: 'none', border: 'none', padding: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', fontWeight: 700 }}>
-                  {r.code} <span className="tiny muted">· {stopsByRoute?.get(r.id)?.length ?? 0} box</span>
+                  {r.code}{r.is_relief ? <span className="tiny muted"> (mentesítő)</span> : null} <span className="tiny muted">· {stopsByRoute?.get(r.id)?.length ?? 0} box</span>
                 </button>
                 <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" disabled={remove.isPending} onConfirm={() => remove.mutate(r.id)} style={{ minHeight: 24, padding: '0 4px' }}>
                   <Icon name="x" size={12} />
@@ -78,6 +79,7 @@ export default function Routes() {
       <h2>Járatok</h2>
       <p className="small muted" style={{ margin: 0 }}>A Box-járatok (R, G, I…) és a hozzájuk tartozó AlzaBoxok sorrendje. A beosztásban körönként ezekből választható, ki melyik járatot viszi; a futár a kezdőlapi járat-kártyán ebben a sorrendben navigál boxról boxra, és a módosításról pusht kap.</p>
       <RoutesCard />
+      <ReliefCard />
     </div>
   )
 }

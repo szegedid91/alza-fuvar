@@ -5,7 +5,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { normalize, type AlzaBox } from '../lib/boxSheet'
-import type { RouteName } from '../hooks/useRoutes'
+import { useRoutes, type RouteName } from '../hooks/useRoutes'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 
@@ -20,6 +20,8 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const [q, setQ] = useState('')
   const [err, setErr] = useState<string | null>(null)
   const stops: RouteStop[] = stopsByRoute?.get(route.id) ?? []
+  const { data: allRoutes } = useRoutes()
+  const fromCode = (id: string) => allRoutes?.find((r) => r.id === id)?.code ?? '?'
   const used = new Set(stops.map((s) => s.box_id))
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-stops'] }); setErr(null) }
   const fail = (e: unknown) => setErr(e instanceof Error ? e.message : 'A művelet nem sikerült')
@@ -127,7 +129,7 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
           <span className="tiny muted" style={{ width: 22, textAlign: 'right', fontWeight: 700 }}>{i + 1}.</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="small" style={{ fontWeight: 700, lineHeight: 1.25 }}>{s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</div>
-            <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.box.address}</div>
+            <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.box.address}{s.moved_from_route_id ? ` · átkerült: ${fromCode(s.moved_from_route_id)}` : ''}</div>
           </div>
           <button type="button" className="icon-btn" style={{ minWidth: 30, minHeight: 30, padding: 0 }} aria-label="Feljebb" disabled={busy || i === 0} onClick={() => move.mutate({ idx: i, dir: -1 })}><Icon name="chevron-up" size={16} /></button>
           <button type="button" className="icon-btn" style={{ minWidth: 30, minHeight: 30, padding: 0 }} aria-label="Lejjebb" disabled={busy || i === stops.length - 1} onClick={() => move.mutate({ idx: i, dir: 1 })}><Icon name="chevron-down" size={16} /></button>
