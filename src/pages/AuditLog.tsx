@@ -9,6 +9,8 @@ import {
 import type { Enums } from '../lib/database.types'
 import Icon, { type IconName } from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import FeedbackList from '../components/FeedbackList'
+import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import { localDateOf } from '../lib/calendar'
 
 const ENTITY_LABEL: Record<string, string> = {
@@ -16,18 +18,19 @@ const ENTITY_LABEL: Record<string, string> = {
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
-  route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó',
+  route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó', route_stops: 'Járat-megálló',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
   check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder', box_sheets: 'package',
-  route_names: 'map', status_templates: 'file-text', invites: 'send',
+  route_names: 'map', status_templates: 'file-text', invites: 'send', route_stops: 'map-pin',
 }
 
 // Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
 const FIELD_LABEL: Record<string, string> = {
+  box_id: 'Box', moved_from_route_id: 'Eredeti járat', moved_from_order: 'Eredeti hely',
   driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Járat', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
   user_id: 'Munkatárs', amount: 'Összeg', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
   phone: 'Telefon', plate: 'Rendszám', label: 'Megnevezés', category_id: 'Kategória', active: 'Aktív', crew_size: 'Létszám (fő)', box_sheet: 'Box-lap',
@@ -54,7 +57,7 @@ const ENUM_LABELS: Record<string, Record<string, string>> = {
   'evidence_photos.category': evidenceCategoryLabel as Record<string, string>, 'swap_requests.status': swapStatusLabel as Record<string, string>,
   'swap_requests.partner_decision': swapStatusLabel as Record<string, string>, 'box_sheets.status': { draft: 'Piszkozat', submitted: 'Lezárva' },
 }
-interface Lookups { nm: (id: string | null) => string | null; plate: (id: string | null) => string | null; route: (id: string | null) => string | null; cat: (id: string | null) => string | null }
+interface Lookups { nm: (id: string | null) => string | null; plate: (id: string | null) => string | null; route: (id: string | null) => string | null; cat: (id: string | null) => string | null; box?: (id: string | null) => string | null }
 function fmtValue(entity: string, key: string, v: unknown, lk: Lookups): string {
   if (v == null || v === '') return '—'
   if (typeof v === 'boolean') return v ? 'igen' : 'nem'
@@ -63,6 +66,8 @@ function fmtValue(entity: string, key: string, v: unknown, lk: Lookups): string 
   if (enumMap) return enumMap[sv] ?? sv
   if (key === 'car_id' || key === 'prev_car_id') return lk.plate(sv) ?? sv.slice(0, 8)
   if (key === 'route_id') return lk.route(sv) ?? sv.slice(0, 8)
+  if (key === 'box_id') return lk.box?.(sv) ?? sv.slice(0, 8)
+  if (key === 'moved_from_route_id') return lk.route(sv) ?? sv.slice(0, 8)
   if (key === 'category_id') return lk.cat(sv) ?? sv.slice(0, 8)
   if (key.endsWith('_id') || key.endsWith('_by')) return lk.nm(sv) ?? sv.slice(0, 8)
   if (/_rate$|^amount$|^pay_amount$/.test(key)) return formatHuf(Number(v))
@@ -100,6 +105,7 @@ function describe(
   detail: Detail,
   nm: (id: string | null) => string | null,
   plate: (id: string | null) => string | null,
+  lk: { route: (id: string | null) => string | null; box: (id: string | null) => string | null } = { route: () => null, box: () => null },
 ): string | null {
   const o = detail?.old
   const n = detail?.new
@@ -259,6 +265,13 @@ function describe(
       const code = s(d, 'code') ?? '?'
       return action === 'INSERT' ? `Új járat: ${code}` : action === 'DELETE' ? `Járat törölve: ${code}` : `Járat módosítva: ${code}`
     }
+    case 'route_stops': {
+      const r = lk.route(s(d, 'route_id'))
+      const b = lk.box(s(d, 'box_id'))
+      const pos = s(d, 'sort_order')
+      const where = `${r ?? '?'} járat${b ? ` · ${b}` : ''}${pos ? ` · ${pos}. hely` : ''}`
+      return action === 'INSERT' ? `Box felkerült a járatra: ${where}` : action === 'DELETE' ? `Box lekerült a járatról: ${where}` : `Járat-megálló módosítva: ${where}`
+    }
     case 'status_templates': {
       const t = s(d, 'text') ?? ''
       return action === 'INSERT' ? `Új hiba-sablon: ${t}` : action === 'DELETE' ? `Hiba-sablon törölve: ${t}` : `Hiba-sablon módosítva: ${t}`
@@ -320,6 +333,8 @@ export default function AuditLog() {
   const { data: routes } = useQuery({ queryKey: ['audit-routes'], queryFn: async () => { const { data, error } = await supabase.from('route_names').select('id, code'); if (error) throw error; return data ?? [] } })
   const { data: cats } = useQuery({ queryKey: ['audit-cats'], queryFn: async () => { const { data, error } = await supabase.from('car_categories').select('id, name'); if (error) throw error; return data ?? [] } })
   const routeOf = (id: string | null) => (id ? routes?.find((r) => r.id === id)?.code ?? null : null)
+  const { data: boxes } = useAlzaBoxes()
+  const boxOf = (id: string | null) => { if (!id) return null; const b = boxes?.find((x) => x.id === id); return b ? `${b.code ? b.code + ' · ' : ''}${b.name}` : null }
   const catOf = (id: string | null) => (id ? cats?.find((c) => c.id === id)?.name ?? null : null)
   // Hosszú változás-listák kinyitása bejegyzésenként
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
@@ -335,9 +350,9 @@ export default function AuditLog() {
     const names = (r._names ?? {}) as Record<string, string>
     const nm = (id: string | null) => (id ? names[id] ?? null : null)
     const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
-    const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf)
+    const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf, { route: routeOf, box: boxOf })
       ?? `${ENTITY_LABEL[r.entity] ?? r.entity} — ${ACTION_LABEL[r.action] ?? r.action}`
-    const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf })
+    const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf, box: boxOf })
     // A rekord teljes tartalma is kereshető (pl. a sofőr neve akkor is, ha csak a kör változott)
     const det = r.detail as Detail
     const rec = det?.new ?? det?.old ?? {}
@@ -364,6 +379,7 @@ export default function AuditLog() {
     <div className="stack">
       <h2>Napló</h2>
       <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, járatok, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 300 bejegyzés.</p>
+      <FeedbackList />
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}

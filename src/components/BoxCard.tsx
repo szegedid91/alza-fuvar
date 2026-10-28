@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { mapsUrl, formatDistance, type AlzaBox } from '../lib/boxSheet'
+import { formatDistance, type AlzaBox } from '../lib/boxSheet'
+import { getNavApp, navUrl, NAV_LABEL } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
 
 // Egy AlzaBox "hol van?" kártyája: fotó, kód, cím, az alza.hu "hol található"
 // leírása, saját megjegyzés, egy koppintásos navigáció.
 export default function BoxCard({
-  box, distanceM, onClose, editable = false, compact = false,
+  box, distanceM, onClose, editable = false, compact = false, hideNav = false,
 }: {
   box: AlzaBox
   distanceM?: number | null
   onClose?: () => void
   editable?: boolean
   compact?: boolean
+  // a járat-kártyán a navigálás gomb már ott van a kártya tetején — itt nem kell még egyszer
+  hideNav?: boolean
 }) {
   const qc = useQueryClient()
   const [editing, setEditing] = useState(false)
@@ -94,9 +97,9 @@ export default function BoxCard({
       )}
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {hasGps && (
-          <a className="btn auto" href={mapsUrl(box.lat!, box.lng!)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <Icon name="navigation" />Navigáció
+        {hasGps && !hideNav && (
+          <a className="btn auto" href={navUrl(getNavApp(), box.lat!, box.lng!)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <Icon name="navigation" />Navigálás ({NAV_LABEL[getNavApp()]})
           </a>
         )}
         {box.article_url && (

@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { roleLabel, statusLabel, isCrewRole } from '../lib/labels'
 import { pushSupported, isPushSubscribed, subscribePush, unsubscribePush } from '../lib/push'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
+import { getNavApp, setNavApp, NAV_LABEL, type NavApp } from '../lib/nav'
+import FeedbackCard from '../components/FeedbackCard'
 import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
 
@@ -87,6 +89,8 @@ export default function ProfilePage() {
       </div>
 
       <ThemeCard />
+      <NavCard />
+      <FeedbackCard />
 
       <PushCard />
 
@@ -95,6 +99,24 @@ export default function ProfilePage() {
       <p className="tiny muted" style={{ textAlign: 'center', margin: 0 }}>
         Verzió: {new Date(__BUILD_TIME__).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}
       </p>
+    </div>
+  )
+}
+
+// Navigációs app a járat-kártyához és a box-adatlaphoz — a választás azonnal mentődik (ezen az eszközön)
+function NavCard() {
+  const [app, setApp] = useState<NavApp>(() => getNavApp())
+  return (
+    <div className="card stack">
+      <div className="card-title"><Icon name="navigation" />Navigáció</div>
+      <div className="tabs compact" style={{ margin: 0 }}>
+        {(['google', 'waze'] as NavApp[]).map((a) => (
+          <button key={a} type="button" className={app === a ? 'active' : ''} onClick={() => { setNavApp(a); setApp(a); toast.success(`Navigáció: ${NAV_LABEL[a]}`) }}>
+            <Icon name="map-pin" size={18} />{NAV_LABEL[a]}
+          </button>
+        ))}
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>A járat-kártya „Navigálás” gombja és a box adatlapja ezt az appot nyitja. Automatikusan mentve, ezen a telefonon marad.</p>
     </div>
   )
 }

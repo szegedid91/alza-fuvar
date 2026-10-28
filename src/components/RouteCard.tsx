@@ -7,8 +7,9 @@ import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
-import { getNavApp, setNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
+import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { toast } from '../lib/toast'
+import { Link } from 'react-router-dom'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
 
@@ -23,7 +24,7 @@ export default function RouteCard() {
   const date = todayISO()
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
-  const [navApp, setNav] = useState<NavApp>(getNavApp)
+  const navApp: NavApp = getNavApp()
   // A vezető módosítása (boxok, sorrend) és a páros másik tagjának lépése azonnal ideér
   useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts'], [['route-stops'], ['route-runs'], ['my-routes-today']])
   const [openList, setOpenList] = useState(false)
@@ -71,7 +72,6 @@ export default function RouteCard() {
 
   if (!myShifts || myShifts.length === 0) return null
   const codeOf = (id: string) => routes?.find((r) => r.id === id)?.code ?? '?'
-  const pickNav = (app: NavApp) => { setNavApp(app); setNav(app) }
 
   return (
     <>
@@ -82,7 +82,7 @@ export default function RouteCard() {
         const go = (index: number) => setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index })
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
-            go={go} navApp={navApp} pickNav={pickNav} openList={openList} setOpenList={setOpenList} />
+            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList} />
         )
       })}
     </>
@@ -91,9 +91,9 @@ export default function RouteCard() {
 
 // A járat-kártya megjelenése — a futár kezdőlapján élesben, a vezetőnek pedig
 // előnézetként (Járatok oldal, helyi haladással) ugyanez a komponens
-export function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, pickNav, openList, setOpenList }: {
+export function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
-  go: (index: number) => void; navApp: NavApp; pickNav: (a: NavApp) => void; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
+  go: (index: number) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
 }) {
   const done = idx >= stops.length && stops.length > 0
   const cur = stops[idx]
@@ -135,7 +135,7 @@ export function RouteCardView({ code, round, plate, stops, idx, busy = false, go
                     <Icon name="package" />Box
                   </button>
                 </div>
-                {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} />}
+                {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
                   <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
@@ -145,12 +145,7 @@ export function RouteCardView({ code, round, plate, stops, idx, busy = false, go
             {stops.length > 0 && (
               <>
                 <div className="between">
-                  <div className="row" style={{ gap: 4 }}>
-                    <span className="tiny muted">Navigáció:</span>
-                    {(['google', 'waze'] as NavApp[]).map((a) => (
-                      <button key={a} type="button" className={`badge ${navApp === a ? 'primary' : ''}`} style={{ cursor: 'pointer', font: 'inherit', fontSize: 11, fontWeight: 700, minHeight: 26 }} onClick={() => pickNav(a)}>{NAV_LABEL[a]}</button>
-                    ))}
-                  </div>
+                  <span className="tiny muted">Navigáció: {NAV_LABEL[navApp]} · <Link to="/profil" style={{ color: 'inherit' }}>a Profilban módosítható</Link></span>
                   <button type="button" className="link-btn tiny" style={{ whiteSpace: 'nowrap' }} onClick={() => setOpenList((o) => !o)}>{openList ? 'lista elrejtése' : 'teljes lista'}</button>
                 </div>
                 {openList && (
