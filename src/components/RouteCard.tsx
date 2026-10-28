@@ -89,9 +89,8 @@ export default function RouteCard() {
   )
 }
 
-// A járat-kártya megjelenése — a futár kezdőlapján élesben, a vezetőnek pedig
-// előnézetként (Járatok oldal, helyi haladással) ugyanez a komponens
-export function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList }: {
+// A járat-kártya megjelenése (egy járat egy körön)
+function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   go: (index: number) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
 }) {
