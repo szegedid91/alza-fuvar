@@ -7,6 +7,7 @@ import TodayStepper from '../components/TodayStepper'
 import StatusCard from '../components/StatusCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
+import { usePhotoHelpRequests } from '../lib/photoHelp'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
@@ -20,6 +21,9 @@ export default function Home() {
   const { data: today } = useToday()
   // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
+  // Vezetőnek: valaki fotó nélkül kér továbbengedést — a kezdőlapon is kiemeljük, ne csak az Áttekintésben
+  const { data: photoHelp } = usePhotoHelpRequests(isManagerOrAdmin)
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
   // alsó menüben is ott van (beolvasás, autó-hiba, beosztás), azt nem ismételjük
@@ -102,6 +106,20 @@ export default function Home() {
             ))}
           </div>
         </div>
+      )}
+
+      {isManagerOrAdmin && (photoHelp?.length ?? 0) > 0 && (
+        <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
+          <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>
+            <Icon name="bell" />Engedélyt kér fotó nélkül ({photoHelp!.length})
+          </div>
+          {photoHelp!.map((p) => (
+            <div key={p.checkinId} className="small">
+              <strong>{p.name}</strong> · <span className="num">{p.plate}</span> <span className="tiny muted">kérte {hhmm(p.helpAt)}</span>
+            </div>
+          ))}
+          <div className="tiny muted row" style={{ gap: 4 }}>Továbbengedés az Áttekintésben <Icon name="chevron-right" size={14} /></div>
+        </Link>
       )}
 
       {isManagerOrAdmin && (conflicts?.length ?? 0) > 0 && (

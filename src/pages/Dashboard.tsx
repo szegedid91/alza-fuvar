@@ -129,6 +129,7 @@ function PhotoPendingCard({ items }: { items: PendingPhoto[] }) {
 const FLAG_META: Record<string, { icon: IconName; to?: string }> = {
   km: { icon: 'fuel', to: '/riportok' }, geo: { icon: 'map-pin', to: '/tortenet' }, issue: { icon: 'wrench', to: '/hibak' },
   noshow: { icon: 'user', to: '/beosztas-szerkeszto' }, insp: { icon: 'camera', to: '/kepek' }, manual: { icon: 'pencil', to: '/tortenet' },
+  help: { icon: 'bell', to: '/kepek' },
 }
 
 // Telephely (geofence) beállítása — nem tilt, csak jelzi a kívül eső be-/kijelentkezést
@@ -273,7 +274,7 @@ export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const today = todayISO()
 
-  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues', 'status_events'], [['dashboard'], ['crew-conflicts']])
+  useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues', 'status_events'], [['dashboard'], ['crew-conflicts'], ['photo-help']])
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', currentWorkspaceId, today],
@@ -287,7 +288,7 @@ export default function Dashboard() {
           supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id, trainee_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
-          supabase.from('car_inspections').select('car_id').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('car_inspections').select('car_id, created_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
           supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
         ])
@@ -297,11 +298,11 @@ export default function Dashboard() {
       // Jelzések a csoportba (megérkeztem / kiindultam / járat kész / hiba) — idő szerint
       const statusToday = (statusEv ?? []).map((a) => ({ id: a.id, name: names[a.user_id] ?? '?', kind: a.kind as StatusKind, at: a.at, outside: a.outside_geofence, note: a.note, photos: [...((a.photos as { storage_path: string | null }[] | null) ?? []).map((p) => p.storage_path), a.photo_path].filter((p): p is string => !!p), plate: a.car_id ? carMap.get(a.car_id)?.plate ?? null : null }))
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
+      const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
       // per-autó összesítés: ki ül rajta, nyitott hiba, mai ellenőrzés / tankolás
       const checkedCarIds = new Set((checkins ?? []).map((c) => c.car_id))
       const perCar = [...checkedCarIds].map((carId) => {
-        const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
         // aki már kijelentkezett (vagy átült másik autóra), az halványan, az idővel
         const crew = (checkins ?? []).filter((c) => c.car_id === carId)
           .map((c) => `${names[c.user_id] ?? '?'}${c.checked_out_at ? ` (ki: ${hhmm(c.checked_out_at)})` : ''}`)
@@ -321,6 +322,12 @@ export default function Dashboard() {
         if (c.outside_geofence) flags.push({ kind: 'geo', text: `Telephelyen kívüli becsekkolás: ${who}` })
         if (c.out_outside_geofence) flags.push({ kind: 'geo', text: `Telephelyen kívüli kijelentkezés: ${who}` })
         if (c.manual_checkin) flags.push({ kind: 'manual', text: `Kézi becsekkolás (QR nélkül): ${who}` })
+        // Engedélyt kért fotó nélkül, de azóta rendeződött (lefotózta / továbbengedték / kijelentkezett) — nyoma maradjon a napon
+        if (c.inspection_help_requested_at) {
+          const inspAt = (insp ?? []).filter((i) => i.car_id === c.car_id && i.created_at >= c.inspection_help_requested_at!).map((i) => i.created_at).sort()[0]
+          const how = c.inspection_waived_at ? `továbbengedve ${hhmm(c.inspection_waived_at)}` : inspAt ? `utána lefotózta ${hhmm(inspAt)}` : c.checked_out_at ? 'kijelentkezett' : null
+          if (how) flags.push({ kind: 'help', text: `Engedélyt kért fotó nélkül ${hhmm(c.inspection_help_requested_at)}: ${who} — ${how}` })
+        }
       }
       // nyitott autó-hibák
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
