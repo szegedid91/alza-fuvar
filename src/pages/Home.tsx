@@ -5,6 +5,7 @@ import { useToday } from '../hooks/useToday'
 import { formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
 import StatusCard from '../components/StatusCard'
+import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { usePhotoHelpRequests } from '../lib/photoHelp'
@@ -94,6 +95,7 @@ export default function Home() {
         )}
       </div>
 
+      {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}
       {isCrew && <TodayStepper />}
 

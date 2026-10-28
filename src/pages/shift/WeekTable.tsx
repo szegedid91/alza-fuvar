@@ -361,7 +361,7 @@ export default function WeekTable() {
         if (!uid) return
         const plate = carOf(carId)?.plate ?? '?'
         const single = crewOf(carId) === 1 && role !== 'betanuló'
-        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${route ? ` ${route} kör` : ''}${round === 2 ? ' (2. kör)' : ''}${single ? '' : ` (${role})`}` }
+        const entry = { date, text: `${DAY_ABBR[dayIdx(date)]}: ${plate}${route ? ` ${route} járat` : ''}${round === 2 ? ' (2. kör)' : ''}${single ? '' : ` (${role})`}` }
         byUser.set(uid, [...(byUser.get(uid) ?? []), entry])
       }
       for (const sh of list) {
@@ -523,14 +523,14 @@ export default function WeekTable() {
                               <div key={round} style={{ marginBottom: round < rounds.length ? 6 : 0 }}>
                                 {(rounds.length > 1 || (isBox(carId) && activeRoutes.length > 0)) && (
                                   <div className="between" style={{ gap: 4, minHeight: ROUND_LABEL_H + 10, marginBottom: 2 }}>
-                                    <span className="tiny muted" style={{ fontSize: 9, fontWeight: 700, paddingLeft: 2, whiteSpace: 'nowrap' }}>{rounds.length > 1 ? `${round}. kör` : 'kör'}</span>
+                                    <span className="tiny muted" style={{ fontSize: 9, fontWeight: 700, paddingLeft: 2, whiteSpace: 'nowrap' }}>{rounds.length > 1 ? `${round}. kör` : 'járat'}</span>
                                     <span className="row" style={{ gap: 3 }}>
                                       {isBox(carId) && activeRoutes.length > 0 && (
-                                        // Melyik nevű kört viszi (R, G, I…)
-                                        <select className="select" value={s?.route_id ?? ''} disabled={busy} title="Kör neve"
+                                        // Melyik járatot viszi (R, G, I…)
+                                        <select className="select" value={s?.route_id ?? ''} disabled={busy} title="Járat"
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
                                           onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
-                                          <option value="">— kör —</option>
+                                          <option value="">— járat —</option>
                                           {activeRoutes.map((r) => { const by = takenRoutes(d, round, carId).get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> })}
                                           {s?.route_id && !activeRoutes.some((r) => r.id === s.route_id) && <option value={s.route_id}>{routeCode(s.route_id) ?? '?'}</option>}
                                         </select>

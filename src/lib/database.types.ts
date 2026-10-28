@@ -1439,6 +1439,120 @@ export type Database = {
           },
         ]
       }
+      route_runs: {
+        Row: {
+          car_id: string
+          current_index: number
+          id: string
+          round: number
+          route_id: string
+          updated_at: string
+          updated_by: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          car_id: string
+          current_index?: number
+          id?: string
+          round?: number
+          route_id: string
+          updated_at?: string
+          updated_by?: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          car_id?: string
+          current_index?: number
+          id?: string
+          round?: number
+          route_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_runs_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_stops: {
+        Row: {
+          box_id: string
+          created_at: string
+          id: string
+          route_id: string
+          sort_order: number
+          workspace_id: string
+        }
+        Insert: {
+          box_id: string
+          created_at?: string
+          id?: string
+          route_id: string
+          sort_order?: number
+          workspace_id: string
+        }
+        Update: {
+          box_id?: string
+          created_at?: string
+          id?: string
+          route_id?: string
+          sort_order?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stops_box_id_fkey"
+            columns: ["box_id"]
+            isOneToOne: false
+            referencedRelation: "alza_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stops_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           car_id: string

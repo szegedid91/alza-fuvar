@@ -16,7 +16,7 @@ const ENTITY_LABEL: Record<string, string> = {
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
-  route_names: 'Kör', status_templates: 'Hiba-sablon', invites: 'Meghívó',
+  route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
@@ -28,7 +28,7 @@ const ENTITY_ICON: Record<string, IconName> = {
 
 // Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
 const FIELD_LABEL: Record<string, string> = {
-  driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Kör', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
+  driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Járat', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
   user_id: 'Munkatárs', amount: 'Összeg', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
   phone: 'Telefon', plate: 'Rendszám', label: 'Megnevezés', category_id: 'Kategória', active: 'Aktív', crew_size: 'Létszám (fő)', box_sheet: 'Box-lap',
   sort_order: 'Sorrend', name: 'Név', code: 'Kód', text: 'Szöveg', driver_day_rate: 'XL sofőr napidíj', loader_day_rate: 'XL rakodó napidíj',
@@ -257,7 +257,7 @@ function describe(
 
     case 'route_names': {
       const code = s(d, 'code') ?? '?'
-      return action === 'INSERT' ? `Új kör: ${code}` : action === 'DELETE' ? `Kör törölve: ${code}` : `Kör módosítva: ${code}`
+      return action === 'INSERT' ? `Új járat: ${code}` : action === 'DELETE' ? `Járat törölve: ${code}` : `Járat módosítva: ${code}`
     }
     case 'status_templates': {
       const t = s(d, 'text') ?? ''
@@ -327,7 +327,7 @@ export default function AuditLog() {
   // Szűrő: típus szerint (a chipeken a darabszám), alapból minden
   const [entityFilter, setEntityFilter] = useState('')
   // Keresés: név, rendszám, kör-kód, mezőérték — a megjelenített szövegben (feloldott nevekkel) keres,
-  // ékezet-függetlenül; több szó esetén mindnek illeszkednie kell (szókezdetre; egybetűs keresés — pl. „G” — csak a pontos G kört adja)
+  // ékezet-függetlenül; több szó esetén mindnek illeszkednie kell (szókezdetre; egybetűs keresés — pl. „G” — csak a pontos G járatot adja)
   const [search, setSearch] = useState('')
   const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const terms = norm(search).split(/[^a-z0-9]+/).filter(Boolean)
@@ -363,7 +363,7 @@ export default function AuditLog() {
   return (
     <div className="stack">
       <h2>Napló</h2>
-      <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, körök, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 300 bejegyzés.</p>
+      <p className="small muted" style={{ margin: 0 }}>Ki, mikor, mit módosított — mezőnként, miről mire (bér, beosztás, járatok, cserék, felhasználók, meghívók, autók, kategóriák, sablonok, beállítások, vezetői beavatkozások). Az utolsó 300 bejegyzés.</p>
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
@@ -371,7 +371,7 @@ export default function AuditLog() {
       {(data?.length ?? 0) > 0 && (
         <div className="input-icon">
           <Icon name="search" size={18} />
-          <input className="input" placeholder="Keresés: név, rendszám, kör (pl. G), érték…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input className="input" placeholder="Keresés: név, rendszám, járat (pl. G), érték…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       )}
       {(data?.length ?? 0) > 0 && (

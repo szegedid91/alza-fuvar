@@ -294,7 +294,7 @@ export default function MySchedule() {
                     <span className="small muted">Szabadnap</span>
                   )}
                 </div>
-                {sh && <span className="badge primary">{dailyRoleLabel[myRole]}{dayShifts.length > 1 ? ` · ${dayShifts.map((x) => routeCode(x.route_id) ?? `${x.round}.`).join('+')} kör` : routeCode(sh.route_id) ? ` · ${routeCode(sh.route_id)} kör` : sh.round === 2 ? ' · 2. kör' : ''}</span>}
+                {sh && <span className="badge primary">{dailyRoleLabel[myRole]}{dayShifts.length > 1 ? ` · ${dayShifts.map((x) => routeCode(x.route_id) ?? `${x.round}.`).join('+')} járat` : routeCode(sh.route_id) ? ` · ${routeCode(sh.route_id)} járat` : sh.round === 2 ? ' · 2. kör' : ''}</span>}
               </div>
             )
           })}
@@ -363,7 +363,7 @@ export default function MySchedule() {
                 </div>
                 <div className="muted small"><span className="num">{car?.plate ?? '–'}</span>{car?.label ? ` · ${car.label}` : ''}</div>
               </div>
-              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{routeCode(s.route_id) ? ` · ${routeCode(s.route_id)} kör` : ''}{s.round === 2 ? ' · 2. kör' : ''}</span>
+              <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{routeCode(s.route_id) ? ` · ${routeCode(s.route_id)} járat` : ''}{s.round === 2 ? ' · 2. kör' : ''}</span>
             </div>
             {traineeName && <div className="between"><span className="muted small">Betanuló veletek</span><span className="small">{traineeName}</span></div>}
             <div className="between">
