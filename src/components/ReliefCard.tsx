@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -85,6 +85,47 @@ export default function ReliefCard() {
     onError: (e) => setErr(e instanceof Error ? e.message : 'Nem sikerült feloszlatni'),
   })
 
+  // A javaslat helyben szerkeszthető a létrehozás előtt: sorrend húzással, box levétele (× — visszakerül az eredeti járatára).
+  // A becslések (km, idő, a többi járat) a módosítás után újraszámolódnak.
+  const applyRelief = (relief: ReliefPlan['relief']) => {
+    if (!plan) return
+    const chosen = new Set(relief.map((s) => s.id))
+    const after = model.filter((r) => plan.before.some((b) => b.id === r.id)).map((r) => {
+      const rest = r.stops.filter((s) => !chosen.has(s.id))
+      return { id: r.id, code: r.code, est: estimateRoute(rest), removed: r.stops.length - rest.length }
+    })
+    setPlan({ ...plan, relief, after, reliefEst: estimateRoute(relief) })
+  }
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const dragRef = useRef<{ from: number; over: number } | null>(null)
+  const [drag, setDrag] = useState<{ from: number; over: number } | null>(null)
+  const startDrag = (idx: number) => (e: React.PointerEvent) => {
+    e.preventDefault()
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+    dragRef.current = { from: idx, over: idx }; setDrag({ from: idx, over: idx })
+  }
+  const moveDrag = (e: React.PointerEvent) => {
+    if (!dragRef.current) return
+    let over = dragRef.current.from
+    rowRefs.current.forEach((el, i) => {
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      if (e.clientY > r.top + r.height / 2) over = i
+      if (i === 0 && e.clientY < r.top + r.height / 2) over = 0
+    })
+    dragRef.current.over = over; setDrag({ from: dragRef.current.from, over })
+  }
+  const endDrag = () => {
+    const d = dragRef.current
+    dragRef.current = null; setDrag(null)
+    if (d && plan && d.from !== d.over) {
+      const next = [...plan.relief]
+      const [m] = next.splice(d.from, 1)
+      next.splice(d.over, 0, m)
+      applyRelief(next)
+    }
+  }
+
   const reliefRoutes = (routes ?? []).filter((r) => r.is_relief)
   const busy = create.isPending || dissolve.isPending
   return (
@@ -117,11 +158,21 @@ export default function ReliefCard() {
             <span className="small" style={{ fontWeight: 700 }}>Új járat: {nextReliefCode((routes ?? []).map((r) => r.code))} · {plan.relief.length} box</span>
             <span className="tiny muted">{Math.round(plan.reliefEst.km)} km · {fmtMin(plan.reliefEst.minutes)}</span>
           </div>
+          <div className="tiny muted">A <Icon name="grip" size={12} /> fogantyúval húzva a sorrend módosítható, a × leveszi a boxot a javaslatból (marad az eredeti járatán).</div>
           {plan.relief.map((s, i) => (
-            <div key={s.id} className="tiny" style={{ display: 'flex', gap: 6 }}>
+            <div key={s.id} ref={(el) => { rowRefs.current[i] = el }} className="tiny" style={{ display: 'flex', gap: 6, alignItems: 'center', borderRadius: 6, padding: '2px 4px',
+              background: drag && drag.over === i && drag.from !== i ? 'var(--primary-ghost)' : undefined, opacity: drag && drag.from === i ? 0.45 : 1,
+              borderTop: drag && drag.over === i && drag.from > i ? '2px solid var(--primary)' : '2px solid transparent',
+              borderBottom: drag && drag.over === i && drag.from < i ? '2px solid var(--primary)' : '2px solid transparent' }}>
+              <span role="button" aria-label="Sorrend húzással" onPointerDown={startDrag(i)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+                style={{ touchAction: 'none', cursor: drag ? 'grabbing' : 'grab', padding: '6px 2px', color: 'var(--text-dim)', display: 'inline-flex', userSelect: 'none' }}>
+                <Icon name="grip" size={14} />
+              </span>
               <span className="muted" style={{ width: 22, textAlign: 'right' }}>{i + 1}.</span>
               <span style={{ flex: 1 }}>{s.code ? `${s.code} · ` : ''}{s.name}</span>
               <span className="badge" style={{ fontSize: 10 }}>{s.fromCode}-ről</span>
+              <button type="button" className="icon-btn" style={{ minWidth: 28, minHeight: 28, padding: 0 }} aria-label="Levétel a javaslatból" disabled={busy || plan.relief.length <= 1}
+                onClick={() => applyRelief(plan.relief.filter((x) => x.id !== s.id))}><Icon name="x" size={14} /></button>
             </div>
           ))}
           <div className="tiny muted" style={{ fontWeight: 700 }}>A kiválasztott járatok a levétel után{excluded.size ? ` (érintetlen: ${model.filter((r) => excluded.has(r.id)).map((r) => r.code).join(', ')})` : ''}:</div>
