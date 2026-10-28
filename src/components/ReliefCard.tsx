@@ -19,6 +19,8 @@ export default function ReliefCard() {
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   const [plan, setPlan] = useState<ReliefPlan | null>(null)
+  // Melyik járatokról vehet le boxot a mentesítő (alapból mind; a kikapcsolt járat érintetlen marad)
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [err, setErr] = useState<string | null>(null)
 
   const model: ReliefRoute[] = useMemo(() => (routes ?? []).map((r) => ({
@@ -26,7 +28,8 @@ export default function ReliefCard() {
     stops: (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat != null && s.box.lng != null)
       .map((s) => ({ id: s.id, boxId: s.box_id, code: s.box.code, name: s.box.name, lat: s.box.lat!, lng: s.box.lng! })),
   })).filter((r) => r.stops.length > 0), [routes, stopsByRoute])
-  const total = model.reduce((a, r) => a + r.stops.length, 0)
+  const selectedModel = model.filter((r) => !excluded.has(r.id))
+  const total = selectedModel.reduce((a, r) => a + r.stops.length, 0)
   const noCoords = (routes ?? []).reduce((a, r) => a + (stopsByRoute?.get(r.id) ?? []).filter((s) => s.box.lat == null).length, 0)
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); void qc.invalidateQueries({ queryKey: ['route-stops'] }) }
 
@@ -92,16 +95,20 @@ export default function ReliefCard() {
       </p>
       {model.length > 0 && (
         <div className="stack" style={{ gap: 4 }}>
-          {model.map((r) => { const e = estimateRoute(r.stops); return (
-            <div key={r.id} className="between tiny">
-              <span><strong>{r.code}</strong>{r.isRelief ? <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>mentesítő</span> : null} · {e.stops} box</span>
+          <div className="tiny muted">Pipáld ki, mely járatokról vehet le boxot a mentesítő:</div>
+          {model.map((r) => { const e = estimateRoute(r.stops); const on = !excluded.has(r.id); return (
+            <label key={r.id} className="between tiny" style={{ cursor: 'pointer', opacity: on ? 1 : 0.55 }}>
+              <span className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={on} onChange={() => { setPlan(null); setExcluded((p) => { const n = new Set(p); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n }) }} />
+                <span><strong>{r.code}</strong>{r.isRelief ? <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>mentesítő</span> : null} · {e.stops} box</span>
+              </span>
               <span className="muted">{Math.round(e.km)} km · {fmtMin(e.minutes)}</span>
-            </div>
+            </label>
           ) })}
           {noCoords > 0 && <div className="tiny muted">{noCoords} box koordináta nélkül — ezeket a javaslat nem tudja figyelembe venni.</div>}
         </div>
       )}
-      <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(model); setPlan(pl); if (!pl) setErr('Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb járatot.') }}>
+      <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(selectedModel); setPlan(pl); if (!pl) setErr(selectedModel.length === 0 ? 'Válassz legalább egy járatot.' : 'Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb kiválasztott járatot.') }}>
         <Icon name="map" size={14} />Javaslat (km és idő kiegyenlítése)
       </button>
       {plan && (
@@ -117,7 +124,7 @@ export default function ReliefCard() {
               <span className="badge" style={{ fontSize: 10 }}>{s.fromCode}-ről</span>
             </div>
           ))}
-          <div className="tiny muted" style={{ fontWeight: 700 }}>A többi járat a levétel után:</div>
+          <div className="tiny muted" style={{ fontWeight: 700 }}>A kiválasztott járatok a levétel után{excluded.size ? ` (érintetlen: ${model.filter((r) => excluded.has(r.id)).map((r) => r.code).join(', ')})` : ''}:</div>
           {plan.after.map((a) => { const b = plan.before.find((x) => x.id === a.id)!; return (
             <div key={a.id} className="between tiny">
               <span><strong>{a.code}</strong> · {a.est.stops} box{a.removed ? <span className="muted"> (−{a.removed})</span> : null}</span>
