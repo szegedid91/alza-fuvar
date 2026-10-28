@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops } from '../hooks/useRouteStops'
+import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, setNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { toast } from '../lib/toast'
@@ -22,6 +23,8 @@ export default function RouteCard() {
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   const [navApp, setNav] = useState<NavApp>(getNavApp)
+  // A vezető módosítása (boxok, sorrend) és a páros másik tagjának lépése azonnal ideér
+  useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts'], [['route-stops'], ['route-runs'], ['my-routes-today']])
   const [openList, setOpenList] = useState(false)
 
   const { data: myShifts } = useQuery({
