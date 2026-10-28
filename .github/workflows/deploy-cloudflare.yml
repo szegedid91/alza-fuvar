@@ -1,0 +1,71 @@
+name: Deploy to Cloudflare Pages
+
+# Ugyanaz a build, mint a GitHub Pages-nél, de a Cloudflare Pages-re is kirakjuk:
+# ott nincs 10 perces CDN-gyorsítótár, a friss verzió a kirakás után azonnal él.
+# Két titok kell a repóban: CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit jog)
+# és CLOUDFLARE_ACCOUNT_ID. Amíg nincsenek megadva, a job csendben kihagyja a kirakást.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Kliens-oldali, nyilvános értékek (a buildelt JS-ben amúgy is benne vannak)
+      VITE_SUPABASE_URL: https://jmhqsfeqfghzxsyqjgjd.supabase.co
+      VITE_SUPABASE_ANON_KEY: sb_publishable_ZBYb_sGt3I6gYfjkrNUMRQ_qkta41ka
+      VITE_VAPID_PUBLIC_KEY: BHWSUoQPIVVLhqcz6si5Ku2kyGMMIN_EHJQr4iXUfP0nFUeugBD1Yq2XMANSrFFgOMbn1rZy6U8P3rIFbYp9CU4
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_PROJECT: alza-fuvar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Titkok ellenőrzése
+        id: cf
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID nincs beállítva — a Cloudflare kirakás kimarad."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A Pages-projekt létrehozása, ha még nincs (idempotens)
+      - name: Pages-projekt biztosítása
+        if: steps.cf.outputs.ready == 'true'
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PROJECT")
+          if [ "$code" = "404" ]; then
+            curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
+              -d "{\"name\":\"$CF_PROJECT\",\"production_branch\":\"main\"}" | head -c 300; echo
+          else
+            echo "projekt megvan ($code)"
+          fi
+
+      - name: Kirakás Cloudflare Pages-re
+        if: steps.cf.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.CF_PROJECT }} --branch=main --commit-dirty=true

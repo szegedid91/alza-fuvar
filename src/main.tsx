@@ -27,6 +27,14 @@ installGlobalErrorHandlers()
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() { setPendingUpdate(updateSW) },
+  // Új verzió keresése: 5 percenként, és amikor az app előtérbe kerül —
+  // a nyitva hagyott app sem marad napokig a régi verzión
+  onRegisteredSW(_url, reg) {
+    if (!reg) return
+    const check = () => { if (navigator.onLine) void reg.update().catch(() => undefined) }
+    setInterval(check, 5 * 60_000)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check() })
+  },
 })
 
 // A query-cache localStorage-be mentése -> offline újratöltés után is elérhető a legutóbbi adat

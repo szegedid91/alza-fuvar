@@ -1,0 +1,18 @@
+# Cloudflare Pages cache-szabályok.
+# A service worker, az index.html és a manifest soha ne ragadjon be a gyorsítótárba:
+# így az új verzió a kirakás után azonnal látszik. A hash-elt assetek viszont
+# örökre cache-elhetők (új build = új fájlnév).
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/push-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/workbox-*.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+/manifest.webmanifest
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
