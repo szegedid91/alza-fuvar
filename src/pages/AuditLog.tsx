@@ -30,6 +30,7 @@ const ENTITY_ICON: Record<string, IconName> = {
 
 // Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
 const FIELD_LABEL: Record<string, string> = {
+  fuel_type: 'Hajtás', depot_name: 'Raktár neve', depot_address: 'Raktár címe', depot_lat: 'Raktár szélesség', depot_lng: 'Raktár hosszúság',
   box_id: 'Box', moved_from_route_id: 'Eredeti járat', moved_from_order: 'Eredeti hely',
   driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Járat', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
   user_id: 'Munkatárs', amount: 'Összeg', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
@@ -56,6 +57,7 @@ const ENUM_LABELS: Record<string, Record<string, string>> = {
   'car_issues.status': carIssueStatusLabel as Record<string, string>, 'adjustments.type': adjustmentTypeLabel as Record<string, string>,
   'evidence_photos.category': evidenceCategoryLabel as Record<string, string>, 'swap_requests.status': swapStatusLabel as Record<string, string>,
   'swap_requests.partner_decision': swapStatusLabel as Record<string, string>, 'box_sheets.status': { draft: 'Piszkozat', submitted: 'Lezárva' },
+  'cars.fuel_type': { diesel: 'Dízel / benzin', electric: 'Elektromos' },
 }
 interface Lookups { nm: (id: string | null) => string | null; plate: (id: string | null) => string | null; route: (id: string | null) => string | null; cat: (id: string | null) => string | null; box?: (id: string | null) => string | null }
 function fmtValue(entity: string, key: string, v: unknown, lk: Lookups): string {

@@ -212,6 +212,7 @@ export default function Cars() {
   const [plate, setPlate] = useState('')
   const [label, setLabel] = useState('')
   const [newCategory, setNewCategory] = useState('')
+  const [newFuel, setNewFuel] = useState<'diesel' | 'electric'>('diesel')
   const [error, setError] = useState<string | null>(null)
   const [qrCar, setQrCar] = useState<Car | null>(null)
   const [printAll, setPrintAll] = useState(false)
@@ -251,11 +252,12 @@ export default function Cars() {
         plate: plate.trim().toUpperCase(),
         label: label.trim() || null,
         category_id: newCategory || null,
+        fuel_type: newFuel,
       })
       if (error) throw error
     },
     onSuccess: () => {
-      setPlate(''); setLabel(''); setNewCategory(''); setError(null); setPanel('none')
+      setPlate(''); setLabel(''); setNewCategory(''); setNewFuel('diesel'); setError(null); setPanel('none')
       void qc.invalidateQueries({ queryKey: ['cars'] })
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
@@ -316,6 +318,16 @@ export default function Cars() {
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
     onError: (e) => setError('A kategória mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+  })
+
+  // Hajtás: elektromos autónál a futárnak nincs tankolás rész
+  const setFuel = useMutation({
+    mutationFn: async ({ carId, fuel }: { carId: string; fuel: 'diesel' | 'electric' }) => {
+      const { error } = await supabase.from('cars').update({ fuel_type: fuel }).eq('id', carId)
+      if (error) throw error
+    },
+    onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
+    onError: (e) => setError('A hajtás mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
   if (qrCar) return <QrView car={qrCar} onBack={() => setQrCar(null)} />
@@ -413,6 +425,13 @@ export default function Cars() {
               <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ford Transit fehér" />
             </div>
           </div>
+          <div className="field">
+            <label>Hajtás</label>
+            <select className="select" value={newFuel} onChange={(e) => setNewFuel(e.target.value as 'diesel' | 'electric')}>
+              <option value="diesel">Dízel / benzin (van tankolás)</option>
+              <option value="electric">Elektromos (nincs tankolás)</option>
+            </select>
+          </div>
           {(categories?.length ?? 0) > 0 && (
             <div className="field">
               <label>Kategória</label>
@@ -494,6 +513,7 @@ export default function Cars() {
                     </div>
                   </div>
                   {cat && !grouped && <span className="badge primary">{cat}</span>}
+                  {car.fuel_type === 'electric' && <span className="badge"><Icon name="zap" size={12} />elektromos</span>}
                   {(openIssues?.[car.id] ?? 0) > 0 && <span className="badge warning"><Icon name="wrench" size={12} />{openIssues![car.id]} hiba</span>}
                   {!car.active && <span className="badge">Archivált</span>}
                   <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
@@ -525,6 +545,14 @@ export default function Cars() {
                         </select>
                       </div>
                     )}
+                    <div className="field">
+                      <label>Hajtás</label>
+                      <select className="select" value={car.fuel_type} disabled={setFuel.isPending}
+                        onChange={(e) => setFuel.mutate({ carId: car.id, fuel: e.target.value as 'diesel' | 'electric' })}>
+                        <option value="diesel">Dízel / benzin (van tankolás)</option>
+                        <option value="electric">Elektromos (nincs tankolás)</option>
+                      </select>
+                    </div>
                     {(openIssues?.[car.id] ?? 0) > 0 && (
                       <Link to="/hibak" className="alert error row" style={{ textDecoration: 'none', gap: 8, justifyContent: 'space-between' }}>
                         <span><Icon name="wrench" size={16} style={{ verticalAlign: -3 }} /> {openIssues![car.id]} nyitott hibabejelentés</span>

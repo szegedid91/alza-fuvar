@@ -19,7 +19,12 @@ export default function Fuel() {
   return (
     <div className="stack">
       <h2>Tankolás</h2>
-      <RequireCheckin>{({ car, date }) => (
+      <RequireCheckin>{({ car, date }) => car.fuel_type === 'electric' ? (
+        <div className="card stack">
+          <div className="card-title" style={{ margin: 0 }}><Icon name="zap" />Elektromos autó — {car.plate}</div>
+          <div className="small muted">Ennél az autónál nincs tankolás, ezt a részt nem kell kitölteni. Ha az autó mégsem elektromos, a vezető az Autók oldalon állíthatja át a hajtást.</div>
+        </div>
+      ) : (
         <InspectionGate carId={car.id} date={date}><FuelInner car={car} date={date} /></InspectionGate>
       )}</RequireCheckin>
     </div>

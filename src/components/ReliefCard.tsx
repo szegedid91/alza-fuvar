@@ -6,6 +6,7 @@ import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { planRelief, estimateRoute, fmtMin, nextReliefCode, type ReliefRoute, type ReliefPlan } from '../lib/relief'
 import { toast } from '../lib/toast'
+import { depotOf } from '../lib/depot'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 
@@ -14,8 +15,10 @@ import Icon from './Icon'
 // futtatható — mindig az összes járat (a korábbi mentesítők is) boxait nézi.
 // Feloszlatásnál a boxok visszakerülnek az eredeti járatukra.
 export default function ReliefCard() {
-  const { currentWorkspaceId } = useWorkspace()
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
+  // A raktár (az admin állítja): innen indul és ide tér vissza minden járat a becslésben
+  const depot = depotOf(currentWorkspace)
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   const [plan, setPlan] = useState<ReliefPlan | null>(null)
@@ -92,9 +95,9 @@ export default function ReliefCard() {
     const chosen = new Set(relief.map((s) => s.id))
     const after = model.filter((r) => plan.before.some((b) => b.id === r.id)).map((r) => {
       const rest = r.stops.filter((s) => !chosen.has(s.id))
-      return { id: r.id, code: r.code, est: estimateRoute(rest), removed: r.stops.length - rest.length }
+      return { id: r.id, code: r.code, est: estimateRoute(rest, depot), removed: r.stops.length - rest.length }
     })
-    setPlan({ ...plan, relief, after, reliefEst: estimateRoute(relief) })
+    setPlan({ ...plan, relief, after, reliefEst: estimateRoute(relief, depot) })
   }
   const rowRefs = useRef<(HTMLDivElement | null)[]>([])
   const dragRef = useRef<{ from: number; over: number } | null>(null)
@@ -137,7 +140,7 @@ export default function ReliefCard() {
       {model.length > 0 && (
         <div className="stack" style={{ gap: 4 }}>
           <div className="tiny muted">Pipáld ki, mely járatokról vehet le boxot a mentesítő:</div>
-          {model.map((r) => { const e = estimateRoute(r.stops); const on = !excluded.has(r.id); return (
+          {model.map((r) => { const e = estimateRoute(r.stops, depot); const on = !excluded.has(r.id); return (
             <label key={r.id} className="between tiny" style={{ cursor: 'pointer', opacity: on ? 1 : 0.55 }}>
               <span className="row" style={{ gap: 8 }}>
                 <input type="checkbox" checked={on} onChange={() => { setPlan(null); setExcluded((p) => { const n = new Set(p); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n }) }} />
@@ -149,7 +152,7 @@ export default function ReliefCard() {
           {noCoords > 0 && <div className="tiny muted">{noCoords} box koordináta nélkül — ezeket a javaslat nem tudja figyelembe venni.</div>}
         </div>
       )}
-      <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(selectedModel); setPlan(pl); if (!pl) setErr(selectedModel.length === 0 ? 'Válassz legalább egy járatot.' : 'Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb kiválasztott járatot.') }}>
+      <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(selectedModel, 60, depot); setPlan(pl); if (!pl) setErr(selectedModel.length === 0 ? 'Válassz legalább egy járatot.' : 'Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb kiválasztott járatot.') }}>
         <Icon name="map" size={14} />Javaslat (km és idő kiegyenlítése)
       </button>
       {plan && (

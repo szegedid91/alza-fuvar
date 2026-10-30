@@ -45,9 +45,11 @@ export default function Home() {
 
   // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
   // alsó menüben is ott van (beolvasás, autó-hiba, beosztás), azt nem ismételjük
+  // Tankolás csak nem elektromos autónál (az autónál állítható a hajtás)
+  const electric = today?.car?.fuel_type === 'electric'
   const crewLinks: HubItem[] = [
     { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
-    { to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' },
+    ...(electric ? [] : [{ to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' } as HubItem]),
     { to: '/takaritas', icon: 'sparkles', title: 'Takarítás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
     { to: '/boxok', icon: 'package', title: 'AlzaBox kereső', desc: '' },

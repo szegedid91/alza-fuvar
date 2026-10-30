@@ -8,6 +8,7 @@ import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
+import { depotOf, type Depot } from '../lib/depot'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
@@ -19,9 +20,10 @@ import BoxCard from './BoxCard'
 // kör + nap), így másik telefonról / a páros másik tagjánál is ugyanott tart.
 export default function RouteCard() {
   const { profile } = useAuth()
-  const { currentWorkspaceId } = useWorkspace()
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
   const date = todayISO()
+  const depot = depotOf(currentWorkspace)
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   const navApp: NavApp = getNavApp()
@@ -59,7 +61,7 @@ export default function RouteCard() {
       return data ?? []
     },
   })
-  // A mai Box-lapomon kitöltött boxok: csak ezeknél engedjük a „Kész, következő”-t
+  // A mai Box-lapomon kitöltött boxok: a kártyán jelezzük, melyik boxhoz van már sor (a lap csak eltérésnél kell)
   const { data: filledBoxes } = useQuery({
     queryKey: ['box-sheet-filled', currentWorkspaceId, profile?.id, date],
     enabled: !!currentWorkspaceId && !!profile?.id,
@@ -108,7 +110,7 @@ export default function RouteCard() {
         }
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
-            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList}
+            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)} onFillSheet={() => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`)} />
         )
       })}
@@ -117,10 +119,12 @@ export default function RouteCard() {
 }
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   go: (index: number) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
-  // Box-lap kapu: a „Kész, következő” csak akkor, ha az aktuális box megállója ki van töltve a mai Box-lapon
+  // A raktár: az utolsó box után ide navigál a futár (az admin állítja a Járatok oldalon)
+  depot: Depot
+  // Box-lap csak eltérésnél: a „Kész, következő” mindig mehet; ha ehhez a boxhoz már van sor a mai lapon, jelezzük
   sheetFilled?: boolean; onFillSheet?: () => void
 }) {
   const done = idx >= stops.length && stops.length > 0
@@ -142,6 +146,13 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                   <div style={{ fontWeight: 800, fontSize: 17 }}><Icon name="truck" /> Kész — irány a raktár!</div>
                   <div className="tiny muted">Mind a {stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része és a kijelentkezés.</div>
                 </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}><Icon name="warehouse" size={18} /> {depot.name}</div>
+                  {depot.address ? <div className="small muted">{depot.address}</div> : <div className="tiny muted">A raktár címét az admin a Járatok oldalon adhatja meg.</div>}
+                </div>
+                <a className="btn" href={navUrl(navApp, depot.lat, depot.lng)} target="_blank" rel="noopener noreferrer">
+                  <Icon name="navigation" />Navigálás a raktárba ({NAV_LABEL[navApp]})
+                </a>
                 <button type="button" className="btn ghost sm auto" disabled={busy} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
               </div>
             ) : cur ? (
@@ -167,17 +178,16 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                   </button>
                 </div>
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
-                {!sheetFilled && onFillSheet && (
-                  <button type="button" className="btn sm" style={{ borderColor: 'var(--warning)' }} onClick={onFillSheet}>
-                    <Icon name="clipboard" size={16} />Box-lap kitöltése ehhez a boxhoz
-                  </button>
-                )}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy || !sheetFilled} onClick={() => go(idx + 1)} style={{ flex: 2 }}
-                    title={sheetFilled ? undefined : 'Előbb töltsd ki a Box-lapot ehhez a boxhoz'}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
-                {!sheetFilled && <div className="tiny muted">A „Kész, következő” akkor nyílik meg, ha ennek a boxnak a sora ki van töltve a mai Box-lapon (behelyezett / hiány / visszáru… vagy megjegyzés).</div>}
+                {onFillSheet && (sheetFilled
+                  ? <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Ehhez a boxhoz van sor a mai Box-lapon. <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={onFillSheet}>Megnyitás</button></div>
+                  : <button type="button" className="btn ghost sm" style={{ borderColor: 'var(--warning)' }} onClick={onFillSheet}>
+                      <Icon name="clipboard" size={16} />Volt eltérés? Box-lap ehhez a boxhoz
+                    </button>)}
+                {!sheetFilled && <div className="tiny muted">Ha minden csomag rendben a helyére került, nem kell lapot tölteni és fotózni — mehetsz tovább. Box-lap csak eltérésnél (hiány, NF, rossz szortírozás, visszáru, ÉK/NHB…).</div>}
               </>
             ) : null}
             {stops.length > 0 && (

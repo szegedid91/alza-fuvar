@@ -619,6 +619,7 @@ export type Database = {
           active: boolean
           category_id: string | null
           created_at: string
+          fuel_type: string
           id: string
           label: string | null
           plate: string
@@ -629,6 +630,7 @@ export type Database = {
           active?: boolean
           category_id?: string | null
           created_at?: string
+          fuel_type?: string
           id?: string
           label?: string | null
           plate: string
@@ -639,6 +641,7 @@ export type Database = {
           active?: boolean
           category_id?: string | null
           created_at?: string
+          fuel_type?: string
           id?: string
           label?: string | null
           plate?: string
@@ -2148,6 +2151,10 @@ export type Database = {
           box_round2_day_rate: number
           box_trainee_day_rate: number
           created_at: string
+          depot_address: string | null
+          depot_lat: number | null
+          depot_lng: number | null
+          depot_name: string
           driver_day_rate: number
           geo_lat: number | null
           geo_lng: number | null
@@ -2165,6 +2172,10 @@ export type Database = {
           box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
+          depot_address?: string | null
+          depot_lat?: number | null
+          depot_lng?: number | null
+          depot_name?: string
           driver_day_rate?: number
           geo_lat?: number | null
           geo_lng?: number | null
@@ -2182,6 +2193,10 @@ export type Database = {
           box_round2_day_rate?: number
           box_trainee_day_rate?: number
           created_at?: string
+          depot_address?: string | null
+          depot_lat?: number | null
+          depot_lng?: number | null
+          depot_name?: string
           driver_day_rate?: number
           geo_lat?: number | null
           geo_lng?: number | null
