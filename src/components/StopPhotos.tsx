@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { uploadPhoto } from '../lib/photos'
+import { uploadPhoto, signedUrl } from '../lib/photos'
 import { sharePhotos, canShareFiles } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
@@ -28,6 +28,9 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
   const taken = photos.filter((p): p is Shot => !!p)
   const shareOk = canShareFiles()
 
+  // A korábban feltöltött képek blobjai a WhatsApp-megosztáshoz (előre letöltve — a megosztást
+  // csak koppintásra engedi a böngésző, letöltésre várni már nem lehet)
+  const [savedBlobs, setSavedBlobs] = useState<Record<string, Blob>>({})
   const { data: saved } = useQuery({
     queryKey: ['stop-photos', stop.id],
     queryFn: async () => {
@@ -37,10 +40,29 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
     },
   })
 
-  // 1) feltöltés + AI-kiolvasás
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      for (const sp of saved ?? []) {
+        if (!sp.storage_path || savedBlobs[sp.storage_path]) continue
+        try {
+          const url = await signedUrl(sp.storage_path, 600)
+          if (!url) continue
+          const r = await fetch(url)
+          if (r.ok && !cancelled) { const b = await r.blob(); setSavedBlobs((prev) => ({ ...prev, [sp.storage_path!]: b })) }
+        } catch { /* egy hiányzó kép ne akassza meg a többit */ }
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved])
+  const savedPaths = (saved ?? []).map((sp) => sp.storage_path).filter((x): x is string => !!x)
+  const hasAny = taken.length > 0 || savedPaths.length > 0
+
+  // 1) feltöltés + AI-kiolvasás (a frissen készített és a korábban feltöltött képekből együtt)
   const read = useMutation({
     mutationFn: async () => {
-      if (!currentWorkspaceId || taken.length === 0) return null
+      if (!currentWorkspaceId || !hasAny) return null
       // csak a még fel nem töltött fotók mennek fel (újbóli kiolvasásnál nem duplázódnak)
       const paths: string[] = []
       const next = [...photos]
@@ -56,7 +78,8 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
         paths.push(path)
       }
       setPhotos(next)
-      const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths, box: stop.box_code ?? boxLabel } })
+      for (const sp of savedPaths) if (!paths.includes(sp)) paths.push(sp)
+      const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths: paths.slice(-4), box: stop.box_code ?? boxLabel } })
       if (error) {
         // a függvény hibaüzenete a válasz törzsében van
         let msg = error.message
@@ -87,7 +110,8 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
     mutationFn: async () => {
       const parts = STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`)
       const text = `${boxLabel} – ${new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })} – ${courierName}${parts.length ? ` – ${parts.join(', ')}` : ''}${stop.note ? ` – ${stop.note}` : ''}`
-      const res = await sharePhotos(taken.map((p) => p.blob), text, `box-${stop.box_code ?? 'foto'}`)
+      const blobs = [...taken.map((p) => p.blob), ...savedPaths.filter((sp) => !taken.some((p) => p.path === sp)).map((sp) => savedBlobs[sp]).filter((b): b is Blob => !!b)]
+      const res = await sharePhotos(blobs, text, `box-${stop.box_code ?? 'foto'}`)
       if (res === 'shared') await supabase.from('box_sheet_stop_photos').update({ sent_at: new Date().toISOString() }).eq('stop_id', stop.id).is('sent_at', null)
       return res
     },
@@ -111,7 +135,7 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
           </button>
         )}
       </div>
-      {taken.length > 0 && (
+      {hasAny && (
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm" style={{ flex: 1 }} disabled={read.isPending} onClick={() => read.mutate()}>
             <Icon name="sparkles" size={14} />{read.isPending ? 'Kiolvasás…' : 'Kiolvasás (AI)'}
