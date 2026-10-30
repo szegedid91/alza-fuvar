@@ -480,7 +480,7 @@ export default function WeekTable() {
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
                       }}
                     >
-                      <span>{carOf(carId)?.plate ?? '?'}{isArchived(carId) && <span className="tiny muted" style={{ fontWeight: 500, marginLeft: 4 }}>(archivált)</span>}</span>
+                      <span>{carOf(carId)?.plate ?? '?'}{isArchived(carId) && <span className="tiny" style={{ fontWeight: 600, marginLeft: 4, color: 'var(--warning)' }}>archivált · csere →</span>}</span>
                       <span className="muted" style={{ fontSize: 14, lineHeight: 1 }}>⋯</span>
                     </button>
                   </td>
@@ -599,6 +599,11 @@ export default function WeekTable() {
                   <div className="row" style={{ fontWeight: 800, gap: 6 }}><Icon name="truck" size={18} />{car?.plate}</div>
                   <span className="tiny muted">{n} beosztás a héten</span>
                 </div>
+                {isArchived(rowMenu.carId) && (
+                  <div className="alert" style={{ padding: '8px 10px', fontSize: 13, fontWeight: 500, borderLeft: '3px solid var(--warning)' }}>
+                    Ez az autó archivált, ezért a sora csak olvasható — új beosztás nem adható rá. Válaszd ki lent az új autót: a hét összes beosztása ({n}) átkerül rá, és a sor szerkeszthető lesz.
+                  </div>
+                )}
                 <div className="field">
                   <label>Csere másik autóra (a heti beosztás átkerül)</label>
                   <select className="select" style={selStyle} value="" disabled={rowBusy || freeCars.length === 0}

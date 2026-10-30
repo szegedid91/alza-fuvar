@@ -333,7 +333,7 @@ export default function Members() {
   })
 
   const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<'all' | 'crew' | 'manager' | 'admin' | 'disabled'>('all')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'crew' | 'manager' | 'admin' | 'disabled' | 'registered' | 'invited'>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
   const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -345,11 +345,16 @@ export default function Members() {
     crew: all.filter((m) => effRole(m) === 'crew' && m.status === 'active').length,
     manager: all.filter((m) => effRole(m) === 'manager' && m.status === 'active').length,
     admin: all.filter((m) => effRole(m) === 'admin' && m.status === 'active').length,
-    disabled: all.filter((m) => m.status !== 'active').length,
+    disabled: all.filter((m) => m.status === 'disabled').length,
+    // Regisztrált = van jelszava, be tud lépni; meghívott = helyőrző, még nem váltotta be a meghívót
+    registered: all.filter((m) => m.status === 'active').length,
+    invited: all.filter((m) => m.status === 'invited').length,
   }
   const q = norm(search.trim())
   const visible = all.filter((m) => {
-    if (roleFilter === 'disabled' ? m.status === 'active' : roleFilter !== 'all' && (effRole(m) !== roleFilter || m.status !== 'active')) return false
+    if (roleFilter === 'registered') { if (m.status !== 'active') return false }
+    else if (roleFilter === 'invited') { if (m.status !== 'invited') return false }
+    else if (roleFilter === 'disabled' ? m.status !== 'disabled' : roleFilter !== 'all' && (effRole(m) !== roleFilter || m.status !== 'active')) return false
     if (!q) return true
     return norm(m.full_name ?? '').includes(q) || norm(m.email ?? '').includes(q)
   })
@@ -401,6 +406,11 @@ export default function Members() {
           {chip('manager', roleLabel.manager, counts.manager)}
           {counts.admin > 0 && chip('admin', roleLabel.admin, counts.admin)}
           {counts.disabled > 0 && chip('disabled', 'Letiltott', counts.disabled)}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span className="tiny muted">Regisztráció:</span>
+          {chip('registered', 'Regisztrált', counts.registered)}
+          {chip('invited', 'Még nem regisztrált', counts.invited)}
         </div>
       </div>
 
@@ -479,6 +489,7 @@ export default function Members() {
                     <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
                   </div>
                   {role !== 'crew' && <span className={`badge ${role === 'admin' ? 'warning' : 'primary'}`}>{role === 'admin' ? 'Admin' : roleLabel[role]}</span>}
+                  {m.status === 'active' && <span className="badge success" title="Beváltotta a meghívót, be tud lépni"><Icon name="check" size={12} />regisztrált</span>}
                   {disabled && <span className={`badge ${m.status === 'invited' ? 'warning' : 'danger'}`}>{m.status === 'invited' ? 'még nem regisztrált' : statusLabel[m.status]}</span>}
                   <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
