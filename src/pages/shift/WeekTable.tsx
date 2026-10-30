@@ -587,7 +587,8 @@ export default function WeekTable() {
         {rowMenu && (() => {
           const car = carOf(rowMenu.carId)
           const n = weekShiftsOf(rowMenu.carId).length
-          const freeCars = activeCars.filter((c) => c.id !== rowMenu.carId && !rowCarIds.includes(c.id))
+          // Csere csak azonos típusra: Box-autó (járatok, körök) csak Box-autóra, XL csak XL-re — a körök/járatok különben elvesznének
+          const freeCars = activeCars.filter((c) => c.id !== rowMenu.carId && !rowCarIds.includes(c.id) && isBox(c.id) === isBox(rowMenu.carId))
           return (
             <>
               <div onClick={() => setRowMenu(null)} style={{ position: 'fixed', inset: 0, zIndex: 290 }} />
@@ -605,10 +606,10 @@ export default function WeekTable() {
                   </div>
                 )}
                 <div className="field">
-                  <label>Csere másik autóra (a heti beosztás átkerül)</label>
+                  <label>Csere másik {isBox(rowMenu.carId) ? 'Box-' : 'nem Box-'}autóra (a heti beosztás átkerül)</label>
                   <select className="select" style={selStyle} value="" disabled={rowBusy || freeCars.length === 0}
                     onChange={(e) => { if (e.target.value) void swapCar(rowMenu.carId, e.target.value) }}>
-                    <option value="">{freeCars.length === 0 ? 'Nincs szabad autó ezen a héten' : '— válassz autót —'}</option>
+                    <option value="">{freeCars.length === 0 ? `Nincs szabad ${isBox(rowMenu.carId) ? 'Box-' : ''}autó ezen a héten` : '— válassz autót —'}</option>
                     {groupByCategory(freeCars, categories).map((g) => (
                       <optgroup key={g.name} label={g.name}>
                         {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}</option>)}
