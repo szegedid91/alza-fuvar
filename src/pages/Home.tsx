@@ -9,17 +9,34 @@ import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { usePhotoHelpRequests } from '../lib/photoHelp'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../lib/supabase'
+import { todayISO } from '../lib/labels'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
 export default function Home() {
   const { profile } = useAuth()
-  const { currentWorkspace } = useWorkspace()
+  const { currentWorkspace, currentWorkspaceId } = useWorkspace()
   const role = profile?.role
   const isCrew = isCrewRole(role)
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
   const isAdmin = role === 'admin'
   const { data: today } = useToday()
+  // Úton vagyok: a megerősített „Kiindultam” után (amíg nincs megerősített „Járat kész” / „Elszámoltam”)
+  // a kezdőlap csak a járatot, a jelzéseket és a gyorslinkeket mutatja — a napi lépéssor és a fejléc részletei eltűnnek
+  const { data: todayStatus } = useQuery({
+    queryKey: ['status-events', currentWorkspaceId, profile?.id, todayISO(), 'home'],
+    enabled: isCrew && !!currentWorkspaceId && !!profile?.id,
+    refetchInterval: 60000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('status_events').select('kind, confirmed_at')
+        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO()).not('confirmed_at', 'is', null)
+      if (error) throw error
+      return (data ?? []).map((r) => r.kind as string)
+    },
+  })
+  const enRoute = !!todayStatus?.includes('departed') && !todayStatus.includes('done') && !todayStatus.includes('settled')
   // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
   // Vezetőnek: valaki fotó nélkül kér továbbengedést — a kezdőlapon is kiemeljük, ne csak az Áttekintésben
@@ -66,10 +83,13 @@ export default function Home() {
           <div style={{ minWidth: 0 }}>
             <div className="muted small">Üdv,</div>
             <h2 style={{ fontSize: 22, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name ?? profile?.email}</h2>
-            <div className="tiny muted">Profil, értesítések, kilépés</div>
+            {!isCrew && <div className="tiny muted">Profil, értesítések, kilépés</div>}
           </div>
           <Icon name="chevron-right" className="muted" />
         </Link>
+        {enRoute ? (
+          <div className="tiny muted" style={{ marginTop: 6 }}><Icon name="navigation" size={12} /> Úton · {today?.car?.plate ?? ''}</div>
+        ) : (<>
         <div className="divider" style={{ margin: '14px 0' }} />
         <div className="between">
           <span className="muted small">Munkaterület</span>
@@ -94,11 +114,12 @@ export default function Home() {
         {isCrew && today?.checkin && (
           <div className="tiny muted" style={{ marginTop: 6 }}>Becsekkolva: {formatDateTime(today.checkin.checked_in_at)}</div>
         )}
+        </>)}
       </div>
 
       {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}
-      {isCrew && <TodayStepper />}
+      {isCrew && !enRoute && <TodayStepper />}
 
       {isCrew && (
         <div>

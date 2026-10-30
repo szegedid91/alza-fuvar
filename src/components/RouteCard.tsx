@@ -138,7 +138,10 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
               <div className="tiny muted">Ehhez a járathoz még nincsenek boxok rendelve — a vezető a Beosztás oldalon, a „Járatok” kártyán adja meg.</div>
             ) : done ? (
               <div className="stack" style={{ gap: 6 }}>
-                <div className="badge success" style={{ alignSelf: 'flex-start' }}><Icon name="check-circle" />Mind a {stops.length} cím kész</div>
+                <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--primary-ghost)', border: '1px solid var(--success)' }}>
+                  <div style={{ fontWeight: 800, fontSize: 17 }}><Icon name="truck" /> Kész — irány a raktár!</div>
+                  <div className="tiny muted">Mind a {stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része és a kijelentkezés.</div>
+                </div>
                 <button type="button" className="btn ghost sm auto" disabled={busy} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
               </div>
             ) : cur ? (
