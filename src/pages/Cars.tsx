@@ -105,7 +105,7 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
   const iconBtn = { minHeight: 30, width: 30, padding: 0, fontSize: 13 } as const
   const chip = (car: Car, onRemove?: () => void) => (
     <span key={car.id} className="badge" style={{ gap: 5, fontSize: 12, padding: '2px 8px' }}>
-      {car.plate}{!car.active && <span className="tiny muted">(inaktív)</span>}
+      {car.plate}{!car.active && <span className="tiny muted">(archivált)</span>}
       {onRemove && (
         <button type="button" onClick={onRemove} title="Kivétel a kategóriából"
           style={{ border: 'none', background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
@@ -370,8 +370,8 @@ export default function Cars() {
           <p className="small" style={{ margin: 0 }}>
             Az autóhoz tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
             eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak ki akarod vonni
-            a forgalomból, válaszd az <strong>Inaktiválást</strong>: az adatok megmaradnak, és az autó
-            eltűnik a beosztásból.
+            a forgalomból, válaszd az <strong>Archiválást</strong>: a régi beosztások, becsekkolások és a bér
+            megmaradnak, az autó csak az új beosztásból és a becsekkolásból tűnik el.
           </p>
           <div className="btn-grid">
             <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
@@ -381,7 +381,7 @@ export default function Cars() {
                 if (car?.active) toggleActive.mutate(car)
                 setDeleteWarn(null)
               }}>
-              <Icon name="pause" />Inkább inaktiválom
+              <Icon name="archive" />Inkább archiválom
             </button>
           </div>
           <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés az adatokkal együtt"
@@ -447,7 +447,7 @@ export default function Cars() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {chip('all', 'Mind', all.length)}
             {chip('active', 'Aktív', counts.active)}
-            {counts.inactive > 0 && chip('inactive', 'Inaktív', counts.inactive)}
+            {counts.inactive > 0 && chip('inactive', 'Archivált', counts.inactive)}
             {(categories ?? []).map((c) => chip(c.id, c.name, all.filter((x) => x.category_id === c.id).length))}
             {counts.none > 0 && (categories?.length ?? 0) > 0 && chip('none', 'Kategória nélkül', counts.none)}
           </div>
@@ -489,7 +489,7 @@ export default function Cars() {
                   </div>
                   {cat && !grouped && <span className="badge primary">{cat}</span>}
                   {(openIssues?.[car.id] ?? 0) > 0 && <span className="badge warning"><Icon name="wrench" size={12} />{openIssues![car.id]} hiba</span>}
-                  {!car.active && <span className="badge danger">Inaktív</span>}
+                  {!car.active && <span className="badge">Archivált</span>}
                   <Icon name="chevron-right" size={18} className="muted" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                 </button>
                 {open && (
@@ -528,11 +528,11 @@ export default function Cars() {
                     <div className="btn-grid">
                       <button className="btn secondary sm" onClick={() => setQrCar(car)}><Icon name="qr-code" />QR-kód</button>
                       {car.active ? (
-                        <ConfirmButton className="btn ghost sm" confirmLabel="Igen, inaktiválom" disabled={toggleActive.isPending} onConfirm={() => toggleActive.mutate(car)}>
-                          <Icon name="pause" />Inaktiválás
+                        <ConfirmButton className="btn ghost sm" confirmLabel="Igen, archiválom" disabled={toggleActive.isPending} onConfirm={() => toggleActive.mutate(car)}>
+                          <Icon name="archive" />Archiválás
                         </ConfirmButton>
                       ) : (
-                        <button className="btn sm" disabled={toggleActive.isPending} onClick={() => toggleActive.mutate(car)}><Icon name="play" />Aktiválás</button>
+                        <button className="btn sm" disabled={toggleActive.isPending} onClick={() => toggleActive.mutate(car)}><Icon name="play" />Visszaállítás</button>
                       )}
                       <ConfirmButton className="btn danger-outline sm" confirmLabel="Igen, törlöm az autót"
                         disabled={removeCar.isPending} onConfirm={() => removeCar.mutate({ id: car.id, force: false })}>

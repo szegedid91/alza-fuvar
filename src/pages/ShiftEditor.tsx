@@ -48,7 +48,7 @@ export default function ShiftEditor() {
   const [carFilter, setCarFilter] = useState('') // '' = összes autó
 
   const { data: members } = useMembers()
-  const { data: cars } = useCars(true)
+  const { data: cars } = useCars()  // archivált autók is: a régi beosztásokban a rendszám maradjon olvasható
   const { data: categories } = useCarCategories()
   const { data: routes } = useRoutes()
   const routeCode = (id: string | null | undefined) => (routes ?? []).find((r) => r.id === id)?.code ?? null

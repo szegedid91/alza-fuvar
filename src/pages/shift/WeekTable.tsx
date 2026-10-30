@@ -134,6 +134,8 @@ export default function WeekTable() {
       .sort((a, b) => rank(a) - rank(b) || a.plate.localeCompare(b.plate))
   }, [shifts, addedCars, cars, categories])
   const rowCarIds = useMemo(() => rowCars.map((c) => c.id), [rowCars])
+  // Archivált autó: a régi beosztásai látszanak, de új beosztás nem adható rá
+  const isArchived = (carId: string) => (cars ?? []).find((c) => c.id === carId)?.active === false
   const categoryName = (id: string | null) => (categories ?? []).find((c) => c.id === id)?.name ?? null
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
   // Körök (1./2. kör, kör-nevek) csak a Box-kategóriás (AlzaBox-töltő) autóknál vannak — XL-nél nincs
@@ -478,7 +480,7 @@ export default function WeekTable() {
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
                       }}
                     >
-                      <span>{carOf(carId)?.plate ?? '?'}</span>
+                      <span>{carOf(carId)?.plate ?? '?'}{isArchived(carId) && <span className="tiny muted" style={{ fontWeight: 500, marginLeft: 4 }}>(archivált)</span>}</span>
                       <span className="muted" style={{ fontSize: 14, lineHeight: 1 }}>⋯</span>
                     </button>
                   </td>
@@ -527,7 +529,7 @@ export default function WeekTable() {
                                     <span className="row" style={{ gap: 3 }}>
                                       {isBox(carId) && activeRoutes.length > 0 && (
                                         // Melyik járatot viszi (R, G, I…)
-                                        <select className="select" value={s?.route_id ?? ''} disabled={busy} title="Járat"
+                                        <select className="select" value={s?.route_id ?? ''} disabled={busy || isArchived(carId)} title="Járat"
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
                                           onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
                                           <option value="">— járat —</option>
@@ -540,7 +542,7 @@ export default function WeekTable() {
                                         const can = !!(r1?.driver_id || r1?.loader_id) && !s?.driver_id && !s?.loader_id
                                         return can ? (
                                           // Egy koppintás: az 1. kör embere(i) a 2. körre is
-                                          <button type="button" disabled={busy} title="Az 1. kör embere a 2. körre is"
+                                          <button type="button" disabled={busy || isArchived(carId)} title="Az 1. kör embere a 2. körre is"
                                             style={{ border: '1px solid var(--border)', background: 'var(--primary-ghost)', color: 'var(--primary)', borderRadius: 6, height: 20, padding: '0 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 2 }}
                                             onClick={() => void setCell(carId, d, 2, 'driver_id', r1!.driver_id ?? '', { loader_id: r1!.loader_id ?? null })}>
                                             <Icon name="arrow-down" size={10} />mint az 1.
@@ -560,7 +562,7 @@ export default function WeekTable() {
                                         value={val}
                                         options={memberOptions}
                                         placeholder={FIELD_PH[field]}
-                                        disabled={busy}
+                                        disabled={busy || isArchived(carId)}
                                         danger={dup}
                                         title={dup ? 'Ütközés: aznap másik autóra is be van osztva!' : FIELD_LABEL[field]}
                                         onChange={(id) => void setCell(carId, d, round, field, id)}
