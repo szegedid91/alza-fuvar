@@ -15,7 +15,7 @@ export const STOP_FIELDS: { key: StopNumKey; short: string; label: string }[] = 
   { key: 'oversize', short: 'Túlméretes', label: 'Túlméretes (db)' },
   { key: 'shortage', short: 'Hiány', label: 'Hiány – box képernyő (db)' },
   { key: 'returned', short: 'Visszáru', label: 'Visszáru a boxból (db)' },
-  { key: 'damaged', short: 'ÉK/NHB/törött', label: 'ÉK (Érvénytelen kód a kijelzőn) / NHB (Ne helyezd be – kijelző) / törött (db)' },
+  { key: 'damaged', short: 'ÉK/NHB/törölt', label: 'ÉK (Érvénytelen kód a kijelzőn) / NHB (Ne helyezd be – kijelző) / törölt (db)' },
   { key: 'left_on_car', short: 'Autón maradt', label: 'Autón maradt (db)' },
 ]
 
