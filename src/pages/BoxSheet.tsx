@@ -7,6 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
+import StopPhotos from '../components/StopPhotos'
 import InspectionGate from '../components/InspectionGate'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
@@ -227,7 +228,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
             <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
-              onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
+              courierName={name ?? 'Futár'} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
       </div>
@@ -337,8 +338,8 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, isLast, focus = false, box, onPatch, onRemove }: {
-  stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null
+function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove }: {
+  stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
   onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void
 }) {
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
@@ -377,6 +378,7 @@ function StopRow({ stop, index, isLast, focus = false, box, onPatch, onRemove }:
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
+          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} courierName={courierName} onPatch={onPatch} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
               <Icon name="trash" size={16} />Megálló törlése

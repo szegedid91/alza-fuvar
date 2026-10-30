@@ -166,6 +166,51 @@ export type Database = {
         }
         Relationships: []
       }
+      box_sheet_stop_photos: {
+        Row: {
+          ai_result: Json | null
+          created_at: string
+          id: string
+          sent_at: string | null
+          stop_id: string
+          storage_path: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ai_result?: Json | null
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          stop_id: string
+          storage_path?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ai_result?: Json | null
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          stop_id?: string
+          storage_path?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "box_sheet_stop_photos_stop_id_fkey"
+            columns: ["stop_id"]
+            isOneToOne: false
+            referencedRelation: "box_sheet_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "box_sheet_stop_photos_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       box_sheet_stops: {
         Row: {
           box_code: string | null
