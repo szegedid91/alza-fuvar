@@ -2339,6 +2339,7 @@ export type Database = {
         Returns: undefined
       }
       delete_workspace_rate: { Args: { p_id: string }; Returns: undefined }
+      discard_empty_inspection: { Args: { p_id: string }; Returns: boolean }
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }

@@ -148,8 +148,8 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
         // A helyi sorból is ki kell venni — különben a felszinkronizálódó
         // fél-kész ellenőrzés kinyitná a kötelező-ellenőrzés kaput
         await removeFromOutbox(queuedIds)
-        await supabase.from('car_inspection_photos').delete().eq('inspection_id', inspectionId)
-        await supabase.from('car_inspections').delete().eq('id', inspectionId)
+        // Saját, fotó nélküli sor törlése (a sima DELETE csak vezetőnek szabad — ezért RPC)
+        await supabase.rpc('discard_empty_inspection', { p_id: inspectionId })
       } catch { /* best effort */ }
       setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen') + ' — az ellenőrzés nem lett elmentve, próbáld újra.')
     } finally {

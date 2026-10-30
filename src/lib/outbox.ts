@@ -54,15 +54,27 @@ function db() {
 let seqCounter = 0
 
 async function putRecord(rec: OutboxRecord): Promise<void> {
-  const d = await db()
   try {
+    const d = await db()
     await d.put('outbox', rec)
   } catch (e) {
     if (e instanceof DOMException && e.name === 'QuotaExceededError') {
       throw new Error('Nincs elég tárhely az eszközön a mentéshez — szabadíts fel helyet, és próbáld újra')
     }
-    throw e
+    // iOS Safari IndexedDB időnként elhasal (pl. „without an in-progress transaction”,
+    // vagy Blob tárolásánál) — egyszer újranyitjuk az adatbázist, és újrapróbáljuk
+    _db = null
+    const d = await db()
+    await d.put('outbox', rec)
   }
+}
+
+// Az IndexedDB hibája nem akadályozhatja a mentést: ha a helyi sor nem írható,
+// a tétel közvetlenül megy a szerverre (csak az offline-védőháló marad el)
+function isStorageFailure(e: unknown): boolean {
+  if (e instanceof Error && /tárhely/.test(e.message)) return false
+  const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
+  return e instanceof DOMException || msg.includes('indexeddb') || msg.includes('transaction') || msg.includes('database') || msg.includes('objectstore') || msg.includes('clone')
 }
 
 export async function enqueue(rec: Omit<OutboxRecord, 'attempts' | 'createdAt'>): Promise<void> {
@@ -199,8 +211,10 @@ async function doFlush(): Promise<{ done: number; remaining: number }> {
 // Sorban álló tételek célzott eltávolítása (pl. visszagörgetett ellenőrzés
 // fotói — hogy később ne szinkronizálódjon fel egy szándékosan törölt mentés)
 export async function removeFromOutbox(ids: string[]): Promise<void> {
-  const d = await db()
-  for (const id of ids) await d.delete('outbox', id)
+  try {
+    const d = await db()
+    for (const id of ids) await d.delete('outbox', id)
+  } catch (e) { console.error('Helyi sor törlési hiba:', e) }
   notify()
 }
 
@@ -228,7 +242,15 @@ export async function submitNow(
   rec: Omit<OutboxRecord, 'attempts' | 'createdAt'>,
 ): Promise<{ queued: boolean }> {
   const stored: OutboxRecord = { ...rec, attempts: 0, createdAt: Date.now(), seq: seqCounter++ }
-  await putRecord(stored)
+  // Helyi sor: ha az IndexedDB nem működik (iOS Safari hiba), online közvetlenül küldünk
+  let persisted = true
+  try {
+    await putRecord(stored)
+  } catch (e) {
+    if (!navigator.onLine || !isStorageFailure(e)) throw e
+    console.error('Helyi sor nem írható, közvetlen küldés:', e)
+    persisted = false
+  }
   if (!navigator.onLine) {
     notify()
     return { queued: true }
@@ -236,28 +258,34 @@ export async function submitNow(
   // Ha már van korábbi, még el nem küldött tétel, NEM előzhetjük meg: a teljes
   // sort futtatjuk időrendben (különben pl. az autócsere "új becsekkolás"
   // hamarabb érne a szerverre, mint a régi lezárása).
-  {
-    const d = await db()
-    const others = (await d.getAll('outbox')).filter((r) => r.id !== stored.id && r.attempts < MAX_ATTEMPTS)
-    if (others.length > 0) {
-      await flushOutbox()
-      const still = await (await db()).get('outbox', stored.id)
-      notify()
-      return { queued: !!still }
+  if (persisted) {
+    try {
+      const d = await db()
+      const others = (await d.getAll('outbox')).filter((r) => r.id !== stored.id && r.attempts < MAX_ATTEMPTS)
+      if (others.length > 0) {
+        await flushOutbox()
+        const still = await (await db()).get('outbox', stored.id)
+        notify()
+        return { queued: !!still }
+      }
+    } catch (e) {
+      if (!isStorageFailure(e)) throw e
+      persisted = false
     }
   }
+  const forget = async () => { if (!persisted) return; try { await (await db()).delete('outbox', stored.id) } catch { /* a következő flush úgyis újrajátssza (idempotens upsert) */ } }
   try {
     await runRecord(stored)
-    await (await db()).delete('outbox', stored.id)
+    await forget()
     notify()
     return { queued: false }
   } catch (e) {
-    if (isNetworkError(e)) {
+    if (isNetworkError(e) && persisted) {
       notify()
       return { queued: true }
     }
     // valódi adat-hiba (pl. RLS): a hívó kezeli — ne ragadjon a sorban
-    await (await db()).delete('outbox', stored.id)
+    await forget()
     notify()
     throw e
   }
