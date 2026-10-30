@@ -232,7 +232,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         })}
       </div>
 
-      {stops.length > 0 && (
+      {stops.length > 0 && !prefillBoxId && (
         <div className="card stack" style={{ gap: 6 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />Összesen</div>
           <div className="grid-2" style={{ gap: 4 }}>
@@ -246,15 +246,24 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         </div>
       )}
 
+      {!prefillBoxId && (
       <div className="card stack" style={{ gap: 8 }}>
+        <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
+        <div className="tiny muted">Ezeket a nap legvégén, a raktárba visszaérve töltsd ki, az egész napra összesítve.</div>
         <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" />Raktári problémák</div>
         <div className="grid-2">
           {WH_FIELDS.slice(0, 2).map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
         </div>
         <NumField label={WH_FIELDS[2].label} value={sheet.wh_pallet_items} onCommit={(v) => updateSheet.mutate({ wh_pallet_items: v })} />
         <TextField label={'Megjegyzés („MENT” stb.)'} value={sheet.wh_note ?? ''} onCommit={(v) => updateSheet.mutate({ wh_note: v || null })} />
+        <div className="card-title" style={{ margin: 0, marginTop: 6 }}><Icon name="truck" />Raktárban leadott (db)</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          {RET_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
+        </div>
       </div>
+      )}
 
+      {!prefillBoxId && (
       <div className="card stack" style={{ gap: 8 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Komplikációk</div>
         <div className="grid-2">
@@ -262,14 +271,9 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         </div>
         <TextField label="Egyéb" value={sheet.comp_note ?? ''} onCommit={(v) => updateSheet.mutate({ comp_note: v || null })} />
       </div>
+      )}
 
-      <div className="card stack" style={{ gap: 8 }}>
-        <div className="card-title" style={{ margin: 0 }}><Icon name="truck" />Raktárban leadott (db)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {RET_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
-        </div>
-      </div>
-
+      {!prefillBoxId && (
       <div className="card stack">
         {submitted ? (
           <div className="alert success row" style={{ gap: 8 }}>
@@ -289,6 +293,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         )}
         {managerView && <div className="tiny muted">Menedzserként szerkeszted {name ?? 'a munkatárs'} lapját — a módosítás a naplóba kerül.</div>}
       </div>
+      )}
     </>
   )
 }
