@@ -339,12 +339,18 @@ export default function Cars() {
   })
   // Szűrés nélkül kategóriánként csoportosítva (a beosztás sorrendjében), különben lapos lista
   const grouped = filter === 'all' && !q && (categories?.length ?? 0) > 0
-  const sections: { title: string | null; cars: Car[] }[] = grouped
-    ? [
-        ...(categories ?? []).map((c) => ({ title: c.name, cars: visible.filter((x) => x.category_id === c.id) })).filter((sec) => sec.cars.length > 0),
-        ...(visible.some((x) => !x.category_id) ? [{ title: 'Kategória nélkül', cars: visible.filter((x) => !x.category_id) }] : []),
-      ]
-    : [{ title: null, cars: visible }]
+  // Az archivált autók külön, a lista alján — a kategória-csoportokban csak az aktívak
+  const live = visible.filter((x) => x.active)
+  const archived = visible.filter((x) => !x.active)
+  const sections: { title: string | null; cars: Car[] }[] = [
+    ...(grouped
+      ? [
+          ...(categories ?? []).map((c) => ({ title: c.name, cars: live.filter((x) => x.category_id === c.id) })).filter((sec) => sec.cars.length > 0),
+          ...(live.some((x) => !x.category_id) ? [{ title: 'Kategória nélkül', cars: live.filter((x) => !x.category_id) }] : []),
+        ]
+      : [{ title: archived.length ? 'Aktív' : null, cars: live }]),
+    ...(archived.length ? [{ title: 'Archivált', cars: archived }] : []),
+  ]
   const chip = (key: string, text: string, n: number) => (
     <button key={key} className={`badge ${filter === key ? 'primary' : ''}`}
       style={{ cursor: 'pointer', border: filter === key ? '1px solid var(--primary)' : undefined }}
