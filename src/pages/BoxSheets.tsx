@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { signedUrl } from '../lib/photos'
 import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { monthRange, currentYm } from '../lib/payroll'
@@ -10,6 +11,7 @@ import { resolveNames } from '../lib/names'
 import { formatDate } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, hhmm, hhmmOfISO, normalize, type BoxSheet, type BoxStop } from '../lib/boxSheet'
+import PhotoThumb from '../components/PhotoThumb'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 
@@ -164,7 +166,7 @@ export default function BoxSheets() {
                       onClick={() => setOpenId(open ? null : s.id)}>
                       <div style={{ minWidth: 0 }}>
                         <div className="small" style={{ fontWeight: 800 }}>{s._name ?? '–'} <span className="muted" style={{ fontWeight: 500 }}>· {s.car?.plate ?? 'autó nélkül'}</span></div>
-                        <div className="tiny muted">{s.stops.length} box · {t.placed} db · {s.start_time ? hhmm(s.start_time) : '?'} → {s.end_time ? hhmm(s.end_time) : '…'}</div>
+                        <div className="tiny muted">{s.stops.length} box · {t.placed} db · végzés {s.end_time ? hhmm(s.end_time) : '…'}</div>
                       </div>
                       <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                         {issues > 0 && <span className="badge warning">{issues} eltérés</span>}
@@ -192,7 +194,7 @@ function SheetDetail({ sheet: s }: { sheet: SheetRow }) {
   return (
     <div className="stack" style={{ gap: 8 }}>
       <div className="tiny muted">
-        Indulás {hhmm(s.start_time)} · végzés {hhmm(s.end_time)}
+        Végzés {hhmm(s.end_time)}
         {s.submitted_at && ` · lezárva ${hhmmOfISO(s.submitted_at)}`}
       </div>
       {s.stops.length === 0 ? <div className="tiny muted">Nincs megálló.</div> : (
@@ -227,10 +229,56 @@ function SheetDetail({ sheet: s }: { sheet: SheetRow }) {
           </table>
         </div>
       )}
+      <SheetPhotos stopIds={s.stops.map((st) => st.id)} codes={Object.fromEntries(s.stops.map((st) => [st.id, st.box_code ?? st.box_name ?? '?']))} />
       <div className="small"><span className="muted">Raktári: </span>{whItems.length ? whItems.join(' · ') : 'nincs'}{s.wh_note ? ` · ${s.wh_note}` : ''}</div>
       <div className="small"><span className="muted">Komplikációk: </span>{compItems.length ? compItems.join(' · ') : 'nincs'}{s.comp_note ? ` · ${s.comp_note}` : ''}</div>
       <div className="small"><span className="muted">Raktárban leadott: </span>{retItems.join(' · ')}</div>
       <Link to={`/box-lap?sheet=${s.id}`} className="btn ghost sm" style={{ textDecoration: 'none' }}><Icon name="pencil" size={16} />Lap szerkesztése</Link>
+    </div>
+  )
+}
+
+// A futár által az appban készített box-fotók megállónként (AI-olvasat és WhatsApp-küldés jelzéssel);
+// a bélyegképre koppintva a teljes kép nyílik meg
+function SheetPhotos({ stopIds, codes }: { stopIds: string[]; codes: Record<string, string> }) {
+  const [full, setFull] = useState<string | null>(null)
+  const { data: photos } = useQuery({
+    queryKey: ['sheet-photos', stopIds.join(',')],
+    enabled: stopIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('box_sheet_stop_photos').select('id, stop_id, storage_path, ai_result, sent_at, created_at').in('stop_id', stopIds).order('created_at')
+      if (error) throw error
+      return data ?? []
+    },
+  })
+  const { data: fullUrl } = useQuery({ queryKey: ['signed-full', full], enabled: !!full, queryFn: () => signedUrl(full!, 600) })
+  if (!photos || photos.length === 0) return null
+  const byStop = new Map<string, typeof photos>()
+  for (const ph of photos) { if (!byStop.has(ph.stop_id)) byStop.set(ph.stop_id, []); byStop.get(ph.stop_id)!.push(ph) }
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <div className="small"><span className="muted">Fotók a boxokról: </span>{photos.length} kép</div>
+      {[...byStop.entries()].map(([stopId, list]) => (
+        <div key={stopId} className="row" style={{ gap: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <span className="tiny num" style={{ minWidth: 64, paddingTop: 4 }}>{codes[stopId] ?? '?'}</span>
+          {list.map((ph) => ph.storage_path && (
+            <button key={ph.id} type="button" onClick={() => setFull(full === ph.storage_path ? null : ph.storage_path)}
+              style={{ width: 72, position: 'relative', background: 'none', border: full === ph.storage_path ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 8, padding: 0, cursor: 'pointer' }}
+              title={`${hhmmOfISO(ph.created_at)}${ph.sent_at ? ' · csoportba küldve' : ''}`}>
+              <PhotoThumb path={ph.storage_path} />
+              <span className="tiny muted" style={{ display: 'block' }}>{hhmmOfISO(ph.created_at)}</span>
+              {ph.sent_at && <span className="badge success" style={{ position: 'absolute', right: 2, top: 2, fontSize: 9, padding: '0 4px' }}>küldve</span>}
+              {ph.ai_result && <span className="badge" style={{ position: 'absolute', left: 2, top: 2, fontSize: 9, padding: '0 4px' }}>AI</span>}
+            </button>
+          ))}
+        </div>
+      ))}
+      {full && (
+        <div className="stack" style={{ gap: 4 }}>
+          {fullUrl ? <img src={fullUrl} alt="Box-fotó" style={{ width: '100%', borderRadius: 10 }} /> : <div className="spinner" />}
+          <button type="button" className="btn ghost sm auto" onClick={() => setFull(null)}><Icon name="x" size={14} />Bezárás</button>
+        </div>
+      )}
     </div>
   )
 }
