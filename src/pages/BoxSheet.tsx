@@ -9,7 +9,6 @@ import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
 import InspectionGate from '../components/InspectionGate'
 import ConfirmButton from '../components/ConfirmButton'
-import BoxCard from '../components/BoxCard'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { resolveNames } from '../lib/names'
@@ -208,17 +207,29 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         </div>
       </div>
 
+      {prefillBoxId && (
+        <Link to="/" className="btn" style={{ textDecoration: 'none' }}>
+          <Icon name="arrow-left" />Vissza a járathoz
+        </Link>
+      )}
+
       <div className="card stack" style={{ gap: 10 }}>
         <div className="between">
-          <div className="card-title" style={{ margin: 0 }}><Icon name="package" />Megállók</div>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="package" />{prefillBoxId ? 'Aktuális box' : 'Megállók'}</div>
           <span className="badge primary num">{stops.length} box</span>
         </div>
-        <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />
-        {stops.length === 0 && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
-        {stops.map((s, i) => (
-          <StopRow key={s.id} stop={s} index={i + 1} isLast={i === stops.length - 1} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
-            onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
-        ))}
+        {prefillBoxId
+          ? <div className="tiny muted">A járat aktuális boxa automatikusan ki van jelölve — csak a darabszámokat kell beírni. A többi megálló összecsukva alatta.</div>
+          : <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />}
+        {stops.length === 0 && !prefillBoxId && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
+        {[...stops].sort((a, b) => (a.box_id === prefillBoxId ? -1 : b.box_id === prefillBoxId ? 1 : 0)).map((s) => {
+          const i = stops.findIndex((x) => x.id === s.id)
+          const focus = !!prefillBoxId && s.box_id === prefillBoxId
+          return (
+            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
+              onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
+          )
+        })}
       </div>
 
       {stops.length > 0 && (
@@ -321,19 +332,19 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, isLast, box, onPatch, onRemove }: {
-  stop: BoxStop; index: number; isLast: boolean; box: AlzaBox | null
+function StopRow({ stop, index, isLast, focus = false, box, onPatch, onRemove }: {
+  stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null
   onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void
 }) {
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
-  // hogy 10-20 boxnál is áttekinthető maradjon a lap
-  const [open, setOpen] = useState(isLast && stop.placed === 0 && !stop.note)
-  useEffect(() => { if (!isLast) setOpen(false) }, [isLast])
-  const [showBox, setShowBox] = useState(false)
+  // hogy 10-20 boxnál is áttekinthető maradjon a lap. Járat-módban a kijelölt box nyitva.
+  const [open, setOpen] = useState(focus || (isLast && stop.placed === 0 && !stop.note))
+  useEffect(() => { if (!isLast && !focus) setOpen(false) }, [isLast, focus])
+  useEffect(() => { if (focus) setOpen(true) }, [focus])
   const extras = STOP_FIELDS.filter((f) => f.key !== 'placed' && stop[f.key] > 0)
   const flagged = stop.shortage > 0 || stop.damaged > 0 || stop.left_on_car > 0
   return (
-    <div className="stack" style={{ gap: 8, padding: 10, border: `1px solid ${flagged ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)' }}>
+    <div className="stack" style={{ gap: 8, padding: 10, border: focus ? '2px solid var(--primary)' : `1px solid ${flagged ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: focus ? 'var(--primary-ghost)' : undefined }}>
       <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }} onClick={() => setOpen((o) => !o)}>
         <div style={{ minWidth: 0 }}>
           <div className="small" style={{ fontWeight: 800 }}>
@@ -357,21 +368,15 @@ function StopRow({ stop, index, isLast, box, onPatch, onRemove }: {
         <>
           <div className="grid-2">
             {STOP_FIELDS.map((f) => (
-              <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && isLast && stop.placed === 0} />
+              <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && (focus || isLast) && stop.placed === 0} />
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            {box && (
-              <button type="button" className="btn ghost sm auto" onClick={() => setShowBox((s) => !s)}>
-                <Icon name="map-pin" size={16} />{showBox ? 'Box elrejtése' : 'Hol van ez a box?'}
-              </button>
-            )}
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
               <Icon name="trash" size={16} />Megálló törlése
             </ConfirmButton>
           </div>
-          {showBox && box && <BoxCard box={box} compact />}
         </>
       )}
     </div>
