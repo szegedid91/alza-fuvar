@@ -7,6 +7,8 @@ import { sharePhotos, canShareFiles } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
 import PhotoSlot, { type CapturedPhoto } from './PhotoSlot'
+
+type Shot = CapturedPhoto & { path?: string }
 import PhotoThumb from './PhotoThumb'
 import Icon from './Icon'
 
@@ -21,9 +23,9 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
 }) {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
-  const [photos, setPhotos] = useState<(CapturedPhoto | null)[]>([null])
+  const [photos, setPhotos] = useState<(Shot | null)[]>([null])
   const [ai, setAi] = useState<AiResult | null>(null)
-  const taken = photos.filter((p): p is CapturedPhoto => !!p)
+  const taken = photos.filter((p): p is Shot => !!p)
   const shareOk = canShareFiles()
 
   const { data: saved } = useQuery({
@@ -39,14 +41,21 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
   const read = useMutation({
     mutationFn: async () => {
       if (!currentWorkspaceId || taken.length === 0) return null
+      // csak a még fel nem töltött fotók mennek fel (újbóli kiolvasásnál nem duplázódnak)
       const paths: string[] = []
-      for (const p of taken) {
+      const next = [...photos]
+      for (let i = 0; i < next.length; i++) {
+        const p = next[i]
+        if (!p) continue
+        if (p.path) { paths.push(p.path); continue }
         const id = crypto.randomUUID()
         const path = await uploadPhoto(currentWorkspaceId, `boxsheet/${stop.id}`, id, p.blob)
-        paths.push(path)
         const { error } = await supabase.from('box_sheet_stop_photos').insert({ id, workspace_id: currentWorkspaceId, stop_id: stop.id, storage_path: path })
         if (error) throw error
+        next[i] = { ...p, path }
+        paths.push(path)
       }
+      setPhotos(next)
       const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths, box: stop.box_code ?? boxLabel } })
       if (error) {
         // a függvény hibaüzenete a válasz törzsében van
@@ -64,7 +73,12 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
       }
       return result
     },
-    onSuccess: (r) => { setAi(r); void qc.invalidateQueries({ queryKey: ['stop-photos', stop.id] }); if (r) toast.success('Kiolvasva — ellenőrizd a számokat, és javítsd, ha kell.') },
+    onSuccess: (r) => {
+      setAi(r); void qc.invalidateQueries({ queryKey: ['stop-photos', stop.id] })
+      const got = r ? STOP_FIELDS.some((f) => typeof r[f.key] === 'number') : false
+      if (got) toast.success('Kiolvasva — ellenőrizd a számokat, és javítsd, ha kell.')
+      else toast.info('A képről nem sikerült számot kiolvasni — írd be kézzel, vagy fotózd újra közelebbről, élesen.')
+    },
     onError: (e) => toast.error('Kiolvasás nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
   })
 
