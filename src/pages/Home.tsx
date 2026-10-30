@@ -23,7 +23,7 @@ export default function Home() {
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
   const isAdmin = role === 'admin'
   const { data: today } = useToday()
-  // Úton vagyok: a megerősített „Kiindultam” után (amíg nincs megerősített „Járat kész” / „Elszámoltam”)
+  // Úton vagyok: a „Kiindultam” jelzés után (amíg nincs „Járat kész” / „Elszámoltam”)
   // a kezdőlap csak a járatot, a jelzéseket és a gyorslinkeket mutatja — a napi lépéssor és a fejléc részletei eltűnnek
   const { data: todayStatus } = useQuery({
     queryKey: ['status-events', currentWorkspaceId, profile?.id, todayISO(), 'home'],
@@ -31,7 +31,7 @@ export default function Home() {
     refetchInterval: 60000,
     queryFn: async () => {
       const { data, error } = await supabase.from('status_events').select('kind, confirmed_at')
-        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO()).not('confirmed_at', 'is', null)
+        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO())
       if (error) throw error
       return (data ?? []).map((r) => r.kind as string)
     },

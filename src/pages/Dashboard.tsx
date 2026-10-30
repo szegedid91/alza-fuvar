@@ -291,13 +291,13 @@ export default function Dashboard() {
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_inspections').select('car_id, created_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
-          supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, confirmed_at, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
+          supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
         ])
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
       const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id]), ...(statusEv ?? []).map((a) => a.user_id)])
       // Jelzések a csoportba (megérkeztem / kiindultam / járat kész / hiba) — idő szerint
-      const statusToday = (statusEv ?? []).map((a) => ({ id: a.id, name: names[a.user_id] ?? '?', kind: a.kind as StatusKind, at: a.at, outside: a.outside_geofence, confirmed: !!a.confirmed_at, note: a.note, photos: [...((a.photos as { storage_path: string | null }[] | null) ?? []).map((p) => p.storage_path), a.photo_path].filter((p): p is string => !!p), plate: a.car_id ? carMap.get(a.car_id)?.plate ?? null : null }))
+      const statusToday = (statusEv ?? []).map((a) => ({ id: a.id, name: names[a.user_id] ?? '?', kind: a.kind as StatusKind, at: a.at, outside: a.outside_geofence, note: a.note, photos: [...((a.photos as { storage_path: string | null }[] | null) ?? []).map((p) => p.storage_path), a.photo_path].filter((p): p is string => !!p), plate: a.car_id ? carMap.get(a.car_id)?.plate ?? null : null }))
       const inspCars = new Set((insp ?? []).map((i) => i.car_id))
       const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
@@ -436,7 +436,7 @@ export default function Dashboard() {
                     </div>
                   )}
                   <div style={{ minWidth: 0 }}>
-                    <div className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} style={{ color: 'var(--danger)', verticalAlign: -2 }} /> Hiba — {a.name}{a.plate ? ` (${a.plate})` : ''} · {new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}{!a.confirmed && <span className="tiny" style={{ color: 'var(--warning)', fontWeight: 500 }}> · nincs megerősítve</span>}</div>
+                    <div className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} style={{ color: 'var(--danger)', verticalAlign: -2 }} /> Hiba — {a.name}{a.plate ? ` (${a.plate})` : ''} · {new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</div>
                     <div className="small">{a.note || '(nincs leírás)'}</div>
                   </div>
                 </div>
@@ -448,7 +448,7 @@ export default function Dashboard() {
                       <Icon name={STATUS_META[a.kind].icon} size={13} style={{ color: STATUS_META[a.kind].color, flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name} · {STATUS_META[a.kind].label.toLowerCase()}</span>
                     </span>
-                    <span className="tiny num" style={{ flexShrink: 0, color: a.confirmed ? undefined : 'var(--warning)' }} title={a.confirmed ? undefined : 'A munkatárs még nem erősítette meg, hogy elküldte a csoportba'}>{new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}{a.outside ? ' ⚠' : ''}{a.confirmed ? '' : ' ?'}</span>
+                    <span className="tiny num" style={{ flexShrink: 0 }}>{new Date(a.at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}{a.outside ? ' ⚠' : ''}</span>
                   </div>
                 ))}
               </div>

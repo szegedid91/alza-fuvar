@@ -11,11 +11,11 @@ export type StopNumKey = 'placed' | 'missorted' | 'nf' | 'oversize' | 'shortage'
 export const STOP_FIELDS: { key: StopNumKey; short: string; label: string }[] = [
   { key: 'placed', short: 'Behelyezve', label: 'Boxba behelyezett csomag (db)' },
   { key: 'missorted', short: 'Rossz szort.', label: 'Rosszul szortírozott áru (db, raktári)' },
-  { key: 'nf', short: 'NF', label: 'NF (db)' },
+  { key: 'nf', short: 'NF', label: 'NF – Nincs szabad fiók (db)' },
   { key: 'oversize', short: 'Túlméretes', label: 'Túlméretes (db)' },
   { key: 'shortage', short: 'Hiány', label: 'Hiány – box képernyő (db)' },
   { key: 'returned', short: 'Visszáru', label: 'Visszáru a boxból (db)' },
-  { key: 'damaged', short: 'EK/NHB/törött', label: 'EK / NHB / törött (db)' },
+  { key: 'damaged', short: 'ÉK/NHB/törött', label: 'ÉK (Érvénytelen kód a kijelzőn) / NHB (Ne helyezd be – kijelző) / törött (db)' },
   { key: 'left_on_car', short: 'Autón maradt', label: 'Autón maradt (db)' },
 ]
 
