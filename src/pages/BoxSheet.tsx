@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
@@ -61,6 +61,9 @@ export default function BoxSheetPage() {
 
 function CrewSheet({ car, date }: { car: Car; date: string }) {
   const { profile } = useAuth()
+  // A járat-kártyáról érkezve (?box=<id>) az aktuális box megállója automatikusan felkerül a lapra
+  const [params] = useSearchParams()
+  const prefillBox = params.get('box')
   const { currentWorkspaceId } = useWorkspace()
   const { data: today } = useToday()
   const category = today?.car?.category ?? null
@@ -97,12 +100,12 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
   if (sheetQ.isError || !sheetQ.data) {
     return <div className="alert error">Nem sikerült megnyitni a mai lapot: {sheetQ.error instanceof Error ? sheetQ.error.message : ''}</div>
   }
-  return <SheetEditor sheetId={sheetQ.data} />
+  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} />
 }
 
 type SheetRow = BoxSheet & { car: { plate: string } | null }
 
-export function SheetEditor({ sheetId, managerView = false }: { sheetId: string; managerView?: boolean }) {
+export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null }) {
   const qc = useQueryClient()
   const { data: boxes } = useAlzaBoxes()
   const boxById = useMemo(() => new Map((boxes ?? []).map((b) => [b.id, b])), [boxes])
@@ -141,9 +144,14 @@ export function SheetEditor({ sheetId, managerView = false }: { sheetId: string;
       const row = 'id' in box
         ? { box_id: box.id, box_code: box.code, box_name: box.name }
         : { box_code: box.code.toUpperCase(), box_name: null }
+      const now = new Date()
       const { error } = await supabase.from('box_sheet_stops')
-        .insert({ sheet_id: sheetId, workspace_id: data!.sheet.workspace_id, seq, ...row })
+        .insert({ sheet_id: sheetId, workspace_id: data!.sheet.workspace_id, seq, done_at: now.toISOString(), ...row })
       if (error) throw error
+      // A lap „végzés” ideje = az utolsó box ideje (a futár ekkor nyomott rá a Box-lapra ennél a boxnál)
+      const hm = now.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', hour12: false })
+      const { error: e2 } = await supabase.from('box_sheets').update({ end_time: hm }).eq('id', sheetId)
+      if (e2) throw e2
     },
     onSuccess: invalidate, onError: fail,
   })
@@ -161,6 +169,18 @@ export function SheetEditor({ sheetId, managerView = false }: { sheetId: string;
     },
     onSuccess: invalidate, onError: fail,
   })
+
+  // ?box=<id>: ha a box még nincs a lapon, egyszer felvesszük (a lista végére kerül, és kinyílik a kitöltéshez)
+  const prefilledRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
+    if (data.stops.some((st) => st.box_id === prefillBoxId)) { prefilledRef.current = prefillBoxId; return }
+    const box = boxById.get(prefillBoxId)
+    if (!box || data.sheet.status === 'submitted') return
+    prefilledRef.current = prefillBoxId
+    addStop.mutate(box)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillBoxId, data, boxById])
 
   if (isLoading) return <Skeleton rows={5} />
   if (isError || !data) return <div className="alert error">Nem sikerült betölteni a lapot: {error instanceof Error ? error.message : ''}</div>
@@ -183,8 +203,8 @@ export function SheetEditor({ sheetId, managerView = false }: { sheetId: string;
             : <span className="badge">Piszkozat{saving ? ' · mentés…' : ''}</span>}
         </div>
         <div className="grid-2">
-          <TimeField label="Indulási idő" value={sheet.start_time} onCommit={(v) => updateSheet.mutate({ start_time: v })} />
-          <TimeField label="Végzés (box)" value={sheet.end_time} onCommit={(v) => updateSheet.mutate({ end_time: v })} />
+          <TimeField label="Végzés (box) — automatikus" value={sheet.end_time} onCommit={(v) => updateSheet.mutate({ end_time: v })} />
+          <div className="tiny muted" style={{ alignSelf: 'end' }}>A végzés ideje akkor rögzül, amikor a járat-kártyáról rányomsz a Box-lapra az aktuális boxnál (az utolsó box ideje). Kézzel javítható.</div>
         </div>
       </div>
 
@@ -318,6 +338,7 @@ function StopRow({ stop, index, isLast, box, onPatch, onRemove }: {
         <div style={{ minWidth: 0 }}>
           <div className="small" style={{ fontWeight: 800 }}>
             <span className="muted">{index}.</span> <span className="num">{stop.box_code ?? '—'}</span>
+            {stop.done_at && <span className="tiny muted" style={{ fontWeight: 500, marginLeft: 6 }}>végzés {hhmmOfISO(stop.done_at)}</span>}
           </div>
           <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.box_name ?? box?.name ?? 'nincs a jegyzékben'}</div>
         </div>

@@ -9,7 +9,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { toast } from '../lib/toast'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
 
@@ -26,7 +26,8 @@ export default function RouteCard() {
   const { data: stopsByRoute } = useRouteStops()
   const navApp: NavApp = getNavApp()
   // A vezető módosítása (boxok, sorrend) és a páros másik tagjának lépése azonnal ideér
-  useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts'], [['route-stops'], ['route-runs'], ['my-routes-today']])
+  useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts', 'box_sheet_stops'], [['route-stops'], ['route-runs'], ['my-routes-today'], ['box-sheet-filled']])
+  const navigate = useNavigate()
   const [openList, setOpenList] = useState(false)
 
   const { data: myShifts } = useQuery({
@@ -58,13 +59,34 @@ export default function RouteCard() {
       return data ?? []
     },
   })
+  // A mai Box-lapomon kitöltött boxok: csak ezeknél engedjük a „Kész, következő”-t
+  const { data: filledBoxes } = useQuery({
+    queryKey: ['box-sheet-filled', currentWorkspaceId, profile?.id, date],
+    enabled: !!currentWorkspaceId && !!profile?.id,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('box_sheet_stops')
+        .select('box_id, placed, missorted, nf, oversize, shortage, returned, damaged, left_on_car, note, sheet:box_sheets!inner(user_id, work_date)')
+        .eq('workspace_id', currentWorkspaceId!).eq('sheet.user_id', profile!.id).eq('sheet.work_date', date)
+      if (error) throw error
+      const filled = (data ?? []).filter((r) => (r.placed ?? 0) + (r.missorted ?? 0) + (r.nf ?? 0) + (r.oversize ?? 0) + (r.shortage ?? 0) + (r.returned ?? 0) + (r.damaged ?? 0) + (r.left_on_car ?? 0) > 0 || !!r.note?.trim())
+      return filled.map((r) => r.box_id).filter((x): x is string => !!x)
+    },
+  })
   const setIndex = useMutation({
-    mutationFn: async ({ routeId, round, carId, index }: { routeId: string; round: number; carId: string; index: number }) => {
+    mutationFn: async ({ routeId, round, carId, index, done }: { routeId: string; round: number; carId: string; index: number; done?: { boxId: string; stopIndex: number }[] }) => {
       const { error } = await supabase.from('route_runs').upsert(
         { workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, current_index: index, updated_by: profile!.id, updated_at: new Date().toISOString() },
         { onConflict: 'work_date,route_id,round,car_id' },
       )
       if (error) throw error
+      // Előre lépéskor naplózzuk: ebben a boxban ekkor adott le mindent a futár (a vezető az Áttekintésben látja)
+      if (done?.length) {
+        const { error: logErr } = await supabase.from('route_stop_logs').insert(done.map((d) => ({
+          workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, user_id: profile!.id, box_id: d.boxId, stop_index: d.stopIndex,
+        })))
+        if (logErr) throw logErr
+      }
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['route-runs'] }),
     onError: (e) => toast.error('Nem sikerült menteni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
@@ -79,10 +101,15 @@ export default function RouteCard() {
         const stops = stopsByRoute?.[sh.route_id] ?? []
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
         const idx = Math.min(run?.current_index ?? 0, stops.length)
-        const go = (index: number) => setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index })
+        const go = (index: number) => {
+          // ami az aktuális és az új hely között van, az leadva (általában egy box)
+          const done = index > idx ? stops.slice(idx, index).map((s, k) => ({ boxId: s.box_id, stopIndex: idx + k + 1 })) : []
+          setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, done })
+        }
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
-            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList} />
+            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList}
+            sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)} onFillSheet={() => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`)} />
         )
       })}
     </>
@@ -90,9 +117,11 @@ export default function RouteCard() {
 }
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   go: (index: number) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
+  // Box-lap kapu: a „Kész, következő” csak akkor, ha az aktuális box megállója ki van töltve a mai Box-lapon
+  sheetFilled?: boolean; onFillSheet?: () => void
 }) {
   const done = idx >= stops.length && stops.length > 0
   const cur = stops[idx]
@@ -135,10 +164,17 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                   </button>
                 </div>
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
+                {!sheetFilled && onFillSheet && (
+                  <button type="button" className="btn sm" style={{ borderColor: 'var(--warning)' }} onClick={onFillSheet}>
+                    <Icon name="clipboard" size={16} />Box-lap kitöltése ehhez a boxhoz
+                  </button>
+                )}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn secondary sm" disabled={busy || !sheetFilled} onClick={() => go(idx + 1)} style={{ flex: 2 }}
+                    title={sheetFilled ? undefined : 'Előbb töltsd ki a Box-lapot ehhez a boxhoz'}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
+                {!sheetFilled && <div className="tiny muted">A „Kész, következő” akkor nyílik meg, ha ennek a boxnak a sora ki van töltve a mai Box-lapon (behelyezett / hiány / visszáru… vagy megjegyzés).</div>}
               </>
             ) : null}
             {stops.length > 0 && (

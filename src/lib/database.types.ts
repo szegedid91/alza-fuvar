@@ -173,6 +173,7 @@ export type Database = {
           box_name: string | null
           created_at: string
           damaged: number
+          done_at: string | null
           id: string
           left_on_car: number
           missorted: number
@@ -192,6 +193,7 @@ export type Database = {
           box_name?: string | null
           created_at?: string
           damaged?: number
+          done_at?: string | null
           id?: string
           left_on_car?: number
           missorted?: number
@@ -211,6 +213,7 @@ export type Database = {
           box_name?: string | null
           created_at?: string
           damaged?: number
+          done_at?: string | null
           id?: string
           left_on_car?: number
           missorted?: number
@@ -1568,6 +1571,81 @@ export type Database = {
           },
         ]
       }
+      route_stop_logs: {
+        Row: {
+          box_id: string
+          car_id: string
+          done_at: string
+          id: string
+          round: number
+          route_id: string
+          stop_index: number
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          box_id: string
+          car_id: string
+          done_at?: string
+          id?: string
+          round?: number
+          route_id: string
+          stop_index: number
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          box_id?: string
+          car_id?: string
+          done_at?: string
+          id?: string
+          round?: number
+          route_id?: string
+          stop_index?: number
+          user_id?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_stop_logs_box_id_fkey"
+            columns: ["box_id"]
+            isOneToOne: false
+            referencedRelation: "alza_boxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stop_logs_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stop_logs_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stop_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_stop_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       route_stops: {
         Row: {
           box_id: string
@@ -1765,6 +1843,7 @@ export type Database = {
         Row: {
           at: string
           car_id: string | null
+          confirmed_at: string | null
           created_at: string
           gps_lat: number | null
           gps_lng: number | null
@@ -1780,6 +1859,7 @@ export type Database = {
         Insert: {
           at?: string
           car_id?: string | null
+          confirmed_at?: string | null
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
@@ -1795,6 +1875,7 @@ export type Database = {
         Update: {
           at?: string
           car_id?: string | null
+          confirmed_at?: string | null
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
@@ -2189,7 +2270,7 @@ export type Database = {
       inspection_reason: "day9" | "driver_change" | "manual"
       inspection_view: "front" | "rear" | "left" | "right" | "interior"
       pay_type: "daily" | "monthly"
-      status_kind: "arrived" | "departed" | "done" | "issue"
+      status_kind: "arrived" | "departed" | "done" | "issue" | "settled"
       swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
       user_status: "pending" | "active" | "disabled" | "invited"
@@ -2327,7 +2408,7 @@ export const Constants = {
       inspection_reason: ["day9", "driver_change", "manual"],
       inspection_view: ["front", "rear", "left", "right", "interior"],
       pay_type: ["daily", "monthly"],
-      status_kind: ["arrived", "departed", "done", "issue"],
+      status_kind: ["arrived", "departed", "done", "issue", "settled"],
       swap_status: ["pending", "approved", "rejected"],
       user_role: ["driver", "loader", "manager", "admin", "crew"],
       user_status: ["pending", "active", "disabled", "invited"],

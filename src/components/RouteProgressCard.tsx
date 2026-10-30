@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -15,22 +16,25 @@ export default function RouteProgressCard() {
   const date = todayISO()
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
-  useRealtimeInvalidate(currentWorkspaceId, ['route_runs', 'shifts'], [['route-progress']])
+  useRealtimeInvalidate(currentWorkspaceId, ['route_runs', 'shifts', 'route_stop_logs'], [['route-progress']])
   const { data } = useQuery({
     queryKey: ['route-progress', currentWorkspaceId, date],
     enabled: !!currentWorkspaceId,
     refetchInterval: 30000,
     queryFn: async () => {
-      const [{ data: shifts, error }, { data: runs, error: runErr }, { data: cars, error: carErr }] = await Promise.all([
+      const [{ data: shifts, error }, { data: runs, error: runErr }, { data: cars, error: carErr }, { data: logs, error: logErr }] = await Promise.all([
         supabase.from('shifts').select('id, car_id, round, route_id, driver_id, loader_id, trainee_id')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date).not('route_id', 'is', null).order('round'),
         supabase.from('route_runs').select('route_id, round, car_id, current_index, updated_at')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date),
         supabase.from('cars').select('id, plate').eq('workspace_id', currentWorkspaceId!),
+        supabase.from('route_stop_logs').select('route_id, round, car_id, box_id, stop_index, done_at, box:alza_boxes(code, name)')
+          .eq('workspace_id', currentWorkspaceId!).eq('work_date', date).order('done_at'),
       ])
       if (error) throw error
       if (runErr) throw runErr
       if (carErr) throw carErr
+      if (logErr) throw logErr
       const names = await resolveNames((shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]))
       const plates = new Map((cars ?? []).map((c) => [c.id, c.plate]))
       return (shifts ?? []).map((s) => ({
@@ -38,9 +42,13 @@ export default function RouteProgressCard() {
         crew: [s.driver_id, s.loader_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
           + (s.trainee_id ? ` + betanuló: ${names[s.trainee_id] ?? '?'}` : ''),
         run: (runs ?? []).find((r) => r.route_id === s.route_id && r.round === (s.round ?? 1) && r.car_id === s.car_id) ?? null,
+        // mikor adott le mindent az egyes boxokban
+        logs: (logs ?? []).filter((l) => l.route_id === s.route_id && l.round === (s.round ?? 1) && l.car_id === s.car_id)
+          .map((l) => ({ stopIndex: l.stop_index, doneAt: l.done_at, label: (() => { const b = l.box as unknown as { code: string | null; name: string } | null; return b ? `${b.code ? b.code + ' · ' : ''}${b.name}` : '?' })() })),
       }))
     },
   })
+  const [openId, setOpenId] = useState<string | null>(null)
   if (!data || data.length === 0) return null
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
   const codeOf = (id: string) => routes?.find((r) => r.id === id)?.code ?? '?'
@@ -76,6 +84,20 @@ export default function RouteProgressCard() {
                 <span><Icon name="navigation" size={12} />{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</span>
                 {s.run?.updated_at && <span className="muted">· lépett {hhmm(s.run.updated_at)}</span>}
               </div>
+            )}
+            {s.logs.length > 0 && (
+              <>
+                <button type="button" className="link-btn tiny" style={{ justifySelf: 'start', padding: 0 }} onClick={() => setOpenId((o) => (o === s.id ? null : s.id))}>
+                  {openId === s.id ? 'leadások elrejtése' : `${s.logs.length} box leadva — részletek`}
+                </button>
+                {openId === s.id && (
+                  <div className="stack" style={{ gap: 2 }}>
+                    {s.logs.map((l, i) => (
+                      <div key={i} className="between tiny"><span><Icon name="check-circle" size={11} style={{ color: 'var(--success)' }} /> {l.stopIndex}. {l.label}</span><span className="muted num">{hhmm(l.doneAt)}</span></div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )

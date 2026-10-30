@@ -49,11 +49,12 @@ export async function sharePhotos(blobs: Blob[], text: string, baseName: string)
 const dt = (d: Date) =>
   `${d.toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' })} ${d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}`
 
-export type StatusKind = 'arrived' | 'departed' | 'done' | 'issue'
-export const STATUS_META: Record<StatusKind, { label: string; title: string; icon: 'map-pin' | 'navigation' | 'flag' | 'alert-triangle'; color: string }> = {
+export type StatusKind = 'arrived' | 'departed' | 'done' | 'settled' | 'issue'
+export const STATUS_META: Record<StatusKind, { label: string; title: string; icon: 'map-pin' | 'navigation' | 'flag' | 'check-circle' | 'alert-triangle'; color: string }> = {
   arrived: { label: 'Megérkeztem', title: 'Megérkeztem az Alzába', icon: 'map-pin', color: 'var(--success)' },
   departed: { label: 'Kiindultam', title: 'Kiindultam', icon: 'navigation', color: 'var(--primary)' },
   done: { label: 'Járat kész', title: 'Járat kész', icon: 'flag', color: 'var(--success)' },
+  settled: { label: 'Elszámoltam', title: 'Elszámoltam (visszáruk leadva)', icon: 'check-circle', color: 'var(--success)' },
   issue: { label: 'Hiba', title: 'Hiba', icon: 'alert-triangle', color: 'var(--danger)' },
 }
 

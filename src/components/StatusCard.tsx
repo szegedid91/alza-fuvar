@@ -84,7 +84,15 @@ export default function StatusCard() {
     window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
   }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
-  const lastOf = (kind: StatusKind) => [...(events ?? [])].reverse().find((e) => e.kind === kind) ?? null
+  // Egy jelzés akkor „teljesített”, ha a munkatárs visszatérve megerősítette, hogy tényleg elküldte a csoportba
+  const lastOf = (kind: StatusKind) => [...(events ?? [])].reverse().find((e) => e.kind === kind && e.confirmed_at) ?? null
+  const unconfirmed = [...(events ?? [])].reverse().find((e) => !e.confirmed_at) ?? null
+  async function confirmSent(ev: StatusEvent) {
+    const { error } = await supabase.from('status_events').update({ confirmed_at: new Date().toISOString() }).eq('id', ev.id)
+    if (error) { toast.error('Nem sikerült megerősíteni: ' + error.message); return }
+    toast.success(`${STATUS_META[ev.kind as StatusKind].label} — elküldve, rögzítve.`)
+    invalidate()
+  }
 
   // Rögzítés a háttérben (offline is sorba áll) — a WhatsApp-link maga a gomb
   async function record(kind: StatusKind, at: Date, note: string | null, photos: CapturedPhoto[]): Promise<string | null> {
@@ -162,8 +170,8 @@ export default function StatusCard() {
       const id = await record('issue', at, issueNote.trim() || null, takenPhotos)
       if (!id) return
       const res = await sharePhotos(takenPhotos.map((p) => p.blob), text, `hiba-${date}`)
-      if (res === 'shared') toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.')
-      else if (res === 'cancelled') toast.info('A megosztás megszakadt — a hiba rögzítve, a vezetők látják. Újra megoszthatod az alábbi gombbal.')
+      if (res === 'shared') { toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.'); await supabase.from('status_events').update({ confirmed_at: new Date().toISOString() }).eq('id', id); invalidate() }
+      else if (res === 'cancelled') toast.info('A megosztás megszakadt — a hiba rögzítve, de nem számít elküldöttnek. Újra megoszthatod az alábbi gombbal.')
       else toast.info('Ezen a készüléken a kép nem adható át a WhatsAppnak — a hiba fotóval rögzítve, a vezetők látják.')
       setIssueOpen(false); setIssueNote(''); setIssuePhotos([null])
     } finally {
@@ -171,7 +179,7 @@ export default function StatusCard() {
     }
   }
 
-  const simple: StatusKind[] = ['arrived', 'departed', 'done']
+  const simple: StatusKind[] = ['arrived', 'departed', 'done', 'settled']
 
   return (
     <div className="card stack" style={{ gap: 10 }}>
@@ -180,7 +188,7 @@ export default function StatusCard() {
         <span className="tiny muted">a csoportot a WhatsAppban választod</span>
       </div>
 
-      <div className="grid-3" style={{ gap: 8 }}>
+      <div className="grid-2" style={{ gap: 8 }}>
         {simple.map((kind) => {
           const meta = STATUS_META[kind]
           const last = lastOf(kind)
@@ -201,11 +209,25 @@ export default function StatusCard() {
               }}>
               <Icon name={meta.icon} />
               <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
-              <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>
+              <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : unconfirmed?.kind === kind ? 'megerősítésre vár' : '—'}</span>
             </a>
           )
         })}
       </div>
+
+      {unconfirmed && (
+        <div className="stack" style={{ gap: 6, padding: 10, borderRadius: 10, border: '2px solid var(--warning)', background: 'rgba(245,158,11,0.08)' }}>
+          <div className="small" style={{ fontWeight: 700 }}>
+            <Icon name="help-circle" size={16} style={{ verticalAlign: -3, color: 'var(--warning)' }} /> „{STATUS_META[unconfirmed.kind as StatusKind].label}” ({hhmm(unconfirmed.at)}) — elküldted a WhatsApp-csoportba?
+          </div>
+          <div className="tiny muted">Csak akkor számít teljesítettnek, ha megerősíted. Ha nem ment el, küldd újra a <Icon name="send" size={12} /> gombbal, vagy töröld.</div>
+          <div className="row" style={{ gap: 6 }}>
+            <button type="button" className="btn sm" style={{ flex: 2 }} onClick={() => void confirmSent(unconfirmed)}><Icon name="check" size={14} />Igen, elküldtem</button>
+            <a className="btn ghost sm" style={{ flex: 1, textDecoration: 'none' }} href={groupTarget(currentWorkspace, statusText(unconfirmed.kind as StatusKind, new Date(unconfirmed.at), name, plate, unconfirmed.note)).url} target="_blank" rel="noopener noreferrer"><Icon name="send" size={14} />Újra</a>
+            <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlöm" onConfirm={() => void undo(unconfirmed)} style={{ flex: 1 }}><Icon name="x" size={14} />Nem</ConfirmButton>
+          </div>
+        </div>
+      )}
 
       {!issueOpen ? (
         <button type="button" className="btn ghost" onClick={() => setIssueOpen(true)} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>
@@ -267,7 +289,7 @@ export default function StatusCard() {
                 <div className="row" style={{ gap: 6, minWidth: 0, alignItems: 'flex-start', flex: 1 }}>
                   <Icon name={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0, marginTop: 3 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div className="tiny"><strong>{hhmm(ev.at)}</strong> {meta.title}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}</div>
+                    <div className="tiny"><strong>{hhmm(ev.at)}</strong> {meta.title}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}{!ev.confirmed_at && <span className="badge" style={{ marginLeft: 6, fontSize: 10, color: 'var(--warning)' }}>nincs megerősítve</span>}</div>
                     {ev.note && (
                       <div className="tiny muted" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.note}</div>
                     )}
@@ -296,7 +318,7 @@ export default function StatusCard() {
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        A gomb rögzíti az időt (a vezetők látják) és megnyitja a WhatsAppot a kész üzenettel — válaszd ki a csoportot és küldd el. A hibánál a képek + a szöveg a megosztás-menün át mennek ugyanígy.
+        A gomb rögzíti az időt és megnyitja a WhatsAppot a kész üzenettel — válaszd ki a csoportot és küldd el, majd visszatérve erősítsd meg. Csak a megerősített jelzés számít teljesítettnek (a vezetők is így látják). A hibánál a képek + a szöveg a megosztás-menün át mennek; ha a megosztás lefut, az egyben a megerősítés.
       </p>
     </div>
   )
