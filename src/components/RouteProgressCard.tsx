@@ -8,6 +8,7 @@ import { useRouteStops } from '../hooks/useRouteStops'
 import { resolveNames } from '../lib/names'
 import { todayISO } from '../lib/labels'
 import Icon from './Icon'
+import { timeToMin, fmtTime, nowMin } from '../lib/routePlan'
 
 // Vezetői nézet: a mai járatok (beosztásból), ki viszi, és hanyadik címnél tart
 // a futár — a route_runs haladásból, realtime frissülve
@@ -28,7 +29,7 @@ export default function RouteProgressCard() {
         supabase.from('route_runs').select('route_id, round, car_id, current_index, updated_at')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date),
         supabase.from('cars').select('id, plate').eq('workspace_id', currentWorkspaceId!),
-        supabase.from('route_stop_logs').select('route_id, round, car_id, box_id, stop_index, done_at, box:alza_boxes(code, name)')
+        supabase.from('route_stop_logs').select('route_id, round, car_id, box_id, stop_index, done_at, late_minutes, delay_reason, box:alza_boxes(code, name)')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date).order('done_at'),
       ])
       if (error) throw error
@@ -44,7 +45,7 @@ export default function RouteProgressCard() {
         run: (runs ?? []).find((r) => r.route_id === s.route_id && r.round === (s.round ?? 1) && r.car_id === s.car_id) ?? null,
         // mikor adott le mindent az egyes boxokban
         logs: (logs ?? []).filter((l) => l.route_id === s.route_id && l.round === (s.round ?? 1) && l.car_id === s.car_id)
-          .map((l) => ({ stopIndex: l.stop_index, doneAt: l.done_at, label: (() => { const b = l.box as unknown as { code: string | null; name: string } | null; return b ? `${b.code ? b.code + ' · ' : ''}${b.name}` : '?' })() })),
+          .map((l) => ({ stopIndex: l.stop_index, doneAt: l.done_at, late: l.late_minutes, reason: l.delay_reason, label: (() => { const b = l.box as unknown as { code: string | null; name: string } | null; return b ? `${b.code ? b.code + ' · ' : ''}${b.name}` : '?' })() })),
       }))
     },
   })
@@ -61,6 +62,10 @@ export default function RouteProgressCard() {
         const done = stops.length > 0 && idx >= stops.length
         const cur = stops[idx]
         const pct = stops.length ? Math.round((idx / stops.length) * 100) : 0
+        // Késésben: az aktuális box határideje lejárt, még nincs leadva (a vezetők 5 percenként pusht is kapnak)
+        const dl = cur && !done ? timeToMin(cur.deadline) : null
+        const lateNow = dl != null ? nowMin() - dl : null
+        const lateLogs = s.logs.filter((l) => l.reason)
         return (
           <div key={s.id} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
             <div className="between" style={{ gap: 8 }}>
@@ -83,6 +88,14 @@ export default function RouteProgressCard() {
               <div className="tiny" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span><Icon name="navigation" size={12} />{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</span>
                 {s.run?.updated_at && <span className="muted">· lépett {hhmm(s.run.updated_at)}</span>}
+                {cur.deadline && <span className={lateNow != null && lateNow > 0 ? '' : 'muted'} style={lateNow != null && lateNow > 0 ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>· határidő {fmtTime(cur.deadline)}{lateNow != null && lateNow > 0 ? ` — késésben ${lateNow} perc` : ''}</span>}
+              </div>
+            )}
+            {lateLogs.length > 0 && (
+              <div className="stack" style={{ gap: 2 }}>
+                {lateLogs.map((l, i) => (
+                  <div key={i} className="tiny" style={{ color: 'var(--danger)' }}><Icon name="clock" size={11} /> {l.stopIndex}. {l.label} · +{l.late} perc ({hhmm(l.doneAt)}): <strong>{l.reason}</strong></div>
+                ))}
               </div>
             )}
             {s.logs.length > 0 && (
@@ -93,7 +106,7 @@ export default function RouteProgressCard() {
                 {openId === s.id && (
                   <div className="stack" style={{ gap: 2 }}>
                     {s.logs.map((l, i) => (
-                      <div key={i} className="between tiny"><span><Icon name="check-circle" size={11} style={{ color: 'var(--success)' }} /> {l.stopIndex}. {l.label}</span><span className="muted num">{hhmm(l.doneAt)}</span></div>
+                      <div key={i} className="between tiny"><span><Icon name="check-circle" size={11} style={{ color: l.reason ? 'var(--danger)' : 'var(--success)' }} /> {l.stopIndex}. {l.label}{l.reason ? <span style={{ color: 'var(--danger)' }}> · +{l.late} p</span> : null}</span><span className="muted num">{hhmm(l.doneAt)}</span></div>
                     ))}
                   </div>
                 )}

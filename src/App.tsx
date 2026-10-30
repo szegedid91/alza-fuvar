@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
+import { lazyRetry } from './lib/lazyRetry'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import InvitePage from './pages/Invite'
@@ -16,31 +17,31 @@ import Skeleton from './components/Skeleton'
 // akkor, amikor először megnyitják. A sofőr így nem hordja magával a
 // beosztás-szerkesztőt/bért/statisztikát, a vezető pedig a QR-olvasót.
 // A service worker a darabokat is előre cache-eli, így offline is működnek.
-const Scan = lazy(() => import('./pages/Scan'))
-const Inspection = lazy(() => import('./pages/Inspection'))
-const Fuel = lazy(() => import('./pages/Fuel'))
-const Incident = lazy(() => import('./pages/Incident'))
-const Cleaning = lazy(() => import('./pages/Cleaning'))
-const MySchedule = lazy(() => import('./pages/MySchedule'))
-const CarIssues = lazy(() => import('./pages/CarIssues'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Reports = lazy(() => import('./pages/Reports'))
-const FleetMap = lazy(() => import('./pages/FleetMap'))
-const Approvals = lazy(() => import('./pages/Approvals'))
-const Members = lazy(() => import('./pages/Members'))
-const Cars = lazy(() => import('./pages/Cars'))
-const ShiftEditor = lazy(() => import('./pages/ShiftEditor'))
-const Adjustments = lazy(() => import('./pages/Adjustments'))
-const Evidence = lazy(() => import('./pages/Evidence'))
-const Payroll = lazy(() => import('./pages/Payroll'))
-const Statistics = lazy(() => import('./pages/Statistics'))
-const PhotoReview = lazy(() => import('./pages/PhotoReview'))
-const History = lazy(() => import('./pages/History'))
-const AuditLog = lazy(() => import('./pages/AuditLog'))
-const BoxSheet = lazy(() => import('./pages/BoxSheet'))
-const BoxSheets = lazy(() => import('./pages/BoxSheets'))
-const RoutesPage = lazy(() => import('./pages/Routes'))
-const Boxes = lazy(() => import('./pages/Boxes'))
+const Scan = lazyRetry(() => import('./pages/Scan'), 'Scan')
+const Inspection = lazyRetry(() => import('./pages/Inspection'), 'Inspection')
+const Fuel = lazyRetry(() => import('./pages/Fuel'), 'Fuel')
+const Incident = lazyRetry(() => import('./pages/Incident'), 'Incident')
+const Cleaning = lazyRetry(() => import('./pages/Cleaning'), 'Cleaning')
+const MySchedule = lazyRetry(() => import('./pages/MySchedule'), 'MySchedule')
+const CarIssues = lazyRetry(() => import('./pages/CarIssues'), 'CarIssues')
+const Dashboard = lazyRetry(() => import('./pages/Dashboard'), 'Dashboard')
+const Reports = lazyRetry(() => import('./pages/Reports'), 'Reports')
+const FleetMap = lazyRetry(() => import('./pages/FleetMap'), 'FleetMap')
+const Approvals = lazyRetry(() => import('./pages/Approvals'), 'Approvals')
+const Members = lazyRetry(() => import('./pages/Members'), 'Members')
+const Cars = lazyRetry(() => import('./pages/Cars'), 'Cars')
+const ShiftEditor = lazyRetry(() => import('./pages/ShiftEditor'), 'ShiftEditor')
+const Adjustments = lazyRetry(() => import('./pages/Adjustments'), 'Adjustments')
+const Evidence = lazyRetry(() => import('./pages/Evidence'), 'Evidence')
+const Payroll = lazyRetry(() => import('./pages/Payroll'), 'Payroll')
+const Statistics = lazyRetry(() => import('./pages/Statistics'), 'Statistics')
+const PhotoReview = lazyRetry(() => import('./pages/PhotoReview'), 'PhotoReview')
+const History = lazyRetry(() => import('./pages/History'), 'History')
+const AuditLog = lazyRetry(() => import('./pages/AuditLog'), 'AuditLog')
+const BoxSheet = lazyRetry(() => import('./pages/BoxSheet'), 'BoxSheet')
+const BoxSheets = lazyRetry(() => import('./pages/BoxSheets'), 'BoxSheets')
+const RoutesPage = lazyRetry(() => import('./pages/Routes'), 'Routes')
+const Boxes = lazyRetry(() => import('./pages/Boxes'), 'Boxes')
 
 function FullScreenSpinner() {
   return <div className="center-screen"><div className="spinner" /></div>

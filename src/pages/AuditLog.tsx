@@ -30,6 +30,7 @@ const ENTITY_ICON: Record<string, IconName> = {
 
 // Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
 const FIELD_LABEL: Record<string, string> = {
+  eta: 'Tervezett érkezés', etd: 'Tervezett indulás', deadline: 'Határidő', planned_start: 'Tervezett indulás', planned_end: 'Tervezett vége', plan_imported_at: 'Terv importálva', plan_source: 'Terv forrása', late_minutes: 'Késés (perc)', delay_reason: 'Késés oka',
   fuel_type: 'Hajtás', depot_name: 'Raktár neve', depot_address: 'Raktár címe', depot_lat: 'Raktár szélesség', depot_lng: 'Raktár hosszúság',
   box_id: 'Box', moved_from_route_id: 'Eredeti járat', moved_from_order: 'Eredeti hely',
   driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Járat', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
@@ -464,34 +465,52 @@ function ClientErrors() {
     queryFn: async () => {
       const { data, error } = await supabase.from('client_errors')
         .select('id, user_id, path, message, build, user_agent, created_at')
-        .order('created_at', { ascending: false }).limit(30)
+        .order('created_at', { ascending: false }).limit(100)
       if (error) throw error
       const rows = data ?? []
       const names = await resolveNames(rows.map((r) => r.user_id))
-      return rows.map((r) => ({ ...r, _name: r.user_id ? names[r.user_id] ?? null : null }))
+      // Ugyanaz a hiba ugyanazon az oldalon egy sor, darabszámmal — így látszik, mi ismétlődik
+      type Group = { key: string; message: string; path: string | null; count: number; last: string; first: string; names: string[]; build: string | null; devices: Set<string> }
+      const groups = new Map<string, Group>()
+      for (const r of rows) {
+        const key = `${r.path ?? ''}|${r.message.replace(/^\w+(\.get is not a function)/, 'x$1').slice(0, 160)}`
+        const nm = r.user_id ? names[r.user_id] ?? 'Ismeretlen' : 'Ismeretlen'
+        const dev = /iPhone|iPad/.test(r.user_agent ?? '') ? 'iPhone' : /Android/.test(r.user_agent ?? '') ? 'Android' : /Macintosh/.test(r.user_agent ?? '') ? 'Mac' : /Windows/.test(r.user_agent ?? '') ? 'Windows' : 'egyéb'
+        const g = groups.get(key)
+        if (g) { g.count++; g.first = r.created_at; if (!g.names.includes(nm)) g.names.push(nm); g.devices.add(dev) }
+        else groups.set(key, { key, message: r.message, path: r.path, count: 1, last: r.created_at, first: r.created_at, names: [nm], build: r.build, devices: new Set([dev]) })
+      }
+      return [...groups.values()]
     },
   })
   const [open, setOpen] = useState(false)
   if (!data || data.length === 0) return null
+  const total = data.reduce((a, g) => a + g.count, 0)
   return (
     <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
       <div className="between">
-        <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--warning)' }} />App-hibák az eszközökről ({data.length})</div>
+        <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" style={{ color: 'var(--warning)' }} />App-hibák az eszközökről ({data.length} féle · {total} db)</div>
         <button className="btn ghost sm auto" onClick={() => setOpen((v) => !v)}>{open ? 'Elrejt' : 'Mutat'}</button>
       </div>
-      {open && data.map((r) => (
-        <div key={r.id} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          <div className="between">
-            <span className="small" style={{ fontWeight: 700 }}>{r._name ?? 'Ismeretlen'} · {r.path ?? '—'}</span>
-            <span className="tiny muted">{formatDateTime(r.created_at)}</span>
-          </div>
-          <div className="tiny" style={{ color: 'var(--error-text)', wordBreak: 'break-word' }}>{r.message}</div>
-          <div className="tiny muted">
-            {r.build ? `build: ${new Date(r.build).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}` : ''}
-            {r.user_agent ? ` · ${r.user_agent.slice(0, 80)}` : ''}
-          </div>
-        </div>
-      ))}
+      {open && (
+        <>
+          <div className="tiny muted">Az utolsó 100 bejegyzés, hibánként összevonva. Ami csak egyszer, egy eszközön fordult elő, az általában nem programhiba. 30 nap után törlődnek.</div>
+          {data.map((g) => (
+            <div key={g.key} className="stack" style={{ gap: 2, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+              <div className="between">
+                <span className="small" style={{ fontWeight: 700 }}>{g.count > 1 && <span className="badge warning" style={{ marginRight: 6 }}>{g.count}×</span>}{g.path ?? '—'}</span>
+                <span className="tiny muted">{formatDateTime(g.last)}</span>
+              </div>
+              <div className="tiny" style={{ color: 'var(--error-text)', wordBreak: 'break-word' }}>{g.message}</div>
+              <div className="tiny muted">
+                {g.names.join(', ')} · {[...g.devices].join(', ')}
+                {g.build ? ` · build: ${new Date(g.build).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}` : ''}
+                {g.count > 1 ? ` · először ${formatDateTime(g.first)}` : ''}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 }

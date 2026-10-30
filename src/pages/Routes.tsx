@@ -10,6 +10,7 @@ import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops } from '../hooks/useRouteStops'
 import RouteStopsEditor from '../components/RouteStopsEditor'
 import ReliefCard from '../components/ReliefCard'
+import RoutePlanImport from '../components/RoutePlanImport'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 
@@ -161,6 +162,7 @@ export default function Routes() {
     <div className="stack">
       <h2>Járatok</h2>
       <p className="small muted" style={{ margin: 0 }}>A Box-járatok (R, G, I…) és a hozzájuk tartozó AlzaBoxok sorrendje. A beosztásban körönként ezekből választható, ki melyik járatot viszi; a futár a kezdőlapi járat-kártyán ebben a sorrendben navigál boxról boxra, és a módosításról pusht kap.</p>
+      <RoutePlanImport />
       <RoutesCard />
       <ReliefCard />
       <DepotCard />

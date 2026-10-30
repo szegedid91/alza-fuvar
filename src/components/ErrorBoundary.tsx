@@ -16,7 +16,10 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    void reportClientError(error.message, `${error.stack ?? ''}\n--- component stack ---${info.componentStack ?? ''}`)
+    // Elavult chunk frissítés után (a lazyRetry újratölt) — nem programhiba, ne kerüljön a Naplóba
+    if (!/dynamically imported module|Importing a module script failed/i.test(error.message)) {
+      void reportClientError(error.message, `${error.stack ?? ''}\n--- component stack ---${info.componentStack ?? ''}`)
+    }
   }
 
   private reload = () => window.location.reload()

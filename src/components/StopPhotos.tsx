@@ -18,8 +18,8 @@ type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[];
 // A box kijelzőjének fotói az appban: a kép az adatbázisba kerül, az AI kiolvassa a
 // számokat (előtölti a mezőket — a futár ellenőrzi), és ugyanaz a kép egy koppintással
 // a WhatsApp-csoportba megy a kész szöveggel.
-export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
-  stop: BoxStop; boxLabel: string; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
+export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch }: {
+  stop: BoxStop; boxLabel: string; boxAddress?: string | null; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
 }) {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
@@ -108,8 +108,11 @@ export default function StopPhotos({ stop, boxLabel, courierName, onPatch }: {
   // 2) küldés a csoportba (a telefon megosztás-menüjén át, mint a hibánál)
   const share = useMutation({
     mutationFn: async () => {
-      const parts = STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`)
-      const text = `${boxLabel} – ${new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })} – ${courierName}${parts.length ? ` – ${parts.join(', ')}` : ''}${stop.note ? ` – ${stop.note}` : ''}`
+      // Első sor: box, cím, idő, név — alatta soronként a számok, végül a megjegyzés
+      const head = [boxLabel, boxAddress, new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }), courierName].filter((x): x is string => !!x).join(' – ')
+      const lines = [head, ...STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`)]
+      if (stop.note) lines.push(`Megjegyzés: ${stop.note}`)
+      const text = lines.join('\n')
       const blobs = [...taken.map((p) => p.blob), ...savedPaths.filter((sp) => !taken.some((p) => p.path === sp)).map((sp) => savedBlobs[sp]).filter((b): b is Blob => !!b)]
       const res = await sharePhotos(blobs, text, `box-${stop.box_code ?? 'foto'}`)
       if (res === 'shared') await supabase.from('box_sheet_stop_photos').update({ sent_at: new Date().toISOString() }).eq('stop_id', stop.id).is('sent_at', null)

@@ -9,6 +9,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
+import { timeToMin, fmtTime, nowMin } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
@@ -76,7 +77,7 @@ export default function RouteCard() {
     },
   })
   const setIndex = useMutation({
-    mutationFn: async ({ routeId, round, carId, index, done }: { routeId: string; round: number; carId: string; index: number; done?: { boxId: string; stopIndex: number }[] }) => {
+    mutationFn: async ({ routeId, round, carId, index, done }: { routeId: string; round: number; carId: string; index: number; done?: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] }) => {
       const { error } = await supabase.from('route_runs').upsert(
         { workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, current_index: index, updated_by: profile!.id, updated_at: new Date().toISOString() },
         { onConflict: 'work_date,route_id,round,car_id' },
@@ -86,6 +87,7 @@ export default function RouteCard() {
       if (done?.length) {
         const { error: logErr } = await supabase.from('route_stop_logs').insert(done.map((d) => ({
           workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, user_id: profile!.id, box_id: d.boxId, stop_index: d.stopIndex,
+          late_minutes: d.lateMinutes ?? null, delay_reason: d.delayReason ?? null,
         })))
         if (logErr) throw logErr
       }
@@ -103,9 +105,11 @@ export default function RouteCard() {
         const stops = stopsByRoute?.[sh.route_id] ?? []
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
         const idx = Math.min(run?.current_index ?? 0, stops.length)
-        const go = (index: number) => {
+        const go = (index: number, late?: { minutes: number; reason: string }) => {
           // ami az aktuális és az új hely között van, az leadva (általában egy box)
-          const done = index > idx ? stops.slice(idx, index).map((s, k) => ({ boxId: s.box_id, stopIndex: idx + k + 1 })) : []
+          const done: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] = index > idx ? stops.slice(idx, index).map((s, k) => ({ boxId: s.box_id, stopIndex: idx + k + 1 })) : []
+          // a késés oka az aktuális (utolsóként leadott) boxhoz tartozik — a vezetők pusht kapnak róla
+          if (late && done.length) done[done.length - 1] = { ...done[done.length - 1], lateMinutes: late.minutes, delayReason: late.reason }
           setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, done })
         }
         return (
@@ -118,10 +122,13 @@ export default function RouteCard() {
   )
 }
 
+// Gyakori késés-okok (egy koppintás); szabad szöveg is írható
+const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
+
 // A járat-kártya megjelenése (egy járat egy körön)
 function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
-  go: (index: number) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
+  go: (index: number, late?: { minutes: number; reason: string }) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
   // A raktár: az utolsó box után ide navigál a futár (az admin állítja a Járatok oldalon)
   depot: Depot
   // Box-lap csak eltérésnél: a „Kész, következő” mindig mehet; ha ehhez a boxhoz már van sor a mai lapon, jelezzük
@@ -131,7 +138,16 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
   const cur = stops[idx]
   // A box adatlapja (fotó, „hol található” leírás, megjegyzés) a navigálás mellett egy koppintásra
   const [showBox, setShowBox] = useState(false)
-  useEffect(() => { setShowBox(false) }, [idx])
+  // Késés: ha a terv határideje (eddig kell végezni a boxban) lejárt, a leadáskor meg kell adni az okot
+  const [late, setLate] = useState<number | null>(null)
+  const [reason, setReason] = useState('')
+  useEffect(() => { setShowBox(false); setLate(null); setReason('') }, [idx])
+  const deadlineMin = timeToMin(cur?.deadline)
+  const lateNow = deadlineMin != null ? nowMin() - deadlineMin : null
+  const finish = () => {
+    if (lateNow != null && lateNow > 0) { setLate(lateNow); return }
+    go(idx + 1)
+  }
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
             <div className="between">
@@ -164,6 +180,12 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
                   <div className="small muted">{cur.box.address}</div>
+                  {(cur.eta || cur.deadline) && (
+                    <div className="tiny" style={{ marginTop: 4, color: lateNow != null && lateNow > 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
+                      <Icon name="clock" size={12} />{cur.eta ? ` terv: érkezés ${fmtTime(cur.eta)}` : ''}{cur.deadline ? `${cur.eta ? ' ·' : ''} határidő ${fmtTime(cur.deadline)}` : ''}
+                      {lateNow != null && lateNow > 0 ? <strong> · késésben {lateNow} perc</strong> : null}
+                    </div>
+                  )}
                   {cur.box.description && <div className="tiny muted" style={{ marginTop: 4 }}><Icon name="info" size={12} />{cur.box.description}</div>}
                   {cur.box.notes && <div className="small" style={{ marginTop: 6, padding: '6px 8px', borderRadius: 8, background: 'var(--warning-ghost, rgba(245,158,11,0.12))', color: 'var(--warning)', fontWeight: 600 }}><Icon name="key" size={14} />{cur.box.notes}</div>}
                 </div>
@@ -180,8 +202,24 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy} onClick={() => go(idx + 1)} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn secondary sm" disabled={busy || late != null} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
+                {late != null && (
+                  <div className="stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--danger)', background: 'var(--danger-ghost, rgba(239,68,68,0.08))' }}>
+                    <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {fmtTime(cur.deadline)} volt. Mi az oka?</div>
+                    <div className="chips">
+                      {LATE_REASONS.map((r) => (
+                        <button key={r} type="button" className={`chip ${reason === r ? 'active' : ''}`} onClick={() => setReason(r)}>{r}</button>
+                      ))}
+                    </div>
+                    <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="vagy írd be röviden…" />
+                    <div className="row" style={{ gap: 6 }}>
+                      <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={() => { setLate(null); setReason('') }}>Mégse</button>
+                      <button type="button" className="btn sm" style={{ flex: 2 }} disabled={busy || !reason.trim()} onClick={() => go(idx + 1, { minutes: late, reason: reason.trim() })}><Icon name="send" size={14} />Mentés és következő</button>
+                    </div>
+                    <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okról.</div>
+                  </div>
+                )}
                 {onFillSheet && (sheetFilled
                   ? <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Ehhez a boxhoz van sor a mai Box-lapon. <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={onFillSheet}>Megnyitás</button></div>
                   : <button type="button" className="btn ghost sm" style={{ borderColor: 'var(--warning)' }} onClick={onFillSheet}>
@@ -203,6 +241,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                         style={{ gap: 6, alignItems: 'center', background: i === idx ? 'var(--primary-ghost)' : 'none', border: 'none', borderRadius: 6, padding: '4px 6px', color: 'inherit', textAlign: 'left', cursor: 'pointer', opacity: i < idx ? 0.6 : 1 }}>
                         <Icon name={i < idx ? 'check-circle' : i === idx ? 'navigation' : 'map-pin'} size={14} style={{ color: i < idx ? 'var(--success)' : i === idx ? 'var(--primary)' : 'var(--text-dim)' }} />
                         <span className="tiny" style={{ flex: 1, textDecoration: i < idx ? 'line-through' : 'none' }}>{i + 1}. {s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</span>
+                        {s.eta && <span className="tiny muted num">{fmtTime(s.eta)}</span>}
                       </button>
                     ))}
                   </div>

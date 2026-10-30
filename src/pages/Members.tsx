@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import type { Enums, Tables } from '../lib/database.types'
-import { roleLabel, statusLabel, formatDateTime } from '../lib/labels'
+import { roleLabel, statusLabel, formatDateTime, formatDate } from '../lib/labels'
 import { qrDataUrl } from '../lib/qr'
 import { telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
@@ -47,12 +47,21 @@ function InviteCard() {
     const { data, error } = await supabase.functions.invoke('manage-invite', { body })
     if (error) {
       let msg = 'A művelet nem sikerült'
-      try { const b = await (error as { context?: Response }).context?.json(); if (b?.error) msg = b.error } catch { /* marad az általános */ }
-      throw new Error(msg)
+      let needsConfirm: { shifts: number; first: string; last: string } | null = null
+      try {
+        const b = await (error as { context?: Response }).context?.json()
+        if (b?.error) msg = b.error
+        if (b?.needs_confirm) needsConfirm = { shifts: b.shifts, first: b.first, last: b.last }
+      } catch { /* marad az általános */ }
+      const err = new Error(msg) as Error & { needsConfirm?: typeof needsConfirm }
+      err.needsConfirm = needsConfirm
+      throw err
     }
     if (data?.error) throw new Error(data.error)
     return data
   }
+  // Helyőrző törlése, aki már szerepel a beosztásban: a szerver 409-cel jelez, itt megerősítést kérünk
+  const [inviteWarn, setInviteWarn] = useState<{ id: string; name: string; shifts: number; first: string; last: string } | null>(null)
   const create = useMutation({
     mutationFn: async () => {
       const em = email.trim().toLowerCase()
@@ -70,11 +79,20 @@ function InviteCard() {
   })
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { await invokeInvite({ action: 'delete', invite_id: id }) },
+    mutationFn: async ({ id, force = false }: { id: string; force?: boolean }) => {
+      try { await invokeInvite({ action: 'delete', invite_id: id, force }) }
+      catch (e) {
+        const nc = (e as Error & { needsConfirm?: { shifts: number; first: string; last: string } | null }).needsConfirm
+        if (nc) { const inv = (invites ?? []).find((i) => i.id === id); setInviteWarn({ id, name: inv?.full_name || inv?.email || 'A munkatárs', ...nc }); return }
+        throw e
+      }
+      setInviteWarn(null)
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['invites'] })
       void qc.invalidateQueries({ queryKey: ['ws-members'] })
       void qc.invalidateQueries({ queryKey: ['members'] })
+      void qc.invalidateQueries({ queryKey: ['shifts'] })
     },
     onError: (e) => setError(e instanceof Error ? e.message : 'A törlés nem sikerült'),
   })
@@ -203,9 +221,23 @@ function InviteCard() {
                 <div className="tiny muted">Olvastasd be a telefonjával — a linken csak jelszót kell megadnia.</div>
               </div>
             )}
-            <ConfirmButton className="btn ghost sm auto" confirmLabel={inv.placeholder_id && !inv.used_at ? 'Törlés (a beosztásból is kikerül)' : 'Törlés'} disabled={remove.isPending} onConfirm={() => remove.mutate(inv.id)}>
+            <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés" disabled={remove.isPending} onConfirm={() => remove.mutate({ id: inv.id })}>
               Törlés
             </ConfirmButton>
+            {inviteWarn?.id === inv.id && (
+              <div className="card stack" style={{ borderColor: 'var(--danger)', gap: 6 }}>
+                <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}><Icon name="alert-triangle" />{inviteWarn.name} már szerepel a beosztásban</div>
+                <p className="small" style={{ margin: 0 }}>
+                  <strong>{inviteWarn.shifts} napon</strong> van beosztva ({formatDate(inviteWarn.first)} – {formatDate(inviteWarn.last)}). Ha törlöd, ezekből a napokból kikerül, és a bérszámításban sem jelenik meg. Ha a munkatárs mégis dolgozik, inkább hagyd meg a meghívót.
+                </p>
+                <div className="btn-grid">
+                  <button type="button" className="btn secondary sm" onClick={() => setInviteWarn(null)}>Mégse, marad</button>
+                  <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés a beosztásból is" disabled={remove.isPending} onConfirm={() => remove.mutate({ id: inv.id, force: true })}>
+                    <Icon name="trash" />Törlés mindenhonnan
+                  </ConfirmButton>
+                </div>
+              </div>
+            )}
             <div className="divider" />
           </div>
         )

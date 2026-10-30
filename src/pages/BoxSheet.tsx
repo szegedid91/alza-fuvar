@@ -378,7 +378,7 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
-          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} courierName={courierName} onPatch={onPatch} />
+          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
               <Icon name="trash" size={16} />Megálló törlése
