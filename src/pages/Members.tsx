@@ -11,6 +11,7 @@ import { telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
+import MemberDataSummary from '../components/MemberDataSummary'
 
 type Profile = Tables<'profiles'>
 type Invite = Tables<'invites'>
@@ -231,6 +232,7 @@ function InviteCard() {
                 <p className="small" style={{ margin: 0 }}>
                   <strong>{inviteWarn.shifts} napon</strong> van beosztva ({formatDate(inviteWarn.first)} – {formatDate(inviteWarn.last)}). Ha törlöd, ezekből a napokból kikerül, és a bérszámításban sem jelenik meg. Ha a munkatárs mégis dolgozik, inkább hagyd meg a meghívót.
                 </p>
+                {inv.placeholder_id && <MemberDataSummary userId={inv.placeholder_id} />}
                 <div className="btn-grid">
                   <button type="button" className="btn secondary sm" onClick={() => setInviteWarn(null)}>Mégse, marad</button>
                   <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés a beosztásból is" disabled={remove.isPending} onConfirm={() => remove.mutate({ id: inv.id, force: true })}>
@@ -528,6 +530,7 @@ export default function Members() {
                               eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak azt szeretnéd,
                               hogy ne tudjon belépni, válaszd a <strong>Letiltást</strong>: az adatok megmaradnak.
                             </p>
+                            <MemberDataSummary userId={deleteWarn.id} />
                             <div className="btn-grid">
                               <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
                               <button className="btn sm" disabled={setStatus.isPending}

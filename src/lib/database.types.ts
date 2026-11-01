@@ -2343,6 +2343,7 @@ export type Database = {
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }
+      member_data_summary: { Args: { target_id: string }; Returns: Json }
       merge_alza_box_duplicates: { Args: never; Returns: number }
       partner_decide_swap: {
         Args: { p_accept: boolean; p_request_id: string }
