@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { formatDateTime } from '../lib/labels'
@@ -18,6 +19,7 @@ type Session = { id: string; user_id: string; started_at: string; last_seen_at: 
 
 function useSessions(active: boolean) {
   const { currentWorkspaceId } = useWorkspace()
+  const { profile } = useAuth()
   useRealtimeInvalidate(currentWorkspaceId, ['help_sessions'], [['help-sessions']])
   return useQuery({
     queryKey: ['help-sessions', currentWorkspaceId, active ? 'list-active' : 'list-ended'],
@@ -29,7 +31,7 @@ function useSessions(active: boolean) {
       const { data, error } = await q
       if (error) throw error
       const names = await resolveNames((data ?? []).map((r) => r.user_id))
-      return (data ?? []).map((r) => ({ ...r, name: names[r.user_id] ?? '?' }))
+      return (data ?? []).filter((r) => r.user_id !== profile?.id).map((r) => ({ ...r, name: names[r.user_id] ?? '?' }))
     },
   })
 }
@@ -46,7 +48,7 @@ function SessionList() {
   return (
     <div className="stack">
       <h2>Élő nézet</h2>
-      <p className="small muted" style={{ margin: 0 }}>A futár a kezdőlapon az „Elakadtam — segítséget kérek” gombbal indítja. Amíg fut, itt látod, amit ő lát, rá tudsz mutatni egy gombra, és üzenhetsz neki. A lezárt kérésnél az utolsó pillanatkép marad meg (30 napig).</p>
+      <p className="small muted" style={{ margin: 0 }}>A futár (vagy egy vezető) a kezdőlapon az „Elakadtam — segítséget kérek” gombbal indítja; a vezetők kérését az adminok kapják. Amíg fut, itt látod, amit ő lát, rá tudsz mutatni egy gombra, és üzenhetsz neki. A lezárt kérésnél az utolsó pillanatkép marad meg (30 napig).</p>
       <div className="card stack" style={{ gap: 6 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="life-buoy" />Most kér segítséget ({active?.length ?? 0})</div>
         {(active ?? []).length === 0 && <div className="tiny muted">Jelenleg senki.</div>}

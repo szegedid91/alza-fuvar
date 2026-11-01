@@ -139,6 +139,7 @@ export default function Home() {
       )}
 
       {isManagerOrAdmin && <HelpSessionsCard />}
+      {isManagerOrAdmin && <HelpRequestCard compact />}
       {isManagerOrAdmin && (photoHelp?.length ?? 0) > 0 && (
         <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
           <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>

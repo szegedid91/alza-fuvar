@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import Icon from './Icon'
@@ -9,6 +10,7 @@ import Icon from './Icon'
 // Vezetői kezdőlap / Áttekintés: élő segítségkérések
 export default function HelpSessionsCard() {
   const { currentWorkspaceId } = useWorkspace()
+  const { profile } = useAuth()
   useRealtimeInvalidate(currentWorkspaceId, ['help_sessions'], [['help-sessions']])
   const { data } = useQuery({
     queryKey: ['help-sessions', currentWorkspaceId, 'active'],
@@ -19,7 +21,7 @@ export default function HelpSessionsCard() {
         .eq('workspace_id', currentWorkspaceId!).is('ended_at', null).gt('last_seen_at', new Date(Date.now() - 90_000).toISOString()).order('started_at', { ascending: false })
       if (error) throw error
       const names = await resolveNames((data ?? []).map((r) => r.user_id))
-      return (data ?? []).map((r) => ({ ...r, name: names[r.user_id] ?? '?' }))
+      return (data ?? []).filter((r) => r.user_id !== profile?.id).map((r) => ({ ...r, name: names[r.user_id] ?? '?' }))
     },
   })
   if (!data || data.length === 0) return null

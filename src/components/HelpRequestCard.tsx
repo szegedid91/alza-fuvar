@@ -10,6 +10,7 @@ export default function HelpRequestCard({ compact = false }: { compact?: boolean
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const s = useHelpShare()
+  const isLeader = profile?.role === 'manager' || profile?.role === 'admin'
   const [open, setOpen] = useState(false)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,8 +32,8 @@ export default function HelpRequestCard({ compact = false }: { compact?: boolean
   }
   return (
     <div className="card stack" style={{ borderColor: 'var(--warning)', gap: 8 }}>
-      <div className="card-title" style={{ margin: 0 }}><Icon name="life-buoy" />Segítségkérés a vezetőtől</div>
-      <p className="small muted" style={{ margin: 0 }}>A vezető értesítést kap, és amíg le nem állítod, <strong>látja, amit az appban látsz</strong> (az oldalt és a mezőket, a kamera képét nem). Rá tud mutatni, hova koppints, és üzenhet. Bármikor leállíthatod a felső sávon.</p>
+      <div className="card-title" style={{ margin: 0 }}><Icon name="life-buoy" />{isLeader ? 'Segítségkérés az admintól' : 'Segítségkérés a vezetőtől'}</div>
+      <p className="small muted" style={{ margin: 0 }}>{isLeader ? 'Az adminok értesítést kapnak' : 'A vezető értesítést kap'}, és amíg le nem állítod, <strong>látja, amit az appban látsz</strong> (az oldalt és a mezőket, a kamera képét nem). Rá tud mutatni, hova koppints, és üzenhet. Bármikor leállíthatod a felső sávon.</p>
       <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Röviden: miben akadtál el? (nem kötelező)" maxLength={200} />
       {err && <div className="alert error">{err}</div>}
       <div className="btn-grid">
