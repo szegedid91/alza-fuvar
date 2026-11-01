@@ -15,8 +15,8 @@
   --radius: 14px;
   --radius-sm: 10px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --bar-bg: rgba(11, 18, 32, 0.9);
-  --nav-bg: rgba(19, 28, 46, 0.96);
+  --bar-bg: #0b1220;
+  --nav-bg: #131c2e;
   --on-primary: #04120f;
   --error-text: #fca5a5;
   --success-text: #86efac;
@@ -41,8 +41,8 @@
   --warning: #b45309;
   --success: #15803d;
   --shadow: 0 6px 18px rgba(23, 34, 47, 0.1);
-  --bar-bg: rgba(255, 255, 255, 0.88);
-  --nav-bg: rgba(255, 255, 255, 0.96);
+  --bar-bg: #ffffff;
+  --nav-bg: #ffffff;
   --on-primary: #ffffff;
   --error-text: #b91c1c;
   --success-text: #15803d;
