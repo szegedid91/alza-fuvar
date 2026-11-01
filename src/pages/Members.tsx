@@ -310,6 +310,7 @@ export default function Members() {
       if (m) {
         const who = (members ?? []).find((x) => x.id === vars.id)
         setDeleteWarn({ id: vars.id, name: who?.full_name || who?.email || 'a munkatárs', details: m[1] })
+        setOpenId(vars.id)
         setActionError(null)
       } else {
         setDeleteWarn(null)
@@ -416,36 +417,6 @@ export default function Members() {
 
       {actionError && <div className="alert error">{actionError}</div>}
 
-      {deleteWarn && (
-        <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
-          <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
-            <Icon name="alert-triangle" />{deleteWarn.name} törlése adatvesztéssel jár
-          </div>
-          <p className="small" style={{ margin: 0 }}>
-            Hozzá tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
-            eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak azt szeretnéd,
-            hogy ne tudjon belépni, válaszd a <strong>Letiltást</strong>: az adatok megmaradnak.
-          </p>
-          <div className="btn-grid">
-            <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
-            <button
-              className="btn sm"
-              disabled={setStatus.isPending}
-              onClick={() => { setStatus.mutate({ id: deleteWarn.id, status: 'disabled' }); setDeleteWarn(null) }}
-            >
-              <Icon name="ban" />Inkább letiltom
-            </button>
-          </div>
-          <ConfirmButton
-            className="btn danger sm"
-            confirmLabel="Igen, törlés az adatokkal együtt"
-            disabled={removeMember.isPending}
-            onConfirm={() => removeMember.mutate({ id: deleteWarn.id, force: true })}
-          >
-            <Icon name="trash" />Végleges törlés az adataival együtt
-          </ConfirmButton>
-        </div>
-      )}
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
         <div className="empty"><span className="ico"><Icon name="users" size={40} /></span>Még nincs jóváhagyott tag ezen a munkaterületen.</div>
@@ -546,6 +517,29 @@ export default function Members() {
                           A fiók megszűnik, a munkatárs nem tud belépni. Ha van hozzá munka- vagy
                           bér-adat, előbb figyelmeztetést kapsz.
                         </div>
+                        {deleteWarn?.id === m.id && (
+                          <div className="card stack" style={{ borderColor: 'var(--danger)', marginTop: 8 }} ref={(el) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })}>
+                            <div className="card-title" style={{ color: 'var(--danger)', margin: 0 }}>
+                              <Icon name="alert-triangle" />{deleteWarn.name} törlése adatvesztéssel jár
+                            </div>
+                            <p className="small" style={{ margin: 0 }}>
+                              Hozzá tartozik: <strong>{deleteWarn.details}</strong>. A végleges törlés ezeket is
+                              eltávolítja — a korábbi bérszámítás és az előzmények módosulnak. Ha csak azt szeretnéd,
+                              hogy ne tudjon belépni, válaszd a <strong>Letiltást</strong>: az adatok megmaradnak.
+                            </p>
+                            <div className="btn-grid">
+                              <button className="btn secondary sm" onClick={() => setDeleteWarn(null)}>Mégse</button>
+                              <button className="btn sm" disabled={setStatus.isPending}
+                                onClick={() => { setStatus.mutate({ id: deleteWarn.id, status: 'disabled' }); setDeleteWarn(null) }}>
+                                <Icon name="ban" />Inkább letiltom
+                              </button>
+                            </div>
+                            <ConfirmButton className="btn danger sm" confirmLabel="Igen, törlés az adatokkal együtt" disabled={removeMember.isPending}
+                              onConfirm={() => removeMember.mutate({ id: deleteWarn.id, force: true })}>
+                              <Icon name="trash" />Végleges törlés az adataival együtt
+                            </ConfirmButton>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
