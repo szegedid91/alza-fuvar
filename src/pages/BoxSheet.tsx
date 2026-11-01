@@ -20,6 +20,7 @@ import {
   type BoxSheet, type BoxStop, type AlzaBox,
 } from '../lib/boxSheet'
 import type { Car } from '../lib/checkin'
+import { errMsg } from '../lib/errors'
 
 // Napi Box-lap: a papír "AlzaBox szállítási lap" digitális mása. Csak a
 // Box-kategóriás (box_sheet = true) autókhoz kell — az XL-eseknek nem.
@@ -98,7 +99,7 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
   }
   if (sheetQ.isLoading) return <Skeleton rows={5} />
   if (sheetQ.isError || !sheetQ.data) {
-    return <div className="alert error">Nem sikerült megnyitni a mai lapot: {sheetQ.error instanceof Error ? sheetQ.error.message : ''}</div>
+    return <div className="alert error">Nem sikerült megnyitni a mai lapot: {errMsg(sheetQ.error, '')}</div>
   }
   return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} />
 }
@@ -129,7 +130,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
     void qc.invalidateQueries({ queryKey: ['box-sheet-status'] })
     void qc.invalidateQueries({ queryKey: ['box-sheets'] })
   }
-  const fail = (e: unknown) => toast.error(e instanceof Error ? e.message : 'A mentés nem sikerült')
+  const fail = (e: unknown) => toast.error(errMsg(e, 'A mentés nem sikerült'))
 
   const updateSheet = useMutation({
     mutationFn: async (patch: Partial<BoxSheet>) => {
@@ -183,7 +184,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
   }, [prefillBoxId, data, boxById])
 
   if (isLoading) return <Skeleton rows={5} />
-  if (isError || !data) return <div className="alert error">Nem sikerült betölteni a lapot: {error instanceof Error ? error.message : ''}</div>
+  if (isError || !data) return <div className="alert error">Nem sikerült betölteni a lapot: {errMsg(error, '')}</div>
 
   const { sheet, stops, name } = data
   const totals = stopTotals(stops)

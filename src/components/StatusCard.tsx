@@ -11,6 +11,7 @@ import { groupTarget, copyText, statusText, STATUS_META, type StatusKind } from 
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_path: string | null }[] }
 
@@ -63,7 +64,7 @@ export default function StatusCard() {
       invalidate()
       return id
     } catch (e) {
-      toast.error('A jelzés rögzítése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba'))
+      toast.error('A jelzés rögzítése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
       return null
     }
   }

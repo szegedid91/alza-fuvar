@@ -14,6 +14,7 @@ import { STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, hhmm, hhmm
 import PhotoThumb from '../components/PhotoThumb'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import { errMsg } from '../lib/errors'
 
 // Vezetői nézet: a hónap Box-lapjai (ki, mikor, melyik autóval, hány box,
 // mennyi csomag / hiány / visszáru), lap-részletek táblázatban, keresés box-kódra
@@ -98,7 +99,7 @@ export default function BoxSheets() {
       </div>
 
       {isLoading && <Skeleton rows={4} />}
-      {isError && <div className="alert error">Nem sikerült betölteni: {error instanceof Error ? error.message : ''}</div>}
+      {isError && <div className="alert error">Nem sikerült betölteni: {errMsg(error, '')}</div>}
 
       {data && (
         <>

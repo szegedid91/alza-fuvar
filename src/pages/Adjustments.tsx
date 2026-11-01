@@ -10,6 +10,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import type { Enums } from '../lib/database.types'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 // Gyakori összegek egy koppintásra (készpénzes előleg)
 const QUICK_AMOUNTS = [5000, 10000, 20000, 50000]
@@ -56,7 +57,7 @@ export default function Adjustments() {
       if (error) throw error
     },
     onSuccess: () => { toast.success('Tétel törölve.'); void qc.invalidateQueries({ queryKey: ['adjustments'] }) },
-    onError: (e) => toast.error('Nem törölhető: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem törölhető: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   const add = useMutation({
@@ -77,7 +78,7 @@ export default function Adjustments() {
       setAmount(''); setReason(''); setError(null)
       void qc.invalidateQueries({ queryKey: ['adjustments'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
+    onError: (e) => setError(errMsg(e, 'Hiba')),
   })
 
   const canSave = !!userId && !!amount && !add.isPending

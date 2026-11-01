@@ -10,6 +10,7 @@ import { qrDataUrl } from '../lib/qr'
 import { telHref } from '../lib/names'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 type Profile = Tables<'profiles'>
 type Invite = Tables<'invites'>
@@ -75,7 +76,7 @@ function InviteCard() {
       void qc.invalidateQueries({ queryKey: ['ws-members'] })
       void qc.invalidateQueries({ queryKey: ['members'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'A meghívó létrehozása nem sikerült'),
+    onError: (e) => setError(errMsg(e, 'A meghívó létrehozása nem sikerült')),
   })
 
   const remove = useMutation({
@@ -94,7 +95,7 @@ function InviteCard() {
       void qc.invalidateQueries({ queryKey: ['members'] })
       void qc.invalidateQueries({ queryKey: ['shifts'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'A törlés nem sikerült'),
+    onError: (e) => setError(errMsg(e, 'A törlés nem sikerült')),
   })
 
   const linkOf = (id: string) => `${window.location.origin}/meghivo/${id}`
@@ -275,7 +276,7 @@ export default function Members() {
       if (error) throw error
     },
     onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }) },
-    onError: (e) => setActionError('Az állapot mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setActionError('Az állapot mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   const setRole = useMutation({
@@ -286,7 +287,7 @@ export default function Members() {
       if (error) throw error
     },
     onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }) },
-    onError: (e) => setActionError('A szerep mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setActionError('A szerep mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   // Tag törlése. A szerver alapból MEGTAGADJA, ha munka-/bér-adat tartozik hozzá
@@ -305,7 +306,7 @@ export default function Members() {
       void qc.invalidateQueries({ queryKey: ['ws-members'] })
     },
     onError: (e, vars) => {
-      const msg = e instanceof Error ? e.message : 'ismeretlen hiba'
+      const msg = errMsg(e, 'ismeretlen hiba')
       const m = msg.match(/ADATOS_TAG:\s*(.*)$/)
       if (m) {
         const who = (members ?? []).find((x) => x.id === vars.id)

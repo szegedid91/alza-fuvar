@@ -14,6 +14,7 @@ import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
+import { errMsg } from '../lib/errors'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -93,7 +94,7 @@ export default function RouteCard() {
       }
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['route-runs'] }),
-    onError: (e) => toast.error('Nem sikerült menteni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült menteni: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   if (!myShifts || myShifts.length === 0) return null

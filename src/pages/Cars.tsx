@@ -8,6 +8,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { carQrPayload, qrDataUrl } from '../lib/qr'
+import { errMsg } from '../lib/errors'
 
 // Kategóriák kezelése: előbb a kategória, aztán rendeled hozzá az autókat
 // (több autó van, mint kategória). Sorrend = a heti beosztás-táblázat sorrendje.
@@ -24,7 +25,7 @@ function CategoriesCard({ cars }: { cars: Car[] }) {
     void qc.invalidateQueries({ queryKey: ['car-categories'] })
     void qc.invalidateQueries({ queryKey: ['cars'] })
   }
-  const fail = (what: string) => (e: unknown) => setError(`${what}: ${e instanceof Error ? e.message : 'ismeretlen hiba'}`)
+  const fail = (what: string) => (e: unknown) => setError(`${what}: ${errMsg(e, 'ismeretlen hiba')}`)
 
   const add = useMutation({
     mutationFn: async () => {
@@ -260,7 +261,7 @@ export default function Cars() {
       setPlate(''); setLabel(''); setNewCategory(''); setNewFuel('diesel'); setError(null); setPanel('none')
       void qc.invalidateQueries({ queryKey: ['cars'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
+    onError: (e) => setError(errMsg(e, 'Hiba')),
   })
 
   const toggleActive = useMutation({
@@ -269,7 +270,7 @@ export default function Cars() {
       if (error) throw error
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
-    onError: (e) => setError('Az autó állapotának módosítása nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setError('Az autó állapotának módosítása nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   // Autó törlése. A szerver alapból MEGTAGADJA, ha tartozik hozzá adat
@@ -287,7 +288,7 @@ export default function Cars() {
       void qc.invalidateQueries({ queryKey: ['car-categories'] })
     },
     onError: (e, vars) => {
-      const msg = e instanceof Error ? e.message : 'ismeretlen hiba'
+      const msg = errMsg(e, 'ismeretlen hiba')
       const m = msg.match(/ADATOS_AUTO:\s*(.*)$/)
       if (m) {
         const car = (cars ?? []).find((c) => c.id === vars.id)
@@ -308,7 +309,7 @@ export default function Cars() {
       if (error) throw error
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
-    onError: (e) => setError('A mentés nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setError('A mentés nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   const assign = useMutation({
@@ -317,7 +318,7 @@ export default function Cars() {
       if (error) throw error
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
-    onError: (e) => setError('A kategória mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setError('A kategória mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   // Hajtás: elektromos autónál a futárnak nincs tankolás rész
@@ -327,7 +328,7 @@ export default function Cars() {
       if (error) throw error
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
-    onError: (e) => setError('A hajtás mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setError('A hajtás mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   if (qrCar) return <QrView car={qrCar} onBack={() => setQrCar(null)} />

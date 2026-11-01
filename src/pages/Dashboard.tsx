@@ -16,6 +16,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import PhotoThumb from '../components/PhotoThumb'
 import RouteProgressCard from '../components/RouteProgressCard'
 import { STATUS_META, type StatusKind } from '../lib/groupMessage'
+import { errMsg } from '../lib/errors'
 
 // Túl sokan egy autón (Box = 1 fő): ezt a vezetőnek kell rendeznie — vagy a
 // tévesen becsekkolt embert kijelentkezteti innen, vagy a munkatárs maga vált
@@ -37,7 +38,7 @@ function CrewConflictsCard() {
       void qc.invalidateQueries({ queryKey: ['crew-conflicts'] })
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
-    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   if (!conflicts || conflicts.length === 0) return null
@@ -94,7 +95,7 @@ function PhotoPendingCard({ items }: { items: PendingPhoto[] }) {
       if (error) throw error
     },
     onSuccess: () => { toast.success('Továbbengedve fotó nélkül — a munkatárs folytathatja.'); void qc.invalidateQueries({ queryKey: ['dashboard'] }) },
-    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   if (items.length === 0) return null
   const asking = items.filter((i) => i.helpAt).length
@@ -243,12 +244,12 @@ function TemplatesCard() {
       if (error) throw error
     },
     onSuccess: () => { setText(''); invalidate() },
-    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   const remove = useMutation({
     mutationFn: async (id: string) => { const { error } = await supabase.from('status_templates').delete().eq('id', id); if (error) throw error },
     onSuccess: invalidate,
-    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   return (
     <div className="card stack" style={{ gap: 8 }}>

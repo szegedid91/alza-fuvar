@@ -17,6 +17,7 @@ import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
 import WaiverRequest from '../components/WaiverRequest'
 import type { Enums, Tables } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 // Körbe az autón (elöl → jobb → hátul → bal), végül a fülke
 const VIEWS: Enums<'inspection_view'>[] = ['front', 'right', 'rear', 'left', 'interior']
@@ -151,7 +152,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
         // Saját, fotó nélküli sor törlése (a sima DELETE csak vezetőnek szabad — ezért RPC)
         await supabase.rpc('discard_empty_inspection', { p_id: inspectionId })
       } catch { /* best effort */ }
-      setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen') + ' — az ellenőrzés nem lett elmentve, próbáld újra.')
+      setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')) + ' — az ellenőrzés nem lett elmentve, próbáld újra.')
     } finally {
       setBusy(false)
     }
@@ -308,7 +309,7 @@ export function CleaningCard({ car, date }: { car: Car; date: string }) {
       })
       await qc.invalidateQueries({ queryKey: ['cleaning', car.id] })
     } catch (e) {
-      setErr('A takarítás mentése nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba'))
+      setErr('A takarítás mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
     } finally {
       setBusy(false)
     }

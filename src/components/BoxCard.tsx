@@ -5,6 +5,7 @@ import { formatDistance, type AlzaBox } from '../lib/boxSheet'
 import { getNavApp, navUrl, NAV_LABEL } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // Egy AlzaBox "hol van?" kártyája: fotó, kód, cím, az alza.hu "hol található"
 // leírása, saját megjegyzés, egy koppintásos navigáció.
@@ -32,7 +33,7 @@ export default function BoxCard({
       if (error) throw error
     },
     onSuccess: () => { setEditing(false); toast.success('Mentve.'); void qc.invalidateQueries({ queryKey: ['alza-boxes'] }) },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'A mentés nem sikerült'),
+    onError: (e) => toast.error(errMsg(e, 'A mentés nem sikerült')),
   })
 
   const hasGps = box.lat != null && box.lng != null

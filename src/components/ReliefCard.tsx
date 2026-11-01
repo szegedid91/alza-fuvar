@@ -9,6 +9,7 @@ import { toast } from '../lib/toast'
 import { depotOf } from '../lib/depot'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // Mentesítő járat: ha sok a csomag, n boxot leveszünk a járatokról (a terheltebbekről
 // elsőbbséggel, egymáshoz közeli címeket), és új M-járatra tesszük. Többször is
@@ -61,7 +62,7 @@ export default function ReliefCard() {
       return code
     },
     onSuccess: (code) => { toast.success(`Mentesítő járat létrehozva: ${code} — a beosztásban már választható.`); setPlan(null); invalidate() },
-    onError: (e) => setErr(e instanceof Error ? e.message : 'Nem sikerült létrehozni'),
+    onError: (e) => setErr(errMsg(e, 'Nem sikerült létrehozni')),
   })
 
   const dissolve = useMutation({
@@ -85,7 +86,7 @@ export default function ReliefCard() {
       if (error) throw error
     },
     onSuccess: () => { toast.success('Mentesítő járat feloszlatva — a boxok visszakerültek az eredeti járatukra.'); setPlan(null); invalidate() },
-    onError: (e) => setErr(e instanceof Error ? e.message : 'Nem sikerült feloszlatni'),
+    onError: (e) => setErr(errMsg(e, 'Nem sikerült feloszlatni')),
   })
 
   // A javaslat helyben szerkeszthető a létrehozás előtt: sorrend húzással, box levétele (× — visszakerül az eredeti járatára).

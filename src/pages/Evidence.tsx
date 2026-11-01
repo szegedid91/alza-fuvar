@@ -16,6 +16,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory } from '../lib/calendar'
 import Icon from '../components/Icon'
 import ConfirmButton from '../components/ConfirmButton'
+import { errMsg } from '../lib/errors'
 
 const CATS: Enums<'evidence_category'>[] = ['dirt', 'damage', 'cigarette_burn', 'other']
 
@@ -140,7 +141,7 @@ export default function Evidence() {
       setPhoto(null); setNote(''); toast.success('Bizonyíték-fotó elmentve.')
       await qc.invalidateQueries({ queryKey: ['evidence'] })
     } catch (e) {
-      setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+      setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')))
     } finally {
       setBusy(false)
     }

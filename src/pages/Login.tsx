@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 // Fejlesztői fiókok ikonja a címke/leírás alapján — az .env-beli emoji helyett
 function devIcon(acc: DevAccount): IconName {
@@ -35,7 +36,7 @@ export default function Login() {
       if (error) throw error
       // Az onAuthStateChange innen átveszi és betölti a profilt.
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ismeretlen hiba'
+      const msg = errMsg(err, 'Ismeretlen hiba')
       setError(`Fejlesztői belépés sikertelen (${acc.label}): ${translateAuthError(msg)}`)
     } finally {
       setDevBusy(null)
@@ -80,7 +81,7 @@ export default function Login() {
         }
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ismeretlen hiba'
+      const msg = errMsg(err, 'Ismeretlen hiba')
       setError(translateAuthError(msg))
     } finally {
       setBusy(false)

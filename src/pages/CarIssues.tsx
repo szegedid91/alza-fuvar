@@ -16,6 +16,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { toast } from '../lib/toast'
 import type { Enums, Tables } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 type Issue = Tables<'car_issues'>
 
@@ -65,7 +66,7 @@ export default function CarIssues() {
       if (error) throw error
     },
     onSuccess: (_d, v) => { toast.success(v.status === 'resolved' ? 'Megoldva — lekerült a nyitott hibák közül.' : v.status === 'open' ? 'Újranyitva.' : 'Folyamatban.'); void qc.invalidateQueries({ queryKey: ['car-issues'] }) },
-    onError: (e) => setMsg('Hiba: az állapot mentése nem sikerült — ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setMsg('Hiba: az állapot mentése nem sikerült — ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   // Alapértelmezett autó: amire ma be van csekkolva
@@ -92,7 +93,7 @@ export default function CarIssues() {
       setNote(''); setPhoto(null); setCarId(''); toast.success('Hiba bejelentve — a menedzser látja és követi.')
       await qc.invalidateQueries({ queryKey: ['car-issues'] })
     } catch (e) {
-      setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+      setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')))
     } finally {
       setBusy(false)
     }

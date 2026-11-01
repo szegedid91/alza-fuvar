@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import { supabase } from './supabase'
 import { uploadPhoto, recordPhotoProof } from './photos'
 import type { Database } from './database.types'
+import { errMsg } from './errors'
 
 type TableName = keyof Database['public']['Tables']
 
@@ -73,7 +74,7 @@ async function putRecord(rec: OutboxRecord): Promise<void> {
 // a tétel közvetlenül megy a szerverre (csak az offline-védőháló marad el)
 function isStorageFailure(e: unknown): boolean {
   if (e instanceof Error && /tárhely/.test(e.message)) return false
-  const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
+  const msg = (errMsg(e, 'ismeretlen hiba')).toLowerCase()
   return e instanceof DOMException || msg.includes('indexeddb') || msg.includes('transaction') || msg.includes('database') || msg.includes('objectstore') || msg.includes('clone')
 }
 
@@ -120,7 +121,7 @@ function isNetworkError(e: unknown): boolean {
   if (!navigator.onLine) return true
   // A fetch hálózati hibái TypeError-ként érkeznek; a szöveges minták csak tartalék
   if (e instanceof TypeError) return true
-  const msg = (e instanceof Error ? e.message : String(e)).toLowerCase()
+  const msg = (errMsg(e, 'ismeretlen hiba')).toLowerCase()
   return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')
     || msg.includes('timeout') || msg.includes('load failed')
 }
@@ -194,7 +195,7 @@ async function doFlush(): Promise<{ done: number; remaining: number }> {
         if (isNetworkError(e)) break // hálózati hiba: később újrapróbáljuk
         // adat/RLS hiba: számoljuk, és MAX_ATTEMPTS után parkoljuk (nem töröljük!)
         rec.attempts += 1
-        rec.lastError = e instanceof Error ? e.message : String(e)
+        rec.lastError = errMsg(e, 'ismeretlen hiba')
         failedIds.add(rec.id)
         if (rec.attempts >= MAX_ATTEMPTS) console.error('Outbox elem parkolva (túl sok hiba):', rec.label, e)
         await d.put('outbox', rec)

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { RECOVERY_URL_ERROR, RECOVERY_IN_URL, clearRecoveryPending, isRecoveryPending } from '../lib/recovery'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
@@ -31,7 +32,7 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
       clearRecoveryPending()
       setDone(true)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Ismeretlen hiba'
+      const msg = errMsg(err, 'Ismeretlen hiba')
       const m = msg.toLowerCase()
       setError(
         m.includes('should be at least') ? 'A jelszó túl rövid (min. 6 karakter).'

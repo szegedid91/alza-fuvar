@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../lib/toast'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // "Nem tudok fotózni" — a munkatárs jelzi a vezetőknek (push), akik az
 // Áttekintésben a saját fiókjukból engedhetik tovább fotó nélkül.
@@ -19,7 +20,7 @@ export default function WaiverRequest({ checkinId, requestedAt }: { checkinId: s
       toast.success('Jeleztük a vezetőknek — amint engedélyezik, folytathatod.')
       void qc.invalidateQueries({ queryKey: ['today'] })
     },
-    onError: (e) => toast.error('Nem sikerült jelezni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült jelezni: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   return (
     <div className="stack" style={{ gap: 6 }}>

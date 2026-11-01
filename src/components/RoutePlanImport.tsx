@@ -7,6 +7,7 @@ import { useRouteStops } from '../hooks/useRouteStops'
 import { parseRoutePlan, type PlanRoute } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 type KnownBox = { id: string; code: string | null; lat: number | null; lng: number | null }
 type Preview = { fileName: string; routes: PlanRoute[]; known: Map<string, KnownBox> }
@@ -41,7 +42,7 @@ export default function RoutePlanImport() {
         if (variants.length === 1) known.set(c, variants[0])
       }
       setPreview({ fileName: file.name, routes: parsed, known })
-    } catch (e) { setErr(e instanceof Error ? e.message : 'A fájl nem olvasható') }
+    } catch (e) { setErr(errMsg(e, 'A fájl nem olvasható')) }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
@@ -85,7 +86,7 @@ export default function RoutePlanImport() {
       setPreview(null)
       void qc.invalidateQueries({ queryKey: ['route-stops'] }); void qc.invalidateQueries({ queryKey: ['route-names'] })
     },
-    onError: (e) => setErr('Nem sikerült betölteni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => setErr('Nem sikerült betölteni: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   return (

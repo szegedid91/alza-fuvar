@@ -9,6 +9,7 @@ import { addDays } from '../lib/calendar'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { exportRowsToXlsx } from '../lib/export'
+import { errMsg } from '../lib/errors'
 
 type PresetKey = 'this-month' | 'prev-month' | 'm3' | 'm6' | 'ytd' | 'm12'
 
@@ -330,7 +331,7 @@ export default function Statistics() {
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={4} /></>}
       {isError && (
         <div className="alert error">
-          A statisztika betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
+          A statisztika betöltése nem sikerült{loadError ? `: ${errMsg(loadError, 'ismeretlen hiba')}` : ''}. Frissítsd az oldalt.
         </div>
       )}
 

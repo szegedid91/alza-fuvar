@@ -16,6 +16,7 @@ import { todayISO, formatDate } from '../../lib/labels'
 import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG, weekLabel } from '../../lib/calendar'
 import Icon from '../../components/Icon'
 import type { Tables } from '../../lib/database.types'
+import { errMsg } from '../../lib/errors'
 
 type Car = Tables<'cars'>
 type Shift = Tables<'shifts'>
@@ -229,7 +230,7 @@ export default function WeekTable() {
       await qc.invalidateQueries({ queryKey: ['shift-week'] })
       await qc.invalidateQueries({ queryKey: ['shift-cal'] })
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Mentési hiba'
+      const msg = errMsg(e, 'Mentési hiba')
       setError(/ROUTE_TAKEN/.test(msg) ? msg.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem menthető: ') : msg)
     } finally {
       setBusyCell(null)
@@ -313,7 +314,7 @@ export default function WeekTable() {
       await qc.invalidateQueries({ queryKey: ['shift-week'] })
       await qc.invalidateQueries({ queryKey: ['shift-cal'] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Az autó cseréje nem sikerült')
+      setError(errMsg(e, 'Az autó cseréje nem sikerült'))
     } finally { setRowBusy(false) }
   }
 
@@ -331,7 +332,7 @@ export default function WeekTable() {
       await qc.invalidateQueries({ queryKey: ['shift-week'] })
       await qc.invalidateQueries({ queryKey: ['shift-cal'] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Az autó kivétele nem sikerült')
+      setError(errMsg(e, 'Az autó kivétele nem sikerült'))
     } finally { setRowBusy(false) }
   }
 
@@ -392,7 +393,7 @@ export default function WeekTable() {
           : `Beosztás kiküldve: ${byUser.size} munkatársból ${reached} főt ért el az értesítés. A többieknél nincs bekapcsolva az értesítés.${failed ? ` ${failed} küldés hibára futott — próbáld újra.` : ''}`,
       )
     } catch (e) {
-      setPublishMsg('Hiba a kiküldésnél: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+      setPublishMsg('Hiba a kiküldésnél: ' + (errMsg(e, 'ismeretlen')))
     } finally {
       setPublishBusy(false)
     }

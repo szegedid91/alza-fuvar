@@ -14,6 +14,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 type PhotoType = 'inspection' | 'fuel' | 'incident' | 'evidence' | 'issue'
 type ViewFilter = Enums<'inspection_view'> | ''
@@ -117,7 +118,7 @@ function RetentionCard() {
             <label>Megőrzés (nap, min. 7 — alap 90 = 3 hónap)</label>
             <input className="input" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
           </div>
-          {save.isError && <div className="alert error">{save.error instanceof Error ? save.error.message : 'Hiba'}</div>}
+          {save.isError && <div className="alert error">{errMsg(save.error, 'Hiba')}</div>}
           <div className="btn-grid">
             <button className="btn ghost sm" onClick={() => setEdit(false)}>Mégse</button>
             <button className="btn sm" disabled={save.isPending || !days} onClick={() => save.mutate()}>Mentés</button>

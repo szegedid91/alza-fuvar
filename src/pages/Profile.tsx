@@ -15,6 +15,7 @@ const THEME_UI: Record<ThemePref, { icon: IconName; label: string }> = {
   dark: { icon: 'moon', label: 'Sötét' },
 }
 import { toast } from '../lib/toast'
+import { errMsg } from '../lib/errors'
 
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -36,7 +37,7 @@ export default function ProfilePage() {
       if (error) throw error
       toast.success('Elküldtük a jelszó-módosító linket az email címedre.')
     } catch (e) {
-      toast.error('Nem sikerült elküldeni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba'))
+      toast.error('Nem sikerült elküldeni: ' + (errMsg(e, 'ismeretlen hiba')))
     } finally {
       setPwBusy(false)
     }
@@ -162,7 +163,7 @@ function PushCard() {
       if (subscribed) { await unsubscribePush(); setSubscribed(false) }
       else { await subscribePush(profile.id); setSubscribed(true) }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Hiba')
+      setErr(errMsg(e, 'Hiba'))
     } finally { setBusy(false) }
   }
 

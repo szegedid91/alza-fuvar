@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from 'react'
+import { errMsg } from './errors'
 
 // Lusta oldalbetöltés újratöltéssel: friss verzió kitelepítése után a régi
 // index még a régi chunk-neveket kéri (404 → „Failed to fetch dynamically
@@ -12,7 +13,7 @@ export function lazyRetry<T extends ComponentType<unknown>>(factory: () => Promi
       try { sessionStorage.removeItem(key) } catch { /* privát mód */ }
       return mod
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
+      const msg = errMsg(e, 'ismeretlen hiba')
       let already = false
       try { already = sessionStorage.getItem(key) === '1'; if (!already) sessionStorage.setItem(key, '1') } catch { /* privát mód */ }
       if (/dynamically imported module|Importing a module script failed|Failed to fetch|Load failed/i.test(msg) && !already) {

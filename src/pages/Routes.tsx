@@ -13,6 +13,7 @@ import ReliefCard from '../components/ReliefCard'
 import RoutePlanImport from '../components/RoutePlanImport'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 // Járatok (R, G, I…) kezelése: a beosztás Box-celláiban ezekből választható, ki
 // melyik járatot viszi; járatonként a boxok sorrendje is itt állítható
@@ -26,7 +27,7 @@ function RoutesCard() {
   const [editing, setEditing] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-names'] }); setErr(null) }
-  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : 'A művelet nem sikerült')
+  const fail = (e: unknown) => setErr(errMsg(e, 'A művelet nem sikerült'))
   const add = useMutation({
     mutationFn: async () => {
       const c = code.trim().toUpperCase()

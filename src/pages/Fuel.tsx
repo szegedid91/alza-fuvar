@@ -14,6 +14,7 @@ import type { Car } from '../lib/checkin'
 import { formatDate, formatHuf, parseHuNumber, todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 export default function Fuel() {
   return (
@@ -133,7 +134,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
       await qc.invalidateQueries({ queryKey: ['fuel-history', car.id] })
       await qc.invalidateQueries({ queryKey: ['fuel-avg', car.id] })
     } catch (e) {
-      setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+      setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')))
     } finally {
       setBusy(false)
     }

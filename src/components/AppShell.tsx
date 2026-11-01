@@ -11,6 +11,7 @@ import { queryClient } from '../lib/queryClient'
 import ConfirmButton from './ConfirmButton'
 import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import OfflineHint from './OfflineHint'
+import { errMsg } from '../lib/errors'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 
@@ -177,7 +178,7 @@ function PushPrompt() {
       await subscribePush(profile.id)
       setShow(false)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Nem sikerült bekapcsolni az értesítéseket')
+      setErr(errMsg(e, 'Nem sikerült bekapcsolni az értesítéseket'))
     } finally {
       setBusy(false)
     }

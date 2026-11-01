@@ -7,6 +7,7 @@ import { resolveNames } from '../lib/names'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // Adminnak: a munkatársak javaslatai és hibabejelentései (Napló oldal), „kész” jelöléssel
 export default function FeedbackList() {
@@ -32,7 +33,7 @@ export default function FeedbackList() {
       if (error) throw error
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['feedback-all'] }),
-    onError: (e) => toast.error('Nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   const open = (data ?? []).filter((f) => f.status === 'new')
   const done = (data ?? []).filter((f) => f.status === 'done')

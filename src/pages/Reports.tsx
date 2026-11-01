@@ -10,6 +10,7 @@ import { exportRowsToXlsx } from '../lib/export'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import { errMsg } from '../lib/errors'
 
 // Havi riport: ki mennyit dolgozott (nap, szerep, óra) és mit csinált az
 // autókkal (ellenőrzés, takarítás, hibabejelentés, esemény); autónként
@@ -205,7 +206,7 @@ export default function Reports() {
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {isError && (
         <div className="alert error">
-          A riport betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
+          A riport betöltése nem sikerült{loadError ? `: ${errMsg(loadError, 'ismeretlen hiba')}` : ''}. Frissítsd az oldalt.
         </div>
       )}
 

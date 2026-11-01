@@ -8,6 +8,7 @@ import { normalize, type AlzaBox } from '../lib/boxSheet'
 import { useRoutes, type RouteName } from '../hooks/useRoutes'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // Egy járat megállói: AlzaBoxok sorrendben. A vezető itt rakja össze (keresés a
 // jegyzékből, fel/le nyilak, törlés); a futár a kezdőlapi járat-kártyán ebben a
@@ -27,7 +28,7 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const fromCode = (id: string) => allRoutes?.find((r) => r.id === id)?.code ?? '?'
   const used = new Set(stops.map((s) => s.box_id))
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-stops'] }); setErr(null) }
-  const fail = (e: unknown) => setErr(e instanceof Error ? e.message : 'A művelet nem sikerült')
+  const fail = (e: unknown) => setErr(errMsg(e, 'A művelet nem sikerült'))
 
   const add = useMutation({
     mutationFn: async (box: AlzaBox) => {

@@ -10,6 +10,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import ConfirmButton from '../components/ConfirmButton'
 import { telHref } from '../lib/names'
+import { errMsg } from '../lib/errors'
 
 type Profile = Tables<'profiles'>
 type AssignRole = Enums<'user_role'>
@@ -91,7 +92,7 @@ function PendingCard({
       void sendPush([user.id], 'Fiók jóváhagyva', 'A fiókodat jóváhagyták, beléphetsz az Alza appba.', '/').catch(() => undefined)
     },
     onSuccess: onDone,
-    onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
+    onError: (e) => setError(errMsg(e, 'Hiba')),
   })
 
   const reject = useMutation({
@@ -100,7 +101,7 @@ function PendingCard({
       if (error) throw error
     },
     onSuccess: onDone,
-    onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
+    onError: (e) => setError(errMsg(e, 'Hiba')),
   })
 
   const roles: AssignRole[] = allowAdmin ? ['crew', 'manager', 'admin'] : ['crew', 'manager']

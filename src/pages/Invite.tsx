@@ -5,6 +5,7 @@ import { roleLabel } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import { errMsg } from '../lib/errors'
 
 interface InviteInfo {
   email: string | null
@@ -69,7 +70,7 @@ export default function InvitePage({ token }: { token: string }) {
           const body = await (error as { context?: Response }).context?.json()
           throw new Error(body?.error ?? 'A meghívó beváltása nem sikerült')
         } catch (e) {
-          throw e instanceof Error ? e : new Error('A meghívó beváltása nem sikerült')
+          throw new Error(errMsg(e, 'A meghívó beváltása nem sikerült'))
         }
       }
       if (data?.error) throw new Error(data.error)
@@ -80,7 +81,7 @@ export default function InvitePage({ token }: { token: string }) {
       window.location.href = '/'
     } catch (e) {
       setPhase('form')
-      setError(e instanceof Error ? e.message : 'Hiba történt')
+      setError(errMsg(e, 'Hiba történt'))
     } finally {
       setBusy(false)
     }

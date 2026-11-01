@@ -11,6 +11,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { weekLabel } from '../lib/calendar'
 import type { Tables } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 type SwapRequest = Tables<'swap_requests'>
 
@@ -175,7 +176,7 @@ export default function MySchedule() {
       if (error) throw error
     },
     onSuccess: () => { setActionError(null); setNowTick(Date.now()); void qc.invalidateQueries({ queryKey: ['my-swaps'] }) },
-    onError: (e) => setActionError(e instanceof Error ? `A cserekérés nem sikerült: ${e.message}` : 'A cserekérés nem sikerült'),
+    onError: (e) => setActionError('A cserekérés nem sikerült: ' + errMsg(e, 'ismeretlen hiba')),
   })
 
   // A társ döntése egy hozzá beérkező cserekérésről
@@ -185,7 +186,7 @@ export default function MySchedule() {
       if (error) throw error
     },
     onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['my-swaps'] }) },
-    onError: (e) => setActionError(e instanceof Error ? `A döntés mentése nem sikerült: ${e.message}` : 'A döntés mentése nem sikerült'),
+    onError: (e) => setActionError('A döntés mentése nem sikerült: ' + errMsg(e, 'ismeretlen hiba')),
   })
 
   // Hozzám beérkező, döntésre váró cserekérések (én vagyok a társ)

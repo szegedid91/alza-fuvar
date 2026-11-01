@@ -12,6 +12,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import type { Tables } from '../lib/database.types'
+import { errMsg } from '../lib/errors'
 
 interface WorkspaceRate { id: string; name: string; driver: number; loader: number; trainee: number; box: number; boxTrainee: number; box2: number }
 
@@ -42,7 +43,7 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
       }
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['payroll-locks'] }) },
-    onError: (e) => setError(e instanceof Error ? e.message : 'Hiba'),
+    onError: (e) => setError(errMsg(e, 'Hiba')),
   })
 
   return (
@@ -302,7 +303,7 @@ export default function Payroll() {
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={4} /></>}
       {isError && (
         <div className="alert error">
-          A béradatok betöltése nem sikerült{loadError instanceof Error ? `: ${loadError.message}` : ''}. Frissítsd az oldalt.
+          A béradatok betöltése nem sikerült{loadError ? `: ${errMsg(loadError, 'ismeretlen hiba')}` : ''}. Frissítsd az oldalt.
         </div>
       )}
 
@@ -398,7 +399,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
       void qc.invalidateQueries({ queryKey: ['payroll'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'A mentés nem sikerült'),
+    onError: (e) => setError(errMsg(e, 'A mentés nem sikerült')),
   })
 
   const remove = useMutation({
@@ -411,7 +412,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
       void qc.invalidateQueries({ queryKey: ['payroll'] })
     },
-    onError: (e) => setError(e instanceof Error ? e.message : 'A törlés nem sikerült'),
+    onError: (e) => setError(errMsg(e, 'A törlés nem sikerült')),
   })
 
   // Évekre bontva, azon belül hónapok — a változás az ELŐZŐ (régebbi) sorhoz képest

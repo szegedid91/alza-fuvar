@@ -10,6 +10,7 @@ import { toast } from '../lib/toast'
 import BoxCard from '../components/BoxCard'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import { errMsg } from '../lib/errors'
 
 // AlzaBox kereső: kód / név / cím szerint, vagy a legközelebbiek GPS alapján.
 // A futár egy koppintással látja, hol van a box (alza.hu leírás, fotó, navigáció).
@@ -71,7 +72,7 @@ export default function Boxes() {
       </div>
 
       {isLoading && <Skeleton rows={4} />}
-      {isError && <div className="alert error">Nem sikerült betölteni a jegyzéket: {error instanceof Error ? error.message : ''}</div>}
+      {isError && <div className="alert error">Nem sikerült betölteni a jegyzéket: {errMsg(error, '')}</div>}
 
       {sel ? (
         <>
@@ -162,7 +163,7 @@ function ImportCard() {
       toast.success('A jegyzék frissült.')
       void qc.invalidateQueries({ queryKey: ['alza-boxes'] })
     },
-    onError: (e) => setResult(`Hiba: ${e instanceof Error ? e.message : 'az importálás nem sikerült'}`),
+    onError: (e) => setResult(`Hiba: ${errMsg(e, 'az importálás nem sikerült')}`),
   })
 
   return (

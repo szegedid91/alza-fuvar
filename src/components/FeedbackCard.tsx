@@ -6,6 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 // Javaslat / hibabejelentés a Profil oldalon: a munkatárs ír, az adminok pusht kapnak,
 // a Naplóban látják és „kész”-re tehetik. A saját beküldéseit itt látja az állapotukkal.
@@ -31,7 +32,7 @@ export default function FeedbackCard() {
       if (error) throw error
     },
     onSuccess: () => { toast.success(kind === 'bug' ? 'Hibabejelentés elküldve — az admin értesítést kap.' : 'Javaslat elküldve — az admin értesítést kap.'); setText(''); void qc.invalidateQueries({ queryKey: ['feedback-mine'] }) },
-    onError: (e) => toast.error('Nem sikerült elküldeni: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Nem sikerült elküldeni: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
   return (
     <div className="card stack">

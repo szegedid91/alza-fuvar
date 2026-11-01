@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { errMsg } from './errors'
 
 const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY as string
 
@@ -60,6 +61,6 @@ export async function unsubscribePush(): Promise<void> {
 export async function sendPush(userIds: string[], title: string, body: string, url = '/'): Promise<number> {
   if (userIds.length === 0) return 0
   const { data, error } = await supabase.functions.invoke('send-push', { body: { user_ids: userIds, title, body, url } })
-  if (error) throw new Error(error instanceof Error ? error.message : 'a küldés nem érte el a szervert')
+  if (error) throw new Error(errMsg(error, 'a küldés nem érte el a szervert'))
   return (data as { sent?: number } | null)?.sent ?? 0
 }

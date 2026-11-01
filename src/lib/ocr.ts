@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { errMsg } from './errors'
 
 export interface OcrParsed {
   location?: string | null
@@ -32,6 +33,6 @@ export async function ocrFuelReceipt(blob: Blob): Promise<OcrResult> {
     const r = data as Partial<OcrResult> | null
     return { text: r?.text ?? '', parsed: r?.parsed ?? {}, error: r?.error }
   } catch (e) {
-    return { text: '', parsed: {}, error: e instanceof Error ? e.message : 'OCR hiba' }
+    return { text: '', parsed: {}, error: errMsg(e, 'OCR hiba') }
   }
 }

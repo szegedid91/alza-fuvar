@@ -11,6 +11,7 @@ import PhotoSlot, { type CapturedPhoto } from './PhotoSlot'
 type Shot = CapturedPhoto & { path?: string }
 import PhotoThumb from './PhotoThumb'
 import Icon from './Icon'
+import { errMsg } from '../lib/errors'
 
 const MAX = 4
 type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[]; screen?: string | null; confidence?: number | null; note?: string | null }
@@ -102,7 +103,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
       if (got) toast.success('Kiolvasva — ellenőrizd a számokat, és javítsd, ha kell.')
       else toast.info('A képről nem sikerült számot kiolvasni — írd be kézzel, vagy fotózd újra közelebbről, élesen.')
     },
-    onError: (e) => toast.error('Kiolvasás nem sikerült: ' + (e instanceof Error ? e.message : 'ismeretlen hiba')),
+    onError: (e) => toast.error('Kiolvasás nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
   // 2) küldés a csoportba (a telefon megosztás-menüjén át, mint a hibánál)

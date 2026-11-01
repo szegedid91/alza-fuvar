@@ -17,6 +17,7 @@ import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
 import { todayISO, formatHours } from '../lib/labels'
+import { errMsg } from '../lib/errors'
 
 // A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
 const QrScanner = lazy(() => import('../components/QrScanner'))
@@ -71,7 +72,7 @@ export default function Scan() {
       })
       await qc.invalidateQueries({ queryKey: ['today'] })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Hiba a kijelentkezésnél')
+      setError(errMsg(e, 'Hiba a kijelentkezésnél'))
     } finally {
       setOutBusy(false)
     }
@@ -96,7 +97,7 @@ export default function Scan() {
       }
       await startCheckIn(car, false)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Hiba'
+      const msg = errMsg(e, 'Hiba')
       setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
     } finally {
       setBusy(false)
@@ -140,7 +141,7 @@ export default function Scan() {
       await continueCheckIn(car, manual, true)
       setPendingConflict(null)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Hiba'
+      const msg = errMsg(e, 'Hiba')
       setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
     } finally {
       setBusy(false)
@@ -157,7 +158,7 @@ export default function Scan() {
       setManualOpen(false)
       setManualCarId('')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Hiba'
+      const msg = errMsg(e, 'Hiba')
       setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
     } finally {
       setBusy(false)
@@ -262,7 +263,7 @@ export default function Scan() {
       setPendingSwitch(null)
       setSwitchNote('')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Hiba az autócsere mentésénél'
+      const msg = errMsg(e, 'Hiba az autócsere mentésénél')
       setError(msg.includes('duplicate') ? 'Erre az autóra ma már volt becsekkolásod — húzd le az oldalt a frissítéshez.' : msg)
     } finally {
       setBusy(false)

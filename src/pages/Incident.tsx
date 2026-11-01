@@ -12,6 +12,7 @@ import { resolveNames } from '../lib/names'
 import { signedUrls } from '../lib/photos'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
+import { errMsg } from '../lib/errors'
 
 export default function Incident() {
   const { profile } = useAuth()
@@ -67,7 +68,7 @@ export default function Incident() {
       setPhoto(null); setNote(''); toast.success('Esemény rögzítve.')
       await qc.invalidateQueries({ queryKey: ['incidents'] })
     } catch (e) {
-      setMsg('Hiba: ' + (e instanceof Error ? e.message : 'ismeretlen'))
+      setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')))
     } finally {
       setBusy(false)
     }
