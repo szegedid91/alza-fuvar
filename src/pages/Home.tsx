@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { todayISO } from '../lib/labels'
 import HelpSessionsCard from '../components/HelpSessionsCard'
+import WaiverRequest from '../components/WaiverRequest'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string; group?: string; badge?: number }
 
@@ -37,6 +38,8 @@ export default function Home() {
       return (data ?? []).map((r) => r.kind as string)
     },
   })
+  // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
+  const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
   const enRoute = !!todayStatus?.includes('departed') && !todayStatus.includes('done') && !todayStatus.includes('settled')
   // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
@@ -96,18 +99,27 @@ export default function Home() {
     managerHub.push({ group: 'Előzmények', to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Ki mit módosított' })
   }
   const hubGroups = ['Napi munka', 'Emberek és autók', 'Pénz és kimutatás', 'Előzmények']
-  if (isAdmin) managerHub.push({ to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Módosítások, app-hibák' })
 
   return (
     <div className="stack">
 
       {/* Amíg nincs becsekkolva: a Mai nap lépéssor (a nagy QR-gombbal) legfelül; utána a járat és a jelzések */}
       {isCrew && !today?.checkin && <TodayStepper />}
-      {isCrew && <RouteCard />}
-      {isCrew && <StatusCard />}
-      {isCrew && !!today?.checkin && !enRoute && <TodayStepper />}
+      {/* Becsekkolás után, amíg az ellenőrzés (5 fotó vagy vezetői engedély) nincs meg: csak ez a kártya —
+          a többi funkció zárva, elérhető: Beosztás, Autó-hiba */}
+      {isCrew && inspectionLocked && today?.checkin && (
+        <div className="card stack" style={{ borderColor: 'var(--warning)', gap: 8 }}>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="camera" />Autó-ellenőrzés — {today.car?.plate}</div>
+          <Link to="/ellenorzes" className="btn" style={{ textDecoration: 'none' }}><Icon name="camera" />Fotók készítése (5 kép)</Link>
+          <WaiverRequest checkinId={today.checkin.id} requestedAt={today.checkin.inspection_help_requested_at} />
+          <div className="tiny muted">Amíg ez nincs meg, csak a Beosztás és az Autó-hiba érhető el.</div>
+        </div>
+      )}
+      {isCrew && !inspectionLocked && <RouteCard />}
+      {isCrew && !inspectionLocked && <StatusCard />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !enRoute && <TodayStepper />}
 
-      {isCrew && (
+      {isCrew && !inspectionLocked && (
         <div>
           <div className="card-title" style={{ marginBottom: 8 }}>Gyorslinkek</div>
           <div className="chips">

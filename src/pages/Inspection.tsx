@@ -177,11 +177,8 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
         </div>
       )}
       {!doneToday && !waived && (
-        <div className="card stack" style={{ borderColor: 'var(--warning)', gap: 8 }}>
-          <div className="row"><Icon name="alert-triangle" size={22} style={{ color: 'var(--warning)' }} /><strong>Kötelező: a becsekkolás a körbefotózással teljes</strong></div>
-          <p className="small muted" style={{ margin: 0 }}>
-            {reasonText ? `${reasonText}. ` : ''}Amíg nincs meg az 5 kép, a tankolás, a takarítás, a Box-lap és a nap lezárása zárva. Fotó nélkül csak a vezető engedhet tovább a saját fiókjából.
-          </p>
+        <div className="card stack" style={{ gap: 8 }}>
+          {reasonText && <div className="small muted">{reasonText}.</div>}
           <WaiverRequest checkinId={checkin.id} requestedAt={checkin.inspection_help_requested_at} />
         </div>
       )}
@@ -269,7 +266,9 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
         <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galériából nem tölthető fel, a telefonra nem mentődik.</p>
       </div>
 
-      <CleaningCard car={car} date={date} />
+      {/* Takarítás csak akkor, ha az ellenőrzés már megvan (vagy engedéllyel továbbengedve) */}
+
+      {(doneToday || waived) && <CleaningCard car={car} date={date} />}
       <InspectionHistory carId={car.id} date={date} />
     </>
   )

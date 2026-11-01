@@ -13,6 +13,7 @@ import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import OfflineHint from './OfflineHint'
 import HelpShareBanner from './HelpShareBanner'
 import { errMsg } from '../lib/errors'
+import { useToday } from '../hooks/useToday'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 
@@ -240,12 +241,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
   const pageTitle = ROUTE_TITLES[pathname]
 
+  // Ellenőrzés-zár: becsekkolás után, amíg nincs 5 fotó vagy vezetői engedély, csak néhány oldal érhető el
+  const { data: today } = useToday()
+  const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
+  const LOCK_ALLOWED = ['/', '/ellenorzes', '/beosztas', '/hibak', '/profil']
+  useEffect(() => {
+    if (inspectionLocked && !LOCK_ALLOWED.includes(pathname)) navigate('/ellenorzes', { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectionLocked, pathname])
+
   const nav: NavItem[] = [{ to: '/', icon: 'home', label: 'Kezdőlap', end: true }]
   if (isCrew) {
     // A munkatárs napi útja: beolvasás → (autó-hiba, ha van) → (este) beosztás.
     // A fuvartervet külön alkalmazás kezeli. A Profil a kezdőlap fejlécéből
     // érhető el — az alsó menüben a Beosztás értékesebb.
-    nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
+    if (!inspectionLocked) nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
     nav.push({ to: '/hibak', icon: 'wrench', label: 'Autó-hiba' })
     nav.push({ to: '/beosztas', icon: 'calendar', label: 'Beosztás' })
   }
