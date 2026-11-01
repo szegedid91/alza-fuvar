@@ -415,7 +415,6 @@ export default function Members() {
         </div>
       </div>
 
-      {actionError && <div className="alert error">{actionError}</div>}
 
       {isLoading && <div className="card"><div className="spinner" /></div>}
       {!isLoading && all.length === 0 && (
@@ -466,6 +465,7 @@ export default function Members() {
                 </button>
                 {open && (
                   <div className="grid-2" style={{ padding: '4px 10px 12px' }}>
+                    {actionError && <div className="alert error" style={{ gridColumn: '1 / -1' }}>{actionError}</div>}
                     {/* Telefon — egy koppintással hívható (párosok szervezésénél, hiányzásnál) */}
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
                       <label>Telefon</label>
