@@ -12,7 +12,6 @@ import { usePhotoHelpRequests } from '../lib/photoHelp'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { todayISO } from '../lib/labels'
-import HelpRequestCard from '../components/HelpRequestCard'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string }
@@ -124,7 +123,6 @@ export default function Home() {
 
       {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}
-      {isCrew && <HelpRequestCard />}
       {isCrew && !enRoute && <TodayStepper />}
 
       {isCrew && (
@@ -139,7 +137,6 @@ export default function Home() {
       )}
 
       {isManagerOrAdmin && <HelpSessionsCard />}
-      {isManagerOrAdmin && <HelpRequestCard compact />}
       {isManagerOrAdmin && (photoHelp?.length ?? 0) > 0 && (
         <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
           <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>

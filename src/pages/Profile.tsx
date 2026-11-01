@@ -16,6 +16,7 @@ const THEME_UI: Record<ThemePref, { icon: IconName; label: string }> = {
 }
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
+import HelpRequestCard from '../components/HelpRequestCard'
 
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -91,7 +92,8 @@ export default function ProfilePage() {
 
       <ThemeCard />
       <NavCard />
-      <FeedbackCard />
+      <HelpRequestCard />
+        <FeedbackCard />
 
       <PushCard />
 
