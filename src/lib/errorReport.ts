@@ -35,7 +35,9 @@ export async function reportClientError(message: string, stack?: string | null, 
 
 // Globális kezelők: kezeletlen kivétel és Promise-elutasítás.
 // A hálózati/megszakítási zajt kiszűrjük — azok nem programhibák.
-const NOISE = /Failed to fetch|Load failed|NetworkError|AbortError|The operation was aborted|dynamically imported module/i
+// setPhotoOptions failed: az Android Chrome belső kamera-hibája, amikor a QR-olvasás után
+// azonnal leállítjuk a kamerát — a beolvasás ettől még sikeres, nem programhiba
+const NOISE = /Failed to fetch|Load failed|NetworkError|AbortError|The operation was aborted|dynamically imported module|setPhotoOptions|getPhotoCapabilities|Importing a module script failed/i
 
 export function installGlobalErrorHandlers(): void {
   if (typeof window === 'undefined') return
