@@ -82,16 +82,6 @@ export default function Home() {
 
   return (
     <div className="stack">
-      <div className="card">
-        <Link to="/profil" className="between" style={{ textDecoration: 'none', color: 'inherit' }} aria-label="Profil megnyitása">
-          <div style={{ minWidth: 0 }}>
-            <div className="muted small">Üdv,</div>
-            <h2 style={{ fontSize: 22, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name ?? profile?.email}</h2>
-            {!isCrew && <div className="tiny muted">Profil, értesítések, kilépés</div>}
-          </div>
-          <Icon name="chevron-right" className="muted" />
-        </Link>
-      </div>
 
       {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}

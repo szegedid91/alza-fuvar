@@ -277,6 +277,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         )}
         <div className="spacer" />
         <SyncBadge />
+        {/* Ki van bejelentkezve — koppintásra a Profil */}
+        <NavLink to="/profil" aria-label="Profil megnyitása" style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'inherit', fontSize: 13, fontWeight: 700, maxWidth: '42vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '4px 6px', borderRadius: 999 }}>
+          <Icon name="user" size={16} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile?.full_name || profile?.email || ''}</span>
+        </NavLink>
         <WorkspaceSwitcher />
       </header>
 
