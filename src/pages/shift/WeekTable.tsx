@@ -398,6 +398,45 @@ export default function WeekTable() {
     }
   }
 
+  // A hét beosztása szövegként (FB-csoportba, WhatsAppba beilleszthető): naponként, autónként, járattal, körrel
+  const [textOpen, setTextOpen] = useState<string | null>(null)
+  function buildWeekText(): string {
+    const nameOf = (id: string | null) => (id ? memberOptions.find((m) => m.id === id)?.label ?? '?' : null)
+    const routeCode = (id: string | null) => (id ? (routes ?? []).find((r) => r.id === id)?.code ?? null : null)
+    const lines: string[] = [`📅 Beosztás — ${weekLabel(weekStart, days[6])}`, '']
+    days.forEach((d, i) => {
+      lines.push(`${DAY_NAMES_LONG[i]} (${d.slice(5).replace('-', '.')}.)`)
+      let any = false
+      for (const car of rowCars) {
+        for (const round of [1, 2]) {
+          const sh = shiftAt(car.id, d, round)
+          if (!sh || (!sh.driver_id && !sh.loader_id && !sh.trainee_id)) continue
+          any = true
+          const people = [nameOf(sh.driver_id), nameOf(sh.loader_id)].filter((x): x is string => !!x).join(' + ')
+          const trainee = nameOf(sh.trainee_id)
+          const rc = routeCode(sh.route_id)
+          lines.push(`• ${car.plate}${rc ? ` · ${rc} járat` : ''}${round === 2 ? ' · 2. kör' : ''}: ${people || '—'}${trainee ? ` (betanuló: ${trainee})` : ''}`)
+        }
+      }
+      if (!any) lines.push('• —')
+      lines.push('')
+    })
+    return lines.join('\n').trimEnd()
+  }
+  async function copyWeekText() {
+    const text = buildWeekText()
+    setCopyMsg(null)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyMsg('A heti beosztás a vágólapon — illeszd be a csoportba.')
+      setTextOpen(null)
+    } catch {
+      // iOS PWA-ban a vágólap néma lehet — a szöveg itt kijelölhető, vagy a megosztás-menün át mehet
+      setTextOpen(text)
+      if (navigator.share) { try { await navigator.share({ text }) } catch { /* megszakítva */ } }
+    }
+  }
+
   return (
     <>
       <div className="card stack">
@@ -410,6 +449,16 @@ export default function WeekTable() {
           <button className="btn secondary sm" onClick={() => setWeekStart(mondayOf(todayISO()))}><Icon name="calendar" />Ez a hét</button>
           <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (felülír)" onConfirm={() => void copyPrevWeek()}><Icon name="clipboard" />Előző hét másolása</ConfirmButton>
         </div>
+        <button type="button" className="btn ghost sm" disabled={(shifts?.length ?? 0) === 0} onClick={() => void copyWeekText()}>
+          <Icon name="file-text" />Beosztás másolása szövegként (FB-csoportba)
+        </button>
+        {textOpen && (
+          <div className="stack" style={{ gap: 4 }}>
+            <div className="tiny muted">A vágólap nem elérhető — jelöld ki és másold, vagy oszd meg:</div>
+            <textarea className="input" readOnly value={textOpen} rows={8} style={{ fontSize: 12, fontFamily: 'inherit' }} onFocus={(e) => e.currentTarget.select()} />
+            <button type="button" className="btn ghost sm" onClick={() => setTextOpen(null)}>Bezárás</button>
+          </div>
+        )}
         <ConfirmButton
           className="btn sm"
           confirmLabel={`Küldés ${weekPeople.size} munkatársnak`}
