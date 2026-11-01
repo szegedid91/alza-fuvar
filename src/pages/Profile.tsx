@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { roleLabel, statusLabel, isCrewRole } from '../lib/labels'
 import { pushSupported, isPushSubscribed, subscribePush, unsubscribePush } from '../lib/push'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
 import { getNavApp, setNavApp, NAV_LABEL, type NavApp } from '../lib/nav'
@@ -21,7 +20,7 @@ import HelpRequestCard from '../components/HelpRequestCard'
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
-  const [phone, setPhone] = useState(profile?.phone ?? '')
+  const phone = profile?.phone ?? '' // a telefonszám a Tagok oldalon kezelhető, itt nem szerkeszthető, de mentéskor megmarad
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pwBusy, setPwBusy] = useState(false)
@@ -57,8 +56,6 @@ export default function ProfilePage() {
     setBusy(false)
   }
 
-  // Futárnál csak a név: a telefonszám, email, szerep, állapot nem jelenik meg
-  const crew = isCrewRole(profile?.role)
   return (
     <div className="stack">
       <div className="card stack primary">
@@ -67,13 +64,6 @@ export default function ProfilePage() {
           <label>Teljes név</label>
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </div>
-        {!crew && (
-          <div className="field">
-            <label>Telefonszám</label>
-            <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+36 30 123 4567" />
-            <div className="tiny muted">A munkatársak a Beosztásom oldalon, a vezetők a Tagok oldalon látják ezt a számot.</div>
-          </div>
-        )}
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         {/* Üres név nem menthető — a név mindenhol megjelenik (beosztás, bér, napló) */}
         <button className="btn" onClick={() => void save()} disabled={busy || !fullName.trim()}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
@@ -82,11 +72,6 @@ export default function ProfilePage() {
 
       <div className="card stack">
         <div className="card-title"><Icon name="shield-check" />Fiók</div>
-        {!crew && (<>
-          <div className="between"><span className="muted small">Email</span><span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</span></div>
-          <div className="between"><span className="muted small">Szerep</span><span className="badge primary">{profile?.role ? roleLabel[profile.role] : '–'}</span></div>
-          <div className="between"><span className="muted small">Állapot</span><span className="badge success">{profile ? statusLabel[profile.status] : '–'}</span></div>
-        </>)}
         <button className="btn ghost sm" disabled={pwBusy} onClick={() => void sendPasswordReset()}>
           <Icon name="key" />{pwBusy ? 'Küldés…' : 'Jelszó módosítása (emailes link)'}
         </button>
