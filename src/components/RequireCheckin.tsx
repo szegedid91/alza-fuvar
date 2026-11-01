@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { useToday } from '../hooks/useToday'
 import Icon from './Icon'
 import Skeleton from './Skeleton'

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import RequireCheckin from '../components/RequireCheckin'

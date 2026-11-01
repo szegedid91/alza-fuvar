@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import RequireCheckin from '../components/RequireCheckin'
 import InspectionGate from '../components/InspectionGate'
 import Icon from '../components/Icon'

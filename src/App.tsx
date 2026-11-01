@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { lazyRetry } from './lib/lazyRetry'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from './context/AuthContext'
 import InvitePage from './pages/Invite'
 import { isCrewRole } from './lib/labels'

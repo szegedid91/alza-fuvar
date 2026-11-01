@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router'
 import Icon, { type IconName } from './Icon'
 import { useAuth } from '../context/AuthContext'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
