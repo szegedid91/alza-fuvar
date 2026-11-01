@@ -42,6 +42,7 @@ export function useToday() {
           .eq('workspace_id', currentWorkspaceId!)
           .eq('user_id', profile!.id)
           .eq('work_date', date)
+          .order('checked_out_at', { ascending: true, nullsFirst: true })
           .order('checked_in_at', { ascending: false })
           .limit(1)
           .maybeSingle(),

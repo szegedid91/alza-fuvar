@@ -157,7 +157,11 @@ function PushPrompt() {
     if (sessionStorage.getItem('alza-push-prompt-dismissed')) return
     let cancelled = false
     void (async () => {
-      if (await isPushSubscribed()) return
+      if (await isPushSubscribed()) {
+        // a böngésző feliratkozása megvan — a szerveren a mostani felhasználóhoz kötjük (eszközváltásnál az előzőé maradt)
+        try { await subscribePush(profile.id) } catch { /* offline: a következő indításnál */ }
+        return
+      }
       if (Notification.permission === 'denied') return
       if (Notification.permission === 'granted') {
         try { await subscribePush(profile.id) } catch { if (!cancelled) setShow(true) }

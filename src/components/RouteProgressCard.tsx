@@ -8,7 +8,7 @@ import { useRouteStops } from '../hooks/useRouteStops'
 import { resolveNames } from '../lib/names'
 import { todayISO } from '../lib/labels'
 import Icon from './Icon'
-import { timeToMin, fmtTime, nowMin } from '../lib/routePlan'
+import { fmtTime, nowMin, deadlineMin, resolveRunIndex } from '../lib/routePlan'
 
 // Vezetői nézet: a mai járatok (beosztásból), ki viszi, és hanyadik címnél tart
 // a futár — a route_runs haladásból, realtime frissülve
@@ -26,7 +26,7 @@ export default function RouteProgressCard() {
       const [{ data: shifts, error }, { data: runs, error: runErr }, { data: cars, error: carErr }, { data: logs, error: logErr }] = await Promise.all([
         supabase.from('shifts').select('id, car_id, round, route_id, driver_id, loader_id, trainee_id')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date).not('route_id', 'is', null).order('round'),
-        supabase.from('route_runs').select('route_id, round, car_id, current_index, updated_at')
+        supabase.from('route_runs').select('route_id, round, car_id, current_index, current_stop_id, current_box_id, updated_at')
           .eq('workspace_id', currentWorkspaceId!).eq('work_date', date),
         supabase.from('cars').select('id, plate').eq('workspace_id', currentWorkspaceId!),
         supabase.from('route_stop_logs').select('route_id, round, car_id, box_id, stop_index, done_at, late_minutes, delay_reason, box:alza_boxes(code, name)')
@@ -58,12 +58,12 @@ export default function RouteProgressCard() {
       <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Járatok ma ({data.length})</div>
       {data.map((s) => {
         const stops = stopsByRoute?.[s.routeId] ?? []
-        const idx = Math.min(s.run?.current_index ?? 0, stops.length)
+        const idx = resolveRunIndex(s.run, stops)
         const done = stops.length > 0 && idx >= stops.length
         const cur = stops[idx]
         const pct = stops.length ? Math.round((idx / stops.length) * 100) : 0
         // Késésben: az aktuális box határideje lejárt, még nincs leadva (a vezetők 5 percenként pusht is kapnak)
-        const dl = cur && !done ? timeToMin(cur.deadline) : null
+        const dl = cur && !done ? deadlineMin(cur.deadline, s.round) : null
         const lateNow = dl != null ? nowMin() - dl : null
         const lateLogs = s.logs.filter((l) => l.reason)
         return (

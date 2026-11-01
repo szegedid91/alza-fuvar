@@ -199,10 +199,11 @@ export default function Payroll() {
             else if (c?.xlLoader) { const v = r?.loader ?? 0; loaderDays++; loaderPay += v; dayRate += v; parts.push('XL rakodó'); role = 'loader' }
             if (c?.boxR1 || c?.boxR2) {
               // Box sofőr: 1. kör díja + 2. kör díja (amelyiket vitte)
-              const b1 = c.boxR1 ? (r?.box ?? 0) : 0
-              const b2 = c.boxR2 ? (r?.box2 ?? 0) : 0
+              // Box-nap díja jár, ha bármelyik kört vitte; a 2. kör díja RÁADÁS, ha aznap mindkét kört vitte
+              const b1 = (c.boxR1 || c.boxR2) ? (r?.box ?? 0) : 0
+              const b2 = (c.boxR1 && c.boxR2) ? (r?.box2 ?? 0) : 0
               boxDays++; boxPay += b1; dayRate += b1 + b2
-              if (c.boxR2) { boxRound2Days++; boxRound2Pay += b2 }
+              if (c.boxR1 && c.boxR2) { boxRound2Days++; boxRound2Pay += b2 }
               parts.push(c.boxR1 && c.boxR2 ? 'Box sofőr (2 kör)' : c.boxR2 ? 'Box sofőr (2. kör)' : 'Box sofőr (1. kör)')
               if (role !== 'driver') role = 'box'
             }

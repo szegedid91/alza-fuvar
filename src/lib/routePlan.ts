@@ -110,4 +110,18 @@ export function timeToMin(t: string | null | undefined): number | null {
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null
 }
 export function fmtTime(t: string | null | undefined): string | null { return t ? t.slice(0, 5) : null }
+// Határidő percben a késés-számításhoz: a 2. kör (délután) a terv határidőit nem nézi;
+// a hajnali (04:00 előtti) határidő a következő napra szól
+export function deadlineMin(t: string | null | undefined, round = 1): number | null {
+  if (round === 2) return null
+  const m = timeToMin(t)
+  return m == null ? null : m < 240 ? m + 1440 : m
+}
+// A futás aktuális megállója: azonosító, aztán box, végül a sorszám (a sorrend napközbeni módosítása ne ugrassa el)
+export function resolveRunIndex<T extends { id: string; box_id: string }>(run: { current_index: number; current_stop_id?: string | null; current_box_id?: string | null } | null | undefined, stops: T[]): number {
+  if (!run) return 0
+  if (run.current_stop_id) { const i = stops.findIndex((s) => s.id === run.current_stop_id); if (i >= 0) return i }
+  if (run.current_box_id) { const i = stops.findIndex((s) => s.box_id === run.current_box_id); if (i >= 0) return i }
+  return Math.min(run.current_index ?? 0, stops.length)
+}
 export function nowMin(): number { const d = new Date(); return d.getHours() * 60 + d.getMinutes() }

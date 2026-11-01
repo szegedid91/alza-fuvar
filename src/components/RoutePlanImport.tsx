@@ -30,8 +30,10 @@ export default function RoutePlanImport() {
     try {
       const parsed = await parseRoutePlan(file)
       const codes = [...new Set(parsed.flatMap((r) => r.stops.map((s) => s.code)))]
+      const bad = codes.filter((c) => !/^[A-Z0-9]{2,16}$/.test(c))
+      if (bad.length) throw new Error(`Érvénytelen box-kód a fájlban: ${bad.slice(0, 5).join(', ')}`)
       // pontos kód, vagy a jegyzék utótagos változata (AB9759 → AB9759B), ha egyetlen ilyen van
-      const { data, error } = await supabase.from('alza_boxes').select('id, code, lat, lng').or(codes.map((c) => `code.like.${c}%`).join(','))
+      const { data, error } = await supabase.from('alza_boxes').select('id, code, lat, lng').or(codes.map((c) => `code.like."${c}%"`).join(','))
       if (error) throw error
       const known = new Map<string, KnownBox>()
       const rows = (data ?? []).filter((b): b is KnownBox & { code: string } => !!b.code)
@@ -50,11 +52,12 @@ export default function RoutePlanImport() {
     mutationFn: async () => {
       if (!preview || !currentWorkspaceId) return
       const ws = currentWorkspaceId
+      let nextOrder = (routes?.length ?? 0) + 1
       for (const pr of preview.routes) {
         // 1) járat (kód szerint), ha nincs, létrejön
         let route = (routes ?? []).find((r) => r.code.toUpperCase() === pr.code)
         if (!route) {
-          const { data, error } = await supabase.from('route_names').insert({ workspace_id: ws, code: pr.code, sort_order: (routes?.length ?? 0) + 1 }).select('*').single()
+          const { data, error } = await supabase.from('route_names').insert({ workspace_id: ws, code: pr.code, sort_order: nextOrder++ }).select('*').single()
           if (error) throw error
           route = data
         }
@@ -71,14 +74,13 @@ export default function RoutePlanImport() {
             ids.set(s.code, data.id); preview.known.set(s.code, { id: data.id, code: s.code, lat: s.lat, lng: s.lng })
           }
         }
-        // 3) megállók cseréje a terv szerint (idővel, határidővel)
-        const del = await supabase.from('route_stops').delete().eq('route_id', route.id)
-        if (del.error) throw del.error
-        const rows = pr.stops.map((s, i) => ({ workspace_id: ws, route_id: route!.id, box_id: ids.get(s.code)!, sort_order: i + 1, eta: s.eta, etd: s.etd, deadline: s.deadline }))
-        const ins = await supabase.from('route_stops').insert(rows)
-        if (ins.error) throw ins.error
-        const up = await supabase.from('route_names').update({ planned_start: pr.start, planned_end: pr.end, plan_imported_at: new Date().toISOString(), plan_source: preview.fileName, is_relief: false }).eq('id', route.id)
-        if (up.error) throw up.error
+        // 3) megállók cseréje a terv szerint — egy tranzakcióban a szerveren (félbeszakadva nem marad üres járat)
+        const { error: rpcErr } = await supabase.rpc('replace_route_stops', {
+          p_route_id: route.id,
+          p_stops: pr.stops.map((s) => ({ box_id: ids.get(s.code)!, eta: s.eta, etd: s.etd, deadline: s.deadline })),
+          p_planned_start: pr.start, p_planned_end: pr.end, p_source: preview.fileName,
+        } as never)
+        if (rpcErr) throw rpcErr
       }
     },
     onSuccess: () => {

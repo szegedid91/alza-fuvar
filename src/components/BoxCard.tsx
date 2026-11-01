@@ -103,7 +103,7 @@ export default function BoxCard({
             <Icon name="navigation" />Navigálás ({NAV_LABEL[getNavApp()]})
           </a>
         )}
-        {box.article_url && (
+        {box.article_url && /^https?:\/\//i.test(box.article_url) && (
           <a className="btn ghost auto" href={box.article_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
             <Icon name="package" />alza.hu
           </a>

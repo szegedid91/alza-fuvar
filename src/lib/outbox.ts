@@ -119,16 +119,18 @@ export async function discardFailed(id: string): Promise<void> {
 
 function isNetworkError(e: unknown): boolean {
   if (!navigator.onLine) return true
-  // A fetch hálózati hibái TypeError-ként érkeznek; a szöveges minták csak tartalék
-  if (e instanceof TypeError) return true
+  // Csak a VALÓDI hálózati hibák (a fetch TypeError-jai ilyen szöveggel) — egy programhiba (más TypeError)
+  // nem akaszthatja meg örökre a sort; a Postgres „statement timeout” sem hálózati hiba
   const msg = (errMsg(e, 'ismeretlen hiba')).toLowerCase()
+  if (msg.includes('statement timeout') || msg.includes('canceling statement')) return false
   return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')
-    || msg.includes('timeout') || msg.includes('load failed')
+    || msg.includes('network timeout') || msg.includes('load failed') || msg.includes('the internet connection') || msg.includes('err_internet') || msg.includes('err_network')
 }
 
 async function runRecord(rec: OutboxRecord): Promise<void> {
   const values = { ...rec.values }
   if (rec.photo) {
+    if (!rec.photo.blob) throw new Error('A fotó adata elveszett a helyi tárból — készítsd el újra')
     const path = await uploadPhoto(rec.photo.workspaceId, rec.photo.folder, rec.photo.id, rec.photo.blob)
     values[rec.photo.column] = path
     // Fotó-hitelesség: hash rögzítése (hiba esetén nem blokkolja a mentést)
@@ -267,6 +269,8 @@ export async function submitNow(
         await flushOutbox()
         const still = await (await db()).get('outbox', stored.id)
         notify()
+        // ha a szerver ELUTASÍTOTTA (adat/RLS hiba), az nem „sorban áll”: a hívó kapja meg a hibát
+        if (still && still.attempts > 0) { try { await (await db()).delete('outbox', stored.id) } catch { /* marad, de hibát dobunk */ } throw new Error(still.lastError ?? 'A mentést a szerver elutasította') }
         return { queued: !!still }
       }
     } catch (e) {
@@ -274,7 +278,8 @@ export async function submitNow(
       persisted = false
     }
   }
-  const forget = async () => { if (!persisted) return; try { await (await db()).delete('outbox', stored.id) } catch { /* a következő flush úgyis újrajátssza (idempotens upsert) */ } }
+  // a helyi példányt akkor is töröljük, ha a sorba írás „sikertelennek” látszott — különben később újrajátszódna
+  const forget = async () => { try { await (await db()).delete('outbox', stored.id) } catch { /* nincs helyi példány */ } }
   try {
     await runRecord(stored)
     await forget()

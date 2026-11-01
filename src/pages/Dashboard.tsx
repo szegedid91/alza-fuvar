@@ -290,7 +290,7 @@ export default function Dashboard() {
           supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id, trainee_id').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('fuel_logs').select('car_id, km_warning, odometer_km').eq('workspace_id', ws).eq('work_date', today),
-          supabase.from('car_inspections').select('car_id, created_at').eq('workspace_id', ws).eq('work_date', today),
+          supabase.from('car_inspections').select('car_id, created_at').eq('workspace_id', ws).eq('work_date', today).not('completed_at', 'is', null),
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
           supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
         ])

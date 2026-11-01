@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatHuf, adjustmentTypeLabel } from '../lib/labels'
+import { formatDate, formatHuf, adjustmentTypeLabel, todayISO } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 
 type Summary = {
@@ -24,7 +24,7 @@ export default function MemberDataSummary({ userId }: { userId: string }) {
   if (isLoading) return <div className="tiny muted">Adatok összegyűjtése…</div>
   if (!data) return null
   const d = (iso: string) => formatDate(iso).replace(/^\d{4}\.\s*/, '')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   const future = data.shifts.filter((s) => s.date >= today)
   const list = (items: string[], max = 14) => items.slice(0, max).join(', ') + (items.length > max ? ` … (+${items.length - max})` : '')
   return (

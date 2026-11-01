@@ -491,6 +491,7 @@ export type Database = {
       car_inspections: {
         Row: {
           car_id: string
+          completed_at: string | null
           created_at: string
           gps_lat: number | null
           gps_lng: number | null
@@ -502,6 +503,7 @@ export type Database = {
         }
         Insert: {
           car_id: string
+          completed_at?: string | null
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
@@ -513,6 +515,7 @@ export type Database = {
         }
         Update: {
           car_id?: string
+          completed_at?: string | null
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
@@ -1637,7 +1640,9 @@ export type Database = {
       route_runs: {
         Row: {
           car_id: string
+          current_box_id: string | null
           current_index: number
+          current_stop_id: string | null
           id: string
           round: number
           route_id: string
@@ -1648,7 +1653,9 @@ export type Database = {
         }
         Insert: {
           car_id: string
+          current_box_id?: string | null
           current_index?: number
+          current_stop_id?: string | null
           id?: string
           round?: number
           route_id: string
@@ -1659,7 +1666,9 @@ export type Database = {
         }
         Update: {
           car_id?: string
+          current_box_id?: string | null
           current_index?: number
+          current_stop_id?: string | null
           id?: string
           round?: number
           route_id?: string
@@ -2318,6 +2327,10 @@ export type Database = {
         Returns: undefined
       }
       can_access_workspace: { Args: { wid: string }; Returns: boolean }
+      create_relief_route: {
+        Args: { p_code: string; p_stops: Json }
+        Returns: string
+      }
       current_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
@@ -2340,6 +2353,10 @@ export type Database = {
       }
       delete_workspace_rate: { Args: { p_id: string }; Returns: undefined }
       discard_empty_inspection: { Args: { p_id: string }; Returns: boolean }
+      dissolve_relief_route: {
+        Args: { p_route_id: string }
+        Returns: undefined
+      }
       is_active: { Args: never; Returns: boolean }
       is_admin: { Args: never; Returns: boolean }
       is_manager_or_admin: { Args: never; Returns: boolean }
@@ -2350,6 +2367,16 @@ export type Database = {
         Returns: undefined
       }
       push_inspection_reminder: { Args: { p_id: string }; Returns: undefined }
+      replace_route_stops: {
+        Args: {
+          p_planned_end?: string
+          p_planned_start?: string
+          p_route_id: string
+          p_source?: string
+          p_stops: Json
+        }
+        Returns: undefined
+      }
       resolve_member_contacts: {
         Args: { ids: string[] }
         Returns: {
@@ -2369,6 +2396,13 @@ export type Database = {
         Args: {
           p_pay_amount: number
           p_pay_type: Database["public"]["Enums"]["pay_type"]
+          target_id: string
+        }
+        Returns: undefined
+      }
+      set_user_role: {
+        Args: {
+          p_role: Database["public"]["Enums"]["user_role"]
           target_id: string
         }
         Returns: undefined
@@ -2402,14 +2436,6 @@ export type Database = {
           p_loader_rate: number
           p_trainee_rate?: number
           p_valid_from: string
-          p_workspace_id: string
-        }
-        Returns: undefined
-      }
-      set_workspace_rates: {
-        Args: {
-          p_driver_rate: number
-          p_loader_rate: number
           p_workspace_id: string
         }
         Returns: undefined

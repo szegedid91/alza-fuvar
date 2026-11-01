@@ -101,7 +101,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
     queryKey: ['inspections-today', car.id, date],
     queryFn: async () => {
       const { count, error } = await supabase.from('car_inspections')
-        .select('id', { count: 'exact', head: true }).eq('car_id', car.id).eq('work_date', date)
+        .select('id', { count: 'exact', head: true }).eq('car_id', car.id).eq('work_date', date).not('completed_at', 'is', null)
       if (error) throw error
       return count ?? 0
     },

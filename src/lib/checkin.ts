@@ -26,7 +26,7 @@ export async function resolveCarByToken(token: string, workspaceId: string): Pro
     .maybeSingle()
   if (error) {
     console.error('Autó feloldási hiba:', error.message)
-    return null
+    throw new Error(/fetch|network|load failed/i.test(error.message) ? 'Nincs hálózati kapcsolat — próbáld újra, ha van térerő' : 'Az autó lekérése nem sikerült: ' + error.message)
   }
   return data
 }
@@ -68,7 +68,7 @@ export async function traineeScheduled(carId: string, date: string): Promise<boo
 // Van-e MA ellenőrző fotósor az autón (bárkitől) — a becsekkolás ettől teljes
 export async function countInspectionsToday(carId: string, date: string): Promise<number> {
   const { count, error } = await supabase.from('car_inspections')
-    .select('id', { count: 'exact', head: true }).eq('car_id', carId).eq('work_date', date)
+    .select('id', { count: 'exact', head: true }).eq('car_id', carId).eq('work_date', date).not('completed_at', 'is', null)
   if (error) throw error
   return count ?? 0
 }

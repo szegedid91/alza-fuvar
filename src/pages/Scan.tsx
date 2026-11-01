@@ -38,6 +38,8 @@ export default function Scan() {
   // Napközbeni autócsere: a beolvasott új autó + a kötelező ok
   // (conflict: a "tele autó" figyelmeztetést már elfogadta — a csere után is jelöljük)
   const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean; conflict: boolean } | null>(null)
+  // Lezárt nap után ugyanazt az autót beolvasva: csak megerősítéssel nyílik újra (a kijelentkezés ideje elveszne)
+  const [pendingReopen, setPendingReopen] = useState<{ car: Car; checkinId: string } | null>(null)
   // "Tele" autó: ma már annyian vannak rajta nyitott becsekkolással, ahány fős
   // (Box = 1). Rákérdezünk — ha mégis, a vezetők jelzést kapnak.
   const [pendingConflict, setPendingConflict] = useState<{ car: Car; manual: boolean; others: CrewMember[]; capacity: number } | null>(null)
@@ -128,6 +130,8 @@ export default function Scan() {
       setPendingSwitch({ car, manual, conflict })
       return
     }
+    const closed = today?.checkin && today.checkin.checked_out_at && today.checkin.car_id === car.id ? today.checkin : null
+    if (closed) { setPendingReopen({ car, checkinId: closed.id }); return }
     await doCheckIn(car, null, null, null, manual, conflict)
   }
 
@@ -173,7 +177,9 @@ export default function Scan() {
     if (!currentWorkspaceId || !profile) return
     const date = todayISO()
     const gps = await getCurrentPosition()
-    const req = await checkInspectionRequirement(car.id, profile.id, date)
+    // a követelmény (sofőrváltás, 9-e) csak tájékoztató — a fotókaput külön kényszeríti a rendszer; offline nem akadály
+    let req: InspectionRequirement = { required: false, reasons: [] }
+    try { req = await checkInspectionRequirement(car.id, profile.id, date) } catch { /* offline: a becsekkolás sorba áll */ }
 
     // Geofence: bárhol enged, de jelzi a vezetőknek, ha nem a telephelyen történt
     const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
@@ -250,6 +256,24 @@ export default function Scan() {
     // Beolvasás után egyből a fotók: az ellenőrzés oldal mutatja az autót + időt,
     // és sorban viszi végig a nézeteken (körbe az autón, végül a fülke)
     navigate('/ellenorzes', { state: { fromCheckin: true } })
+  }
+
+  // A lezárt nap újranyitása ugyanarra az autóra: csak a kijelentkezés törlődik, a többi mező marad
+  async function confirmReopen() {
+    if (!pendingReopen || !currentWorkspaceId) return
+    setBusy(true); setError(null)
+    try {
+      await submitNow({
+        id: crypto.randomUUID(), table: 'check_ins', op: 'update', match: { id: pendingReopen.checkinId },
+        label: `Nap újranyitása – ${pendingReopen.car.plate}`,
+        values: { checked_out_at: null, out_gps_lat: null, out_gps_lng: null, out_outside_geofence: false },
+      })
+      setPendingReopen(null)
+      await qc.invalidateQueries({ queryKey: ['today'] })
+      navigate('/', { replace: true })
+    } catch (e) {
+      setError(errMsg(e, 'Az újranyitás nem sikerült'))
+    } finally { setBusy(false) }
   }
 
   // Autócsere megerősítése a megadott okkal
@@ -398,6 +422,17 @@ export default function Scan() {
         </div>
       )}
 
+      {pendingReopen && (
+        <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" />Ma már kijelentkeztél erről az autóról</div>
+          <p className="small" style={{ margin: 0 }}>{pendingReopen.car.plate}: a mai nap le van zárva. Újranyitod? A kijelentkezés ideje törlődik, és a nap végén újra ki kell jelentkezned.</p>
+          <div className="btn-grid">
+            <button className="btn secondary sm" disabled={busy} onClick={() => setPendingReopen(null)}>Mégse</button>
+            <button className="btn sm" disabled={busy} onClick={() => void confirmReopen()}><Icon name="play" />Igen, újranyitom</button>
+          </div>
+        </div>
+      )}
+
       {pendingSwitch && (
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
           <div className="row"><Icon name="repeat" size={24} style={{ color: 'var(--warning)' }} /><strong>Autócsere: {today?.car?.plate} → {pendingSwitch.car.plate}</strong></div>
@@ -460,8 +495,8 @@ export default function Scan() {
       {!checkedIn && !isLoading && !pendingConflict && (
         <div className="card stack primary">
           <p className="muted small">Olvasd be az autó QR-kódját a nap kezdéséhez. A beolvasás rögzíti a ledolgozott napot (idő + GPS).</p>
-          <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
-            <Icon name="qr-code" />{busy ? 'Feldolgozás…' : 'QR beolvasása'}
+          <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy || !cars}>
+            <Icon name="qr-code" />{busy ? 'Feldolgozás…' : !cars ? 'Autók betöltése…' : 'QR beolvasása'}
           </button>
           {!manualOpen && (
             <button className="btn ghost sm" type="button" onClick={() => { setError(null); setManualOpen(true) }} disabled={busy}>

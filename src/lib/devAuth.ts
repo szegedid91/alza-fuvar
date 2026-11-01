@@ -28,7 +28,8 @@ const isLocalHost =
   (['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
     window.location.hostname.endsWith('.localhost'))
 
-const LOCAL_ONLY = import.meta.env.DEV || isLocalHost
+// Csak a vite dev szerveren ÉS localhoston: éles buildből a fiókok szövege is kimarad (holt kód)
+const LOCAL_ONLY = import.meta.env.DEV && isLocalHost
 
 function parseAccounts(): DevAccount[] {
   const raw = (import.meta.env.VITE_DEV_ACCOUNTS as string | undefined)?.trim()

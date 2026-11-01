@@ -5,6 +5,7 @@ import { queryClient } from '../lib/queryClient'
 import { clearOutbox } from '../lib/outbox'
 import { RECOVERY_IN_URL, RECOVERY_URL_ERROR, markRecoveryPending, clearRecoveryPending, isRecoveryPending } from '../lib/recovery'
 import type { Tables } from '../lib/database.types'
+import { unsubscribePush } from '../lib/push'
 
 export type Profile = Tables<'profiles'>
 
@@ -114,6 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile])
 
   const signOut = useCallback(async () => {
+    // a push-feliratkozás a kijelentkező felhasználóé — még az ő tokenjével töröljük
+    try { await unsubscribePush() } catch { /* nincs feliratkozás vagy offline */ }
     await supabase.auth.signOut()
     setProfile(null)
     setRecovery(false)

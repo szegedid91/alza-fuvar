@@ -6,6 +6,8 @@ import { supabase } from './supabase'
 
 declare const __BUILD_TIME__: string
 
+// Tokenek, aláírt URL-ek sosem kerülnek a naplóba
+const scrub = (t: string) => t.replace(/(token|apikey|access_token|refresh_token)=[^&\s"']+/gi, '$1=…').replace(/Bearer\s+[A-Za-z0-9._-]+/g, 'Bearer …').replace(/eyJ[A-Za-z0-9._-]{20,}/g, '…')
 const MAX_PER_SESSION = 10
 let sent = 0
 const seen = new Set<string>()
@@ -25,8 +27,8 @@ export async function reportClientError(message: string, stack?: string | null, 
       user_id: u.user.id,
       workspace_id: workspaceId,
       path: extra?.path ?? (typeof location !== 'undefined' ? location.pathname : null),
-      message: message.slice(0, 2000),
-      stack: stack ? stack.slice(0, 8000) : null,
+      message: scrub(message).slice(0, 2000),
+      stack: stack ? scrub(stack).slice(0, 8000) : null,
       build: typeof __BUILD_TIME__ === 'string' ? __BUILD_TIME__ : null,
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : null,
     })

@@ -23,7 +23,7 @@ export async function findPhotoHelpRequests(workspaceId: string, date: string): 
   if (error) throw error
   if (!cis || cis.length === 0) return []
   const { data: insp, error: inspErr } = await supabase.from('car_inspections')
-    .select('car_id').eq('workspace_id', workspaceId).eq('work_date', date).in('car_id', cis.map((c) => c.car_id))
+    .select('car_id').eq('workspace_id', workspaceId).eq('work_date', date).not('completed_at', 'is', null).in('car_id', cis.map((c) => c.car_id))
   if (inspErr) throw inspErr
   const done = new Set((insp ?? []).map((i) => i.car_id))
   const open = cis.filter((c) => !done.has(c.car_id))

@@ -283,9 +283,7 @@ export default function Members() {
 
   const setRole = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: Enums<'user_role'> }) => {
-      const { error } = await supabase.rpc('approve_user', {
-        target_id: id, p_role: role, p_workspace_id: currentWorkspaceId!,
-      })
+      const { error } = await supabase.rpc('set_user_role', { target_id: id, p_role: role } as never)
       if (error) throw error
     },
     onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }) },

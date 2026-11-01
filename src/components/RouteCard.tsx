@@ -9,7 +9,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
-import { timeToMin, fmtTime, nowMin } from '../lib/routePlan'
+import { fmtTime, nowMin, deadlineMin, resolveRunIndex } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from './Icon'
@@ -57,7 +57,7 @@ export default function RouteCard() {
     enabled: !!currentWorkspaceId && (myShifts?.length ?? 0) > 0,
     refetchInterval: 30000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('route_runs').select('route_id, round, car_id, current_index')
+      const { data, error } = await supabase.from('route_runs').select('route_id, round, car_id, current_index, current_stop_id, current_box_id')
         .eq('workspace_id', currentWorkspaceId!).eq('work_date', date)
       if (error) throw error
       return data ?? []
@@ -78,18 +78,19 @@ export default function RouteCard() {
     },
   })
   const setIndex = useMutation({
-    mutationFn: async ({ routeId, round, carId, index, done }: { routeId: string; round: number; carId: string; index: number; done?: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] }) => {
+    mutationFn: async ({ routeId, round, carId, index, stopId, boxId, done }: { routeId: string; round: number; carId: string; index: number; stopId?: string | null; boxId?: string | null; done?: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] }) => {
       const { error } = await supabase.from('route_runs').upsert(
-        { workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, current_index: index, updated_by: profile!.id, updated_at: new Date().toISOString() },
+        { workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, current_index: index, current_stop_id: stopId ?? null, current_box_id: boxId ?? null, updated_by: profile!.id, updated_at: new Date().toISOString() },
         { onConflict: 'work_date,route_id,round,car_id' },
       )
       if (error) throw error
       // Előre lépéskor naplózzuk: ebben a boxban ekkor adott le mindent a futár (a vezető az Áttekintésben látja)
       if (done?.length) {
-        const { error: logErr } = await supabase.from('route_stop_logs').insert(done.map((d) => ({
+        // egy megálló egyszer naplózódik (ha a sofőr és a rakodó egyszerre nyomja, nem dupláz)
+        const { error: logErr } = await supabase.from('route_stop_logs').upsert(done.map((d) => ({
           workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, user_id: profile!.id, box_id: d.boxId, stop_index: d.stopIndex,
           late_minutes: d.lateMinutes ?? null, delay_reason: d.delayReason ?? null,
-        })))
+        })), { onConflict: 'work_date,route_id,round,car_id,stop_index', ignoreDuplicates: true })
         if (logErr) throw logErr
       }
     },
@@ -105,13 +106,13 @@ export default function RouteCard() {
       {myShifts.map((sh) => {
         const stops = stopsByRoute?.[sh.route_id] ?? []
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
-        const idx = Math.min(run?.current_index ?? 0, stops.length)
+        const idx = resolveRunIndex(run, stops)
         const go = (index: number, late?: { minutes: number; reason: string }) => {
           // ami az aktuális és az új hely között van, az leadva (általában egy box)
           const done: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] = index > idx ? stops.slice(idx, index).map((s, k) => ({ boxId: s.box_id, stopIndex: idx + k + 1 })) : []
           // a késés oka az aktuális (utolsóként leadott) boxhoz tartozik — a vezetők pusht kapnak róla
           if (late && done.length) done[done.length - 1] = { ...done[done.length - 1], lateMinutes: late.minutes, delayReason: late.reason }
-          setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, done })
+          setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, stopId: stops[index]?.id ?? null, boxId: stops[index]?.box_id ?? null, done })
         }
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
@@ -143,8 +144,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
   const [late, setLate] = useState<number | null>(null)
   const [reason, setReason] = useState('')
   useEffect(() => { setShowBox(false); setLate(null); setReason('') }, [idx])
-  const deadlineMin = timeToMin(cur?.deadline)
-  const lateNow = deadlineMin != null ? nowMin() - deadlineMin : null
+  const dlMin = deadlineMin(cur?.deadline, round)
+  const lateNow = dlMin != null ? nowMin() - dlMin : null
   const finish = () => {
     if (lateNow != null && lateNow > 0) { setLate(lateNow); return }
     go(idx + 1)

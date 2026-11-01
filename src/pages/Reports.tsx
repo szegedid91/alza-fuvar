@@ -76,7 +76,7 @@ export default function Reports() {
       const seenDay = new Set<string>()
       // Napközbeni autócserénél egy naphoz több check_ins sor tartozik — a
       // munkaidő ezért a nap TELJES hossza (első be → utolsó ki), nem a sorok összege
-      const dayspan = new Map<string, { from: number; to: number | null }>()
+      const dayspan = new Map<string, { from: number; to: number | null; open: boolean }>()
       const carDays = new Map<string, Set<string>>()
       for (const c of checkins ?? []) {
         const key = `${c.user_id}|${c.work_date}`
@@ -93,16 +93,17 @@ export default function Reports() {
         const from = new Date(c.checked_in_at).getTime()
         const to = c.checked_out_at ? new Date(c.checked_out_at).getTime() : null
         const span = dayspan.get(key)
-        if (!span) dayspan.set(key, { from, to })
+        if (!span) dayspan.set(key, { from, to, open: to == null })
         else {
           span.from = Math.min(span.from, from)
           span.to = to == null ? span.to : span.to == null ? to : Math.max(span.to, to)
+          if (to == null) span.open = true
         }
         if (!carDays.has(c.car_id)) carDays.set(c.car_id, new Set())
         carDays.get(c.car_id)!.add(c.work_date)
       }
       for (const [key, span] of dayspan) {
-        if (span.to == null) continue
+        if (span.open || span.to == null) continue // nyitott nap: nincs lezárt munkaidő
         u(key.slice(0, key.indexOf('|'))).hoursMs += Math.max(0, span.to - span.from)
       }
 

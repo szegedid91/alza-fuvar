@@ -15,7 +15,9 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/'
+  let url = (event.notification.data && event.notification.data.url) || '/'
+  // csak az app saját útvonala nyitható (külső oldal, „//más-oldal” nem)
+  try { url = new URL(url, self.location.origin).origin === self.location.origin ? new URL(url, self.location.origin).pathname + new URL(url, self.location.origin).search : '/' } catch (e) { url = '/' }
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       // Előny: már a cél-útvonalon nyitva lévő ablak; különben a meglévő ablakot

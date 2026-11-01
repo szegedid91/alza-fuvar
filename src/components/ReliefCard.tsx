@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
-import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
+import { useRouteStops } from '../hooks/useRouteStops'
 import { planRelief, estimateRoute, fmtMin, nextReliefCode, type ReliefRoute, type ReliefPlan } from '../lib/relief'
 import { toast } from '../lib/toast'
 import { depotOf } from '../lib/depot'
@@ -16,7 +16,7 @@ import { errMsg } from '../lib/errors'
 // futtatható — mindig az összes járat (a korábbi mentesítők is) boxait nézi.
 // Feloszlatásnál a boxok visszakerülnek az eredeti járatukra.
 export default function ReliefCard() {
-  const { currentWorkspaceId, currentWorkspace } = useWorkspace()
+  const { currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
   // A raktár (az admin állítja): innen indul és ide tér vissza minden járat a becslésben
   const depot = depotOf(currentWorkspace)
@@ -41,24 +41,12 @@ export default function ReliefCard() {
     mutationFn: async () => {
       if (!plan) return
       const code = nextReliefCode((routes ?? []).map((r) => r.code))
-      const { data: rn, error } = await supabase.from('route_names')
-        .insert({ workspace_id: currentWorkspaceId!, code, sort_order: (routes?.length ?? 0) + 1, is_relief: true }).select('id').single()
+      // egy tranzakcióban a szerveren: új járat + megállók át + eredetiek törlése + újrasorszámozás
+      const { data: newId, error } = await supabase.rpc('create_relief_route', {
+        p_code: code, p_stops: plan.relief.map((s) => ({ stop_id: s.id, from_route_id: s.fromRouteId })),
+      } as never)
       if (error) throw error
-      // az átkerülő megállók eredeti helye megmarad (feloszlatáshoz)
-      const all = routes!.flatMap((r) => stopsByRoute?.[r.id] ?? [])
-      const rows = plan.relief.map((s, i) => {
-        const orig = all.find((x) => x.id === s.id)
-        return { workspace_id: currentWorkspaceId!, route_id: rn.id, box_id: s.boxId, sort_order: i + 1, moved_from_route_id: s.fromRouteId, moved_from_order: orig?.sort_order ?? null }
-      })
-      const ins = await supabase.from('route_stops').insert(rows)
-      if (ins.error) throw ins.error
-      const del = await supabase.from('route_stops').delete().in('id', plan.relief.map((s) => s.id))
-      if (del.error) throw del.error
-      // a megmaradt megállók újrasorszámozása az érintett járatokon
-      for (const r of routes!) {
-        const rest = (stopsByRoute?.[r.id] ?? []).filter((s) => !plan.relief.some((x) => x.id === s.id))
-        await Promise.all(rest.map((s, i) => (s.sort_order === i + 1 ? null : supabase.from('route_stops').update({ sort_order: i + 1 }).eq('id', s.id))))
-      }
+      void newId
       return code
     },
     onSuccess: (code) => { toast.success(`Mentesítő járat létrehozva: ${code} — a beosztásban már választható.`); setPlan(null); invalidate() },
@@ -67,22 +55,8 @@ export default function ReliefCard() {
 
   const dissolve = useMutation({
     mutationFn: async (routeId: string) => {
-      const stops: RouteStop[] = stopsByRoute?.[routeId] ?? []
-      // vissza az eredeti járatra (a lista végére, az eredeti sorrendjük szerint), ha ott még nincs
-      const byOrigin = new Map<string, RouteStop[]>()
-      for (const s of stops) if (s.moved_from_route_id) { if (!byOrigin.has(s.moved_from_route_id)) byOrigin.set(s.moved_from_route_id, []); byOrigin.get(s.moved_from_route_id)!.push(s) }
-      for (const [origId, list] of byOrigin) {
-        if (!routes?.some((r) => r.id === origId)) continue
-        const existing = stopsByRoute?.[origId] ?? []
-        let next = (existing.length ? Math.max(...existing.map((s) => s.sort_order)) : 0) + 1
-        const rows = list.sort((a, b) => (a.moved_from_order ?? 0) - (b.moved_from_order ?? 0))
-          .filter((s) => !existing.some((e) => e.box_id === s.box_id))
-          .map((s) => ({ workspace_id: currentWorkspaceId!, route_id: origId, box_id: s.box_id, sort_order: next++ }))
-        if (rows.length) { const { error } = await supabase.from('route_stops').insert(rows); if (error) throw error }
-      }
-      const unlink = await supabase.from('shifts').update({ route_id: null }).eq('route_id', routeId)
-      if (unlink.error) throw unlink.error
-      const { error } = await supabase.from('route_names').delete().eq('id', routeId)
+      // egy tranzakcióban a szerveren: boxok vissza az eredeti járatra, beosztás leválasztása, járat törlése
+      const { error } = await supabase.rpc('dissolve_relief_route', { p_route_id: routeId } as never)
       if (error) throw error
     },
     onSuccess: () => { toast.success('Mentesítő járat feloszlatva — a boxok visszakerültek az eredeti járatukra.'); setPlan(null); invalidate() },
