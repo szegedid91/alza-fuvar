@@ -1106,6 +1106,79 @@ export type Database = {
           },
         ]
       }
+      help_sessions: {
+        Row: {
+          body_attrs: string | null
+          ended_at: string | null
+          ended_by: string | null
+          html_attrs: string | null
+          id: string
+          last_seen_at: string
+          note: string | null
+          path: string | null
+          snapshot_html: string | null
+          started_at: string
+          user_id: string
+          viewport_h: number | null
+          viewport_w: number | null
+          workspace_id: string
+        }
+        Insert: {
+          body_attrs?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          html_attrs?: string | null
+          id?: string
+          last_seen_at?: string
+          note?: string | null
+          path?: string | null
+          snapshot_html?: string | null
+          started_at?: string
+          user_id: string
+          viewport_h?: number | null
+          viewport_w?: number | null
+          workspace_id: string
+        }
+        Update: {
+          body_attrs?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          html_attrs?: string | null
+          id?: string
+          last_seen_at?: string
+          note?: string | null
+          path?: string | null
+          snapshot_html?: string | null
+          started_at?: string
+          user_id?: string
+          viewport_h?: number | null
+          viewport_w?: number | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "help_sessions_ended_by_fkey"
+            columns: ["ended_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "help_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "help_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incidents: {
         Row: {
           car_id: string | null

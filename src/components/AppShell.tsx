@@ -11,6 +11,7 @@ import { queryClient } from '../lib/queryClient'
 import ConfirmButton from './ConfirmButton'
 import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import OfflineHint from './OfflineHint'
+import HelpShareBanner from './HelpShareBanner'
 import { errMsg } from '../lib/errors'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
@@ -18,7 +19,7 @@ interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 // A fejléc a belső oldalakon az oldal címét mutatja (a tartalom első h2-je
 // a CSS-ben rejtve) — görgetés közben is látszik, hol vagy.
 const ROUTE_TITLES: Record<string, string> = {
-  '/profil': 'Profil', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
+  '/profil': 'Profil', '/elo-nezet': 'Élő nézet', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
   '/esemeny': 'Esemény / baleset', '/takaritas': 'Takarítás', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
   '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
   '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
@@ -258,6 +259,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     <div className="app">
       <PullToRefresh />
       <PushPrompt />
+      <HelpShareBanner />
       {isCrew && <InspectionZoneWatcher />}
       <header className="topbar">
         {pageTitle ? (

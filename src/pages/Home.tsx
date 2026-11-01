@@ -12,6 +12,8 @@ import { usePhotoHelpRequests } from '../lib/photoHelp'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { todayISO } from '../lib/labels'
+import HelpRequestCard from '../components/HelpRequestCard'
+import HelpSessionsCard from '../components/HelpSessionsCard'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
@@ -61,6 +63,7 @@ export default function Home() {
     { to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
     { to: '/beosztas-szerkeszto', icon: 'calendar', title: 'Beosztás', desc: 'Napi párosok, heti nézet' },
     { to: '/jaratok', icon: 'map', title: 'Járatok', desc: 'Box-járatok, boxok sorrendje' },
+    { to: '/elo-nezet', icon: 'life-buoy', title: 'Élő nézet', desc: 'Segítség a futárnak, ha elakad' },
     { to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
     { to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, tiltás' },
     { to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok kezelése' },
@@ -121,6 +124,7 @@ export default function Home() {
 
       {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}
+      {isCrew && <HelpRequestCard />}
       {isCrew && !enRoute && <TodayStepper />}
 
       {isCrew && (
@@ -134,6 +138,7 @@ export default function Home() {
         </div>
       )}
 
+      {isManagerOrAdmin && <HelpSessionsCard />}
       {isManagerOrAdmin && (photoHelp?.length ?? 0) > 0 && (
         <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
           <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>

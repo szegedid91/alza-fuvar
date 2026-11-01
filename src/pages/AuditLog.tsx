@@ -15,7 +15,7 @@ import { localDateOf } from '../lib/calendar'
 
 const ENTITY_LABEL: Record<string, string> = {
   adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
-  evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás',
+  evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás', help_sessions: 'Segítségkérés',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
   route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó', route_stops: 'Járat-megálló',

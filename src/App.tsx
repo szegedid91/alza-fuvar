@@ -41,6 +41,7 @@ const AuditLog = lazyRetry(() => import('./pages/AuditLog'), 'AuditLog')
 const BoxSheet = lazyRetry(() => import('./pages/BoxSheet'), 'BoxSheet')
 const BoxSheets = lazyRetry(() => import('./pages/BoxSheets'), 'BoxSheets')
 const RoutesPage = lazyRetry(() => import('./pages/Routes'), 'Routes')
+const LiveView = lazyRetry(() => import('./pages/LiveView'), 'LiveView')
 const Boxes = lazyRetry(() => import('./pages/Boxes'), 'Boxes')
 
 function FullScreenSpinner() {
@@ -114,6 +115,8 @@ export default function App() {
 
           {/* Manager / admin */}
           {isManagerOrAdmin && <Route path="/attekintes" element={<Dashboard />} />}
+          {isManagerOrAdmin && <Route path="/elo-nezet" element={<LiveView />} />}
+          {isManagerOrAdmin && <Route path="/elo-nezet/:id" element={<LiveView />} />}
           {isManagerOrAdmin && <Route path="/riportok" element={<Reports />} />}
           {isManagerOrAdmin && <Route path="/terkep" element={<FleetMap />} />}
           {isManagerOrAdmin && <Route path="/jovahagyas" element={<Approvals />} />}

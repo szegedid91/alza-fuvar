@@ -15,6 +15,7 @@ import Skeleton from '../components/Skeleton'
 import ConfirmButton from '../components/ConfirmButton'
 import PhotoThumb from '../components/PhotoThumb'
 import RouteProgressCard from '../components/RouteProgressCard'
+import HelpSessionsCard from '../components/HelpSessionsCard'
 import { STATUS_META, type StatusKind } from '../lib/groupMessage'
 import { errMsg } from '../lib/errors'
 
@@ -392,6 +393,7 @@ export default function Dashboard() {
   return (
     <div className="stack">
       <h2>Áttekintés — {currentWorkspace?.name}</h2>
+      <HelpSessionsCard />
       <CrewConflictsCard />
       {data && <PhotoPendingCard items={data.pendingPhoto} />}
       <RouteProgressCard />
