@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
-import { formatDateTime, dailyRoleLabel, isCrewRole } from '../lib/labels'
+import { isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
 import StatusCard from '../components/StatusCard'
 import RouteCard from '../components/RouteCard'
@@ -18,7 +18,7 @@ interface HubItem { to: string; icon: IconName; title: string; desc: string }
 
 export default function Home() {
   const { profile } = useAuth()
-  const { currentWorkspace, currentWorkspaceId } = useWorkspace()
+  const { currentWorkspaceId } = useWorkspace()
   const role = profile?.role
   const isCrew = isCrewRole(role)
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
@@ -91,34 +91,6 @@ export default function Home() {
           </div>
           <Icon name="chevron-right" className="muted" />
         </Link>
-        {enRoute ? (
-          <div className="tiny muted" style={{ marginTop: 6 }}><Icon name="navigation" size={12} /> Úton · {today?.car?.plate ?? ''}</div>
-        ) : (<>
-        <div className="divider" style={{ margin: '14px 0' }} />
-        <div className="between">
-          <span className="muted small">Munkaterület</span>
-          <span className="badge">{currentWorkspace?.name ?? '–'}</span>
-        </div>
-        {isCrew && (
-          <div className="between" style={{ marginTop: 10 }}>
-            <span className="muted small">Mai szerep</span>
-            {today?.assignedRole
-              ? <span className="badge primary">{dailyRoleLabel[today.assignedRole]}</span>
-              : <span className="badge">Nincs mai beosztás</span>}
-          </div>
-        )}
-        {isCrew && (
-          <div className="between" style={{ marginTop: 10 }}>
-            <span className="muted small">Mai autó</span>
-            {today?.car
-              ? <span className="badge success num">{today.car.plate}</span>
-              : <span className="badge">Nincs becsekkolva</span>}
-          </div>
-        )}
-        {isCrew && today?.checkin && (
-          <div className="tiny muted" style={{ marginTop: 6 }}>Becsekkolva: {formatDateTime(today.checkin.checked_in_at)}</div>
-        )}
-        </>)}
       </div>
 
       {isCrew && <RouteCard />}
