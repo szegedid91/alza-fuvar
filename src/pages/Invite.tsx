@@ -6,6 +6,7 @@ import type { Enums } from '../lib/database.types'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
+import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
 
 interface InviteInfo {
   email: string | null
@@ -60,6 +61,8 @@ export default function InvitePage({ token }: { token: string }) {
     if (password !== password2) { setError('A két jelszó nem egyezik.'); return }
     const email = (info.email ?? emailIn).trim().toLowerCase()
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('Adj meg egy érvényes email-címet.'); return }
+    const leak = await isPasswordPwned(password)
+    if (leak.pwned) { setError(PWNED_MESSAGE); return }
     setBusy(true)
     try {
       const { data, error } = await supabase.functions.invoke('redeem-invite', {

@@ -4,6 +4,7 @@ import { RECOVERY_URL_ERROR, RECOVERY_IN_URL, clearRecoveryPending, isRecoveryPe
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
+import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
@@ -21,10 +22,12 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (pw.length < 6) { setError('A jelszó legalább 6 karakter legyen.'); return }
+    if (pw.length < 8) { setError('A jelszó legalább 8 karakter legyen.'); return }
     if (pw !== pw2) { setError('A két jelszó nem egyezik.'); return }
     setBusy(true)
     try {
+      const leak = await isPasswordPwned(pw)
+      if (leak.pwned) throw new Error(PWNED_MESSAGE)
       const { error } = await supabase.auth.updateUser({ password: pw })
       if (error) throw error
       // A jelszó megvan: a "függőben" jelölés azonnal megszűnik, akkor is, ha a

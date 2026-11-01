@@ -4,6 +4,7 @@ import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount 
 import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
 import { errMsg } from '../lib/errors'
+import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
 
 // Fejlesztői fiókok ikonja a címke/leírás alapján — az .env-beli emoji helyett
 function devIcon(acc: DevAccount): IconName {
@@ -60,6 +61,9 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (error) throw error
       } else {
+        if (password.length < 8) throw new Error('A jelszó legalább 8 karakter legyen.')
+        const pw = await isPasswordPwned(password)
+        if (pw.pwned) throw new Error(PWNED_MESSAGE)
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
