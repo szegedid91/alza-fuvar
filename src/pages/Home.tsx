@@ -101,9 +101,11 @@ export default function Home() {
   return (
     <div className="stack">
 
+      {/* Amíg nincs becsekkolva: a Mai nap lépéssor (a nagy QR-gombbal) legfelül; utána a járat és a jelzések */}
+      {isCrew && !today?.checkin && <TodayStepper />}
       {isCrew && <RouteCard />}
       {isCrew && <StatusCard />}
-      {isCrew && !enRoute && <TodayStepper />}
+      {isCrew && !!today?.checkin && !enRoute && <TodayStepper />}
 
       {isCrew && (
         <div>
