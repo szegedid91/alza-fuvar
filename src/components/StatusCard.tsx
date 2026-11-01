@@ -145,7 +145,7 @@ export default function StatusCard() {
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        A gomb rögzíti az időt (a vezetők látják) és megnyitja a WhatsAppot a kész üzenettel — válaszd ki a csoportot és küldd el. Ha nem ment el, a <Icon name="send" size={12} /> gombbal újraküldheted. Box-hibát fotóval a Box-lapon jelenthetsz.
+        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják.
       </p>
     </div>
   )

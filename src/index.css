@@ -84,8 +84,8 @@ a { color: var(--primary); }
   align-items: center;
   gap: 12px;
   padding: max(12px, env(safe-area-inset-top)) 16px 12px;
-  background: var(--bar-bg);
-  backdrop-filter: blur(10px);
+  /* Fedő háttér: főképernyőre tett appnál (iPhone, Dynamic Island) a státuszsor-sáv alatt ne derengjen át a tartalom */
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
 }
 
@@ -134,7 +134,7 @@ a { color: var(--primary); }
   gap: 4px;
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   background: var(--nav-bg);
-  backdrop-filter: blur(10px);
+  
   border-top: 1px solid var(--border);
 }
 .bottom-nav a {
@@ -347,6 +347,10 @@ a { color: var(--primary); }
 .chip .icon { color: var(--primary); width: 18px; height: 18px; }
 /* Vezetői csempék: ikon + cím + leírás */
 .hub { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hub a { position: relative; }
+.hub a .hub-badge { position: absolute; top: 8px; right: 10px; }
+.hub-group { margin-top: 6px; }
+.hub-group .card-title { margin-bottom: 8px; font-size: 14px; }
 .hub a {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 64px;
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);

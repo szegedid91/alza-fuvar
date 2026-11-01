@@ -14,7 +14,7 @@ import { supabase } from '../lib/supabase'
 import { todayISO } from '../lib/labels'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 
-interface HubItem { to: string; icon: IconName; title: string; desc: string }
+interface HubItem { to: string; icon: IconName; title: string; desc: string; group?: string; badge?: number }
 
 export default function Home() {
   const { profile } = useAuth()
@@ -58,26 +58,44 @@ export default function Home() {
   // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autóhoz — az XL-eseknek nincs
   if (today?.car?.category?.box_sheet) crewLinks.unshift({ to: '/box-lap', icon: 'clipboard', title: 'Box-lap', desc: '' })
 
+  // Számok a csempéken: mire kell ránézni (jóváhagyásra váró, nyitott autó-hiba, segítségkérés)
+  const { data: counts } = useQuery({
+    queryKey: ['home-counts', currentWorkspaceId],
+    enabled: isManagerOrAdmin && !!currentWorkspaceId,
+    refetchInterval: 60000,
+    queryFn: async () => {
+      const [p, i, h] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('car_issues').select('id', { count: 'exact', head: true }).eq('workspace_id', currentWorkspaceId!).neq('status', 'resolved'),
+        supabase.from('help_sessions').select('id', { count: 'exact', head: true }).eq('workspace_id', currentWorkspaceId!).is('ended_at', null).gt('last_seen_at', new Date(Date.now() - 90_000).toISOString()),
+      ])
+      return { pending: p.count ?? 0, issues: i.count ?? 0, help: h.count ?? 0 }
+    },
+  })
   const managerHub: HubItem[] = [
-    { to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Élő napi műszerfal' },
-    { to: '/beosztas-szerkeszto', icon: 'calendar', title: 'Beosztás', desc: 'Napi párosok, heti nézet' },
-    { to: '/jaratok', icon: 'map', title: 'Járatok', desc: 'Box-járatok, boxok sorrendje' },
-    { to: '/elo-nezet', icon: 'life-buoy', title: 'Élő nézet', desc: 'Segítség a futárnak, ha elakad' },
-    { to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk' },
-    { to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, tiltás' },
-    { to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok kezelése' },
-    { to: '/riportok', icon: 'trending-up', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },
-    { to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók és események élőben' },
-    { to: '/hibak', icon: 'wrench', title: 'Autó-hibák', desc: 'Bejelentések követése' },
-    { to: '/elolegek', icon: 'wallet', title: 'Előleg / levonás', desc: 'Rögzítés' },
-    { to: '/bizonyitek', icon: 'camera', title: 'Bizonyíték-fotók', desc: 'Kosz / törés → levonás' },
-    { to: '/kepek', icon: 'image', title: 'Képek', desc: 'Autó, nap, ember szerint' },
-    { to: '/tortenet', icon: 'history', title: 'Előzmények', desc: 'Autók, cserék, események' },
-    { to: '/box-lapok', icon: 'package', title: 'Box-lapok', desc: 'AlzaBox szállítási lapok' },
-    { to: '/boxok', icon: 'map-pin', title: 'AlzaBoxok', desc: 'Hol van a box?' },
+    { group: 'Napi munka', to: '/attekintes', icon: 'layout-dashboard', title: 'Áttekintés', desc: 'Ki hol tart ma' },
+    { group: 'Napi munka', to: '/beosztas-szerkeszto', icon: 'calendar', title: 'Beosztás', desc: 'Heti táblázat, párosok' },
+    { group: 'Napi munka', to: '/jaratok', icon: 'map', title: 'Járatok', desc: 'Boxok sorrendje, terv' },
+    { group: 'Napi munka', to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók élőben' },
+    { group: 'Napi munka', to: '/elo-nezet', icon: 'life-buoy', title: 'Élő nézet', desc: 'Segítség, ha elakad', badge: counts?.help },
+    { group: 'Emberek és autók', to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk', badge: counts?.pending },
+    { group: 'Emberek és autók', to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, meghívók' },
+    { group: 'Emberek és autók', to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok, kategóriák' },
+    { group: 'Emberek és autók', to: '/hibak', icon: 'wrench', title: 'Autó-hibák', desc: 'Bejelentések', badge: counts?.issues },
+    { group: 'Pénz és kimutatás', to: '/riportok', icon: 'trending-up', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },
+    { group: 'Pénz és kimutatás', to: '/elolegek', icon: 'wallet', title: 'Előleg / levonás', desc: 'Rögzítés' },
+    { group: 'Pénz és kimutatás', to: '/bizonyitek', icon: 'camera', title: 'Bizonyíték-fotók', desc: 'Kosz, törés' },
+    { group: 'Előzmények', to: '/box-lapok', icon: 'package', title: 'Box-lapok', desc: 'Napi szállítási lapok' },
+    { group: 'Előzmények', to: '/tortenet', icon: 'history', title: 'Előzmények', desc: 'Autók, cserék, események' },
+    { group: 'Előzmények', to: '/kepek', icon: 'image', title: 'Képek', desc: 'Autó, nap, ember szerint' },
+    { group: 'Előzmények', to: '/boxok', icon: 'map-pin', title: 'AlzaBoxok', desc: 'Hol van a box?' },
   ]
-  if (isAdmin) managerHub.push({ to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
-  if (isAdmin) managerHub.push({ to: '/statisztika', icon: 'target', title: 'Statisztika', desc: 'Átlagok, rangsorok' })
+  if (isAdmin) {
+    managerHub.push({ group: 'Pénz és kimutatás', to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
+    managerHub.push({ group: 'Pénz és kimutatás', to: '/statisztika', icon: 'target', title: 'Statisztika', desc: 'Átlagok, rangsorok' })
+    managerHub.push({ group: 'Előzmények', to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Ki mit módosított' })
+  }
+  const hubGroups = ['Napi munka', 'Emberek és autók', 'Pénz és kimutatás', 'Előzmények']
   if (isAdmin) managerHub.push({ to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Módosítások, app-hibák' })
 
   return (
@@ -127,22 +145,23 @@ export default function Home() {
         </Link>
       )}
 
-      {isManagerOrAdmin && (
-        <div>
-          <div className="card-title" style={{ marginBottom: 8 }}>Vezetői eszközök</div>
+      {isManagerOrAdmin && hubGroups.map((g) => (
+        <div key={g} className="hub-group">
+          <div className="card-title">{g}</div>
           <div className="hub">
-            {managerHub.map((i) => (
+            {managerHub.filter((i) => i.group === g).map((i) => (
               <Link key={i.to} to={i.to}>
                 <Icon name={i.icon} />
                 <div style={{ minWidth: 0 }}>
                   <div className="name">{i.title}</div>
                   <div className="tiny muted">{i.desc}</div>
                 </div>
+                {!!i.badge && <span className="badge warning hub-badge">{i.badge}</span>}
               </Link>
             ))}
           </div>
         </div>
-      )}
+      ))}
     </div>
   )
 }
