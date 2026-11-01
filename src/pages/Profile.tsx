@@ -57,6 +57,8 @@ export default function ProfilePage() {
     setBusy(false)
   }
 
+  // Futárnál csak a név: a telefonszám, email, szerep, állapot nem jelenik meg
+  const crew = isCrewRole(profile?.role)
   return (
     <div className="stack">
       <div className="card stack primary">
@@ -65,15 +67,13 @@ export default function ProfilePage() {
           <label>Teljes név</label>
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </div>
-        <div className="field">
-          <label>Telefonszám</label>
-          <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+36 30 123 4567" />
-          <div className="tiny muted">
-            {isCrewRole(profile?.role)
-              ? 'A társad ezen a számon tud hívni a beosztásból.'
-              : 'A munkatársak a Beosztásom oldalon, a vezetők a Tagok oldalon látják ezt a számot.'}
+        {!crew && (
+          <div className="field">
+            <label>Telefonszám</label>
+            <input className="input" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+36 30 123 4567" />
+            <div className="tiny muted">A munkatársak a Beosztásom oldalon, a vezetők a Tagok oldalon látják ezt a számot.</div>
           </div>
-        </div>
+        )}
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         {/* Üres név nem menthető — a név mindenhol megjelenik (beosztás, bér, napló) */}
         <button className="btn" onClick={() => void save()} disabled={busy || !fullName.trim()}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
@@ -82,9 +82,11 @@ export default function ProfilePage() {
 
       <div className="card stack">
         <div className="card-title"><Icon name="shield-check" />Fiók</div>
-        <div className="between"><span className="muted small">Email</span><span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</span></div>
-        <div className="between"><span className="muted small">Szerep</span><span className="badge primary">{profile?.role ? roleLabel[profile.role] : '–'}</span></div>
-        <div className="between"><span className="muted small">Állapot</span><span className="badge success">{profile ? statusLabel[profile.status] : '–'}</span></div>
+        {!crew && (<>
+          <div className="between"><span className="muted small">Email</span><span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.email}</span></div>
+          <div className="between"><span className="muted small">Szerep</span><span className="badge primary">{profile?.role ? roleLabel[profile.role] : '–'}</span></div>
+          <div className="between"><span className="muted small">Állapot</span><span className="badge success">{profile ? statusLabel[profile.status] : '–'}</span></div>
+        </>)}
         <button className="btn ghost sm" disabled={pwBusy} onClick={() => void sendPasswordReset()}>
           <Icon name="key" />{pwBusy ? 'Küldés…' : 'Jelszó módosítása (emailes link)'}
         </button>
