@@ -345,6 +345,9 @@ a { color: var(--primary); }
   text-decoration: none; font-size: 14px; font-weight: 600;
 }
 .chip .icon { color: var(--primary); width: 18px; height: 18px; }
+/* Kijelölt chip (pl. késés oka — több is jelölhető) */
+.chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.chip.active .icon { color: #fff; }
 /* Vezetői csempék: ikon + cím + leírás */
 .hub { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .hub a { position: relative; }

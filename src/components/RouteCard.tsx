@@ -142,13 +142,30 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
   const [showBox, setShowBox] = useState(false)
   // Késés: ha a terv határideje (eddig kell végezni a boxban) lejárt, a leadáskor meg kell adni az okot
   const [late, setLate] = useState<number | null>(null)
-  const [reason, setReason] = useState('')
-  useEffect(() => { setShowBox(false); setLate(null); setReason('') }, [idx])
+  // Több ok is jelölhető egyszerre (+ szabad szöveg)
+  const [reasons, setReasons] = useState<string[]>([])
+  const [reasonText, setReasonText] = useState('')
+  // Átvitel: az előző késő boxnál megadott okok (pl. „Kamion késett”) a következő késő boxoknál
+  // előre be vannak jelölve, amíg a futár be nem hozza a késést (egy box időben → törlődik).
+  // sessionStorage: újratöltés / oldalváltás után is megmarad a napon belül.
+  const carryKey = `late-carry:${code}:${round}`
+  const [carry, setCarry] = useState<string[]>(() => { try { return JSON.parse(sessionStorage.getItem(carryKey) ?? '[]') as string[] } catch { return [] } })
+  const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
+  useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
   const dlMin = deadlineMin(cur?.deadline, round)
   const lateNow = dlMin != null ? nowMin() - dlMin : null
   const finish = () => {
-    if (lateNow != null && lateNow > 0) { setLate(lateNow); return }
+    if (lateNow != null && lateNow > 0) { setLate(lateNow); setReasons(carry); return }
+    // időben leadva: a késés behozva, az átvitt okok törlődnek
+    if (carry.length) saveCarry([])
     go(idx + 1)
+  }
+  const toggleReason = (r: string) => setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
+  const reasonAll = [...reasons, ...(reasonText.trim() ? [reasonText.trim()] : [])].join('; ')
+  const saveLate = () => {
+    if (late == null || !reasonAll) return
+    saveCarry(reasons)
+    go(idx + 1, { minutes: late, reason: reasonAll })
   }
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
@@ -208,18 +225,21 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 </div>
                 {late != null && (
                   <div className="stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--danger)', background: 'var(--danger-ghost, rgba(239,68,68,0.08))' }}>
-                    <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {fmtTime(cur.deadline)} volt. Mi az oka?</div>
+                    <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {fmtTime(cur.deadline)} volt. Mi az oka? <span className="muted" style={{ fontWeight: 500 }}>(több is jelölhető)</span></div>
                     <div className="chips">
                       {LATE_REASONS.map((r) => (
-                        <button key={r} type="button" className={`chip ${reason === r ? 'active' : ''}`} onClick={() => setReason(r)}>{r}</button>
+                        <button key={r} type="button" className={`chip ${reasons.includes(r) ? 'active' : ''}`} aria-pressed={reasons.includes(r)} onClick={() => toggleReason(r)}>{r}</button>
                       ))}
                     </div>
-                    <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="vagy írd be röviden…" />
+                    {carry.length > 0 && reasons.some((r) => carry.includes(r)) && (
+                      <div className="tiny muted"><Icon name="info" size={12} /> Az előző késő boxnál megadott ok előre bejelölve — amíg be nem hozod a késést, ez marad; módosíthatod.</div>
+                    )}
+                    <input className="input" value={reasonText} onChange={(e) => setReasonText(e.target.value)} placeholder="egyéb ok röviden (nem kötelező)…" />
                     <div className="row" style={{ gap: 6 }}>
-                      <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={() => { setLate(null); setReason('') }}>Mégse</button>
-                      <button type="button" className="btn sm" style={{ flex: 2 }} disabled={busy || !reason.trim()} onClick={() => go(idx + 1, { minutes: late, reason: reason.trim() })}><Icon name="send" size={14} />Mentés és következő</button>
+                      <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={() => { setLate(null); setReasons([]); setReasonText('') }}>Mégse</button>
+                      <button type="button" className="btn sm" style={{ flex: 2 }} disabled={busy || !reasonAll} onClick={saveLate}><Icon name="send" size={14} />Mentés és következő</button>
                     </div>
-                    <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okról.</div>
+                    <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okokról.</div>
                   </div>
                 )}
                 {onFillSheet && (sheetFilled

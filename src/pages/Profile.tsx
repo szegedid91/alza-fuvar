@@ -43,6 +43,26 @@ export default function ProfilePage() {
     }
   }
 
+  // Új verzió keresése kézzel: ha van várakozó, azonnal aktiválja és újratölt; ha nincs,
+  // a gyorsítótárat is üríti és újratölt (a telefon néha napokig a régit tartja)
+  const [updBusy, setUpdBusy] = useState(false)
+  async function checkUpdate() {
+    setUpdBusy(true)
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration()
+      if (reg) {
+        await reg.update().catch(() => undefined)
+        if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); await new Promise((r) => setTimeout(r, 400)) }
+      }
+      if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.filter((k) => !k.includes('supabase-storage')).map((k) => caches.delete(k))) }
+      toast.info('Frissítés — az app újratölt.')
+      setTimeout(() => window.location.reload(), 300)
+    } catch (e) {
+      toast.error('Nem sikerült frissíteni: ' + errMsg(e, 'ismeretlen hiba'))
+      setUpdBusy(false)
+    }
+  }
+
   async function save() {
     if (!profile) return
     setBusy(true)
@@ -88,6 +108,7 @@ export default function ProfilePage() {
 
       <p className="tiny muted" style={{ textAlign: 'center', margin: 0 }}>
         Verzió: {new Date(__BUILD_TIME__).toLocaleString('hu-HU', { timeZone: 'Europe/Budapest' })}
+        {' · '}<button type="button" className="link-btn tiny" style={{ padding: 0 }} disabled={updBusy} onClick={() => void checkUpdate()}>{updBusy ? 'keresés…' : 'frissítés keresése'}</button>
       </p>
     </div>
   )
