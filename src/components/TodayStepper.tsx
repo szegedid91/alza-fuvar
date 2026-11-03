@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useToday } from '../hooks/useToday'
 import { useInspectionGate } from '../hooks/useInspectionGate'
 import Icon, { type IconName } from './Icon'
+import ParkCarButton, { useSettledToday } from './ParkCarButton'
 
 // "Mai nap" lépéssor a munkatárs kezdőlapján: hol tart a nap, és egy gombbal
 // a KÖVETKEZŐ lépésre visz. A sofőr napja lineáris (becsekk → ellenőrzés →
@@ -22,6 +23,7 @@ const STATE_ICON: Record<StepState, { name: IconName; color: string }> = {
 
 export default function TodayStepper() {
   const { data: today, isLoading } = useToday()
+  const { data: settledAt } = useSettledToday()
   const car = today?.car ?? null
   const date = today?.date ?? ''
   const checkin = today?.checkin ?? null
@@ -58,6 +60,7 @@ export default function TodayStepper() {
 
   const checkedOut = !!checkin?.checked_out_at
   const inspected = (inspCount ?? 0) > 0
+  const electric = car?.fuel_type === 'electric'
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   const steps: Step[] = [
@@ -77,8 +80,9 @@ export default function TodayStepper() {
       state: (boxSheet?.submitted ? 'done' : checkin ? 'todo' : 'todo') as StepState,
     }] : []),
     {
-      key: 'checkout', icon: 'flag', title: 'Kijelentkezés', to: '/beolvasas', cta: 'Kijelentkezés (nap vége)',
-      detail: checkedOut ? `Nap lezárva ${hhmm(checkin!.checked_out_at!)}` : 'A nap végén, az autó leadásakor',
+      // Nap vége = elszámolás után az autó lerakva (elektromosnál töltőre téve) — nincs külön kijelentkezés
+      key: 'parked', icon: electric ? 'zap' : 'flag', title: electric ? 'Autó lerakva, töltőn' : 'Autó lerakva', to: '/', cta: electric ? 'Autó lerakva, töltőre téve' : 'Autó lerakva',
+      detail: checkedOut ? `Nap lezárva ${hhmm(checkin!.checked_out_at!)}` : settledAt ? `Elszámoltál ${hhmm(settledAt)} — ${electric ? 'töltőre, és koppints' : 'rakd le, és koppints'}` : 'Az „Elszámoltam” jelzés után, az autó leadásakor',
       state: checkedOut ? 'done' : 'todo',
     },
   ]
@@ -113,7 +117,9 @@ export default function TodayStepper() {
           )
         })}
       </div>
-      {next && (
+      {next && next.key === 'parked' ? (
+        <ParkCarButton />
+      ) : next && (
         <Link to={next.to} className="btn" style={{ textDecoration: 'none' }}>
           <Icon name={next.icon} />{next.cta}
         </Link>

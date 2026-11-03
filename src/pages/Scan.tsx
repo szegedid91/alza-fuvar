@@ -9,6 +9,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory, crewSizeFor } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
 import WaiverRequest from '../components/WaiverRequest'
+import ParkCarButton from '../components/ParkCarButton'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
@@ -31,7 +32,6 @@ export default function Scan() {
 
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [outBusy, setOutBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inspection, setInspection] = useState<InspectionRequirement | null>(null)
 
@@ -50,35 +50,6 @@ export default function Scan() {
   const { data: categories } = useCarCategories()
   const [switchReason, setSwitchReason] = useState('Műszaki hiba')
   const [switchNote, setSwitchNote] = useState('')
-
-  // Nap végi kijelentkezés — rögzíti az időt, GPS-t és a geofence-jelzést
-  async function checkout() {
-    if (!today?.checkin) return
-    setOutBusy(true)
-    setError(null)
-    try {
-      const gps = await getCurrentPosition()
-      const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
-      await submitNow({
-        id: crypto.randomUUID(),
-        table: 'check_ins',
-        op: 'update',
-        match: { id: today.checkin.id },
-        label: 'Kijelentkezés (nap vége)',
-        values: {
-          checked_out_at: new Date().toISOString(),
-          out_gps_lat: gps.lat,
-          out_gps_lng: gps.lng,
-          out_outside_geofence: outside,
-        },
-      })
-      await qc.invalidateQueries({ queryKey: ['today'] })
-    } catch (e) {
-      setError(errMsg(e, 'Hiba a kijelentkezésnél'))
-    } finally {
-      setOutBusy(false)
-    }
-  }
 
   async function handleScan(text: string) {
     setScanning(false)
@@ -370,7 +341,7 @@ export default function Scan() {
               {/* Nyitott becsekkolások a létszám fölött — a vezetők már jelzést kaptak */}
               {openCrewCount > capacity ? (
                 <div className="tiny" style={{ color: 'var(--danger)', fontWeight: 700 }}>
-                  <Icon name="alert-triangle" size={14} /> Túl sokan az autón ({openCrewCount} fő, {capacity} fős autó) — a vezetők jelzést kaptak. Aki nem ezen dolgozik, váltson autót vagy jelentkezzen ki.
+                  <Icon name="alert-triangle" size={14} /> Túl sokan az autón ({openCrewCount} fő, {capacity} fős autó) — a vezetők jelzést kaptak. Aki nem ezen dolgozik, váltson autót, vagy zárja le a napját (Autó lerakva).
                 </div>
               ) : capacity === 1
                 ? <div className="tiny muted">1 fős autó — ma egyedül dolgozol.</div>
@@ -380,7 +351,7 @@ export default function Scan() {
           <div className="divider" />
           {today.checkin!.checked_out_at ? (
             <div className="between">
-              <span className="badge success"><Icon name="flag" />Kijelentkezve</span>
+              <span className="badge success"><Icon name="flag" />Autó lerakva · nap lezárva</span>
               <span className="small">
                 {hhmm(today.checkin!.checked_out_at)} ·{' '}
                 {formatHours(new Date(today.checkin!.checked_out_at).getTime() - new Date(today.checkin!.checked_in_at).getTime())}
@@ -401,10 +372,8 @@ export default function Scan() {
               {today.checkin!.inspection_waived_at && !today.inspectionDone && (
                 <div className="tiny muted row" style={{ gap: 6 }}><Icon name="shield-check" size={14} />Vezetői engedéllyel fotó nélkül továbbengedve ({hhmm(today.checkin!.inspection_waived_at)})</div>
               )}
-              {/* Két koppintás: a nap lezárása rögzíti a munkaidő végét — egy félrekoppintás ne zárja le a napot */}
-              <ConfirmButton className="btn secondary" confirmLabel="Biztos? Nap lezárása" disabled={outBusy} onConfirm={() => void checkout()}>
-                <Icon name="flag" />{outBusy ? 'Mentés…' : 'Kijelentkezés (nap vége)'}
-              </ConfirmButton>
+              {/* Nap vége: elszámolás után „Autó lerakva” (elektromosnál töltőre téve) — nincs külön kijelentkezés */}
+              <ParkCarButton className="btn secondary" />
             </>
           )}
         </div>
