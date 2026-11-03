@@ -8,7 +8,9 @@ import StatusCard from '../components/StatusCard'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
-import { usePhotoHelpRequests } from '../lib/photoHelp'
+import { usePhotoHelpRequests, useWaiveInspection } from '../lib/photoHelp'
+import { useRealtimeInvalidate } from '../hooks/useRealtime'
+import ConfirmButton from '../components/ConfirmButton'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { todayISO } from '../lib/labels'
@@ -45,6 +47,9 @@ export default function Home() {
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
   // Vezetőnek: valaki fotó nélkül kér továbbengedést — a kezdőlapon is kiemeljük, ne csak az Áttekintésben
   const { data: photoHelp } = usePhotoHelpRequests(isManagerOrAdmin)
+  const waive = useWaiveInspection()
+  // Realtime: engedélykérés, fotózás, autó-hiba, segítségkérés, jóváhagyás — a vezető kezdőlapja azonnal frissüljön, ne 30–60 mp késéssel
+  useRealtimeInvalidate(isManagerOrAdmin ? currentWorkspaceId : null, ['check_ins', 'car_inspections', 'car_issues', 'help_sessions', 'profiles'], [['photo-help'], ['crew-conflicts'], ['home-counts']])
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   // Crew: a "Mai nap" lépéssor a főszereplő, ezek csak gyorslinkek — ami az
@@ -132,17 +137,23 @@ export default function Home() {
 
       {isManagerOrAdmin && <HelpSessionsCard />}
       {isManagerOrAdmin && (photoHelp?.length ?? 0) > 0 && (
-        <Link to="/attekintes" className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, textDecoration: 'none', color: 'inherit', gap: 6 }}>
+        <div className="card stack" style={{ borderColor: 'var(--danger)', borderWidth: 2, gap: 8 }}>
           <div className="card-title" style={{ margin: 0, color: 'var(--danger)' }}>
             <Icon name="bell" />Engedélyt kér fotó nélkül ({photoHelp!.length})
           </div>
+          <p className="tiny muted" style={{ margin: 0 }}>Amíg nincs körbefotózva az autó, a munkatárs napja áll. Ha indokolt, itt engedheted tovább — a neved a becsekkolásra és a naplóba kerül.</p>
           {photoHelp!.map((p) => (
-            <div key={p.checkinId} className="small">
-              <strong>{p.name}</strong> · <span className="num">{p.plate}</span> <span className="tiny muted">kérte {hhmm(p.helpAt)}</span>
+            <div key={p.checkinId} className="between" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+              <span className="small" style={{ minWidth: 0 }}>
+                <strong>{p.name}</strong> · <span className="num">{p.plate}</span> <span className="tiny muted">kérte {hhmm(p.helpAt)}</span>
+              </span>
+              <ConfirmButton className="btn sm auto" confirmLabel="Biztos? Továbbengedem" disabled={waive.isPending} onConfirm={() => waive.mutate(p.checkinId)}>
+                <Icon name="shield-check" size={14} />Továbbengedés
+              </ConfirmButton>
             </div>
           ))}
-          <div className="tiny muted row" style={{ gap: 4 }}>Továbbengedés az Áttekintésben <Icon name="chevron-right" size={14} /></div>
-        </Link>
+          <Link to="/attekintes" className="tiny muted row" style={{ gap: 4, textDecoration: 'none' }}>Részletek az Áttekintésben <Icon name="chevron-right" size={14} /></Link>
+        </div>
       )}
 
       {isManagerOrAdmin && (conflicts?.length ?? 0) > 0 && (

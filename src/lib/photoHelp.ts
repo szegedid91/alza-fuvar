@@ -1,6 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
+import { toast } from './toast'
+import { errMsg } from './errors'
 import { resolveNames } from './names'
 import { todayISO } from './labels'
 
@@ -45,5 +48,25 @@ export function usePhotoHelpRequests(enabled = true) {
     enabled: enabled && !!currentWorkspaceId,
     refetchInterval: 30000,
     queryFn: () => findPhotoHelpRequests(currentWorkspaceId!, date),
+  })
+}
+
+// Továbbengedés fotó nélkül: a vezető a saját fiókjából engedi tovább (naplózva, a neve
+// rákerül a becsekkolásra). A kezdőlap és az Áttekintés ugyanezt használja.
+export function useWaiveInspection() {
+  const qc = useQueryClient()
+  const { profile } = useAuth()
+  return useMutation({
+    mutationFn: async (checkinId: string) => {
+      const { error } = await supabase.from('check_ins')
+        .update({ inspection_waived_at: new Date().toISOString(), inspection_waived_by: profile!.id })
+        .eq('id', checkinId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('Továbbengedve fotó nélkül — a munkatárs folytathatja.')
+      for (const key of [['dashboard'], ['photo-help'], ['home-counts']]) void qc.invalidateQueries({ queryKey: key })
+    },
+    onError: (e) => toast.error('Nem sikerült: ' + errMsg(e, 'ismeretlen hiba')),
   })
 }

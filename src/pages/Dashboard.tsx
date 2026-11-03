@@ -8,6 +8,7 @@ import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
 import { todayISO, parseHuNumber } from '../lib/labels'
 import { useCrewConflicts } from '../lib/crewConflicts'
+import { useWaiveInspection } from '../lib/photoHelp'
 import { toast } from '../lib/toast'
 import { Link } from 'react-router'
 import Icon, { type IconName } from '../components/Icon'
@@ -85,19 +86,8 @@ function CrewConflictsCard() {
 // tovább fotó nélkül (naplózva, a név rákerül a becsekkolásra).
 interface PendingPhoto { checkinId: string; name: string; plate: string; checkedInAt: string; helpAt: string | null }
 function PhotoPendingCard({ items }: { items: PendingPhoto[] }) {
-  const qc = useQueryClient()
-  const { profile } = useAuth()
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
-  const waive = useMutation({
-    mutationFn: async (checkinId: string) => {
-      const { error } = await supabase.from('check_ins')
-        .update({ inspection_waived_at: new Date().toISOString(), inspection_waived_by: profile!.id })
-        .eq('id', checkinId)
-      if (error) throw error
-    },
-    onSuccess: () => { toast.success('Továbbengedve fotó nélkül — a munkatárs folytathatja.'); void qc.invalidateQueries({ queryKey: ['dashboard'] }) },
-    onError: (e) => toast.error('Nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
-  })
+  const waive = useWaiveInspection()
   if (items.length === 0) return null
   const asking = items.filter((i) => i.helpAt).length
   return (
