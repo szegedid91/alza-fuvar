@@ -20,7 +20,8 @@ import { errMsg } from '../lib/errors'
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
 // a választás a telefonon marad). A haladás az adatbázisban van (autó + járat +
 // kör + nap), így másik telefonról / a páros másik tagjánál is ugyanott tart.
-export default function RouteCard() {
+// active: a „Kiindultam” jelzés után — addig a járat csak megtekinthető (címek, navigálás), a leadás nem
+export default function RouteCard({ active = true }: { active?: boolean }) {
   const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
@@ -115,7 +116,7 @@ export default function RouteCard() {
           setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, stopId: stops[index]?.id ?? null, boxId: stops[index]?.box_id ?? null, done })
         }
         return (
-          <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending}
+          <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active}
             go={go} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)} onFillSheet={() => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`)} />
         )
@@ -128,8 +129,10 @@ export default function RouteCard() {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, go, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
+  // locked: még nem küldte el a „Kiindultam”-ot — a leadás gombjai inaktívak
+  locked?: boolean
   go: (index: number, late?: { minutes: number; reason: string }) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
   // A raktár: az utolsó box után ide navigál a futár (az admin állítja a Járatok oldalon)
   depot: Depot
@@ -188,7 +191,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 <a className="btn" href={navUrl(navApp, depot.lat, depot.lng)} target="_blank" rel="noopener noreferrer">
                   <Icon name="navigation" />Navigálás a raktárba ({NAV_LABEL[navApp]})
                 </a>
-                <button type="button" className="btn ghost sm auto" disabled={busy} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
+                <button type="button" className="btn ghost sm auto" disabled={busy || locked} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
               </div>
             ) : cur ? (
               <>
@@ -220,9 +223,10 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 </div>
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
                 <div className="row" style={{ gap: 6 }}>
-                  <button type="button" className="btn ghost sm" disabled={busy || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy || late != null} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
+                  <button type="button" className="btn secondary sm" disabled={busy || locked || late != null} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
+                {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A járat a „Kiindultam” jelzés után válik aktívvá — addig csak megnézheted a címeket.</div>}
                 {late != null && (
                   <div className="stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--danger)', background: 'var(--danger-ghost, rgba(239,68,68,0.08))' }}>
                     <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {fmtTime(cur.deadline)} volt. Mi az oka? <span className="muted" style={{ fontWeight: 500 }}>(több is jelölhető)</span></div>
@@ -259,7 +263,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                 {openList && (
                   <div className="stack" style={{ gap: 4 }}>
                     {stops.map((s, i) => (
-                      <button key={s.id} type="button" className="row" disabled={busy} onClick={() => go(i)}
+                      <button key={s.id} type="button" className="row" disabled={busy || locked} onClick={() => go(i)}
                         style={{ gap: 6, alignItems: 'center', background: i === idx ? 'var(--primary-ghost)' : 'none', border: 'none', borderRadius: 6, padding: '4px 6px', color: 'inherit', textAlign: 'left', cursor: 'pointer', opacity: i < idx ? 0.6 : 1 }}>
                         <Icon name={i < idx ? 'check-circle' : i === idx ? 'navigation' : 'map-pin'} size={14} style={{ color: i < idx ? 'var(--success)' : i === idx ? 'var(--primary)' : 'var(--text-dim)' }} />
                         <span className="tiny" style={{ flex: 1, textDecoration: i < idx ? 'line-through' : 'none' }}>{i + 1}. {s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</span>

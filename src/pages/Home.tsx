@@ -33,6 +33,9 @@ export default function Home() {
   const { data: todayStatus } = useTodayStatusEvents()
   // „Elindultam” — a nap első jelzése, becsekkolás előtt; amíg nincs meg, a kezdőlapon csak ez a gomb van
   const setOffAt = todayStatus?.find((s) => s.kind === 'set_off')?.at ?? null
+  // Járat: a „Megérkeztem” után jelenik meg, a „Kiindultam” után aktív
+  const arrived = !!todayStatus?.some((s) => s.kind === 'arrived')
+  const departed = !!todayStatus?.some((s) => s.kind === 'departed')
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
 
@@ -112,7 +115,7 @@ export default function Home() {
           <div className="tiny muted">Amíg ez nincs meg, csak a Beosztás és az Autó-hiba érhető el.</div>
         </div>
       )}
-      {isCrew && !inspectionLocked && !!today?.checkin && <RouteCard />}
+      {isCrew && !inspectionLocked && !!today?.checkin && arrived && <RouteCard active={departed} />}
       {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
       {/* A lépéssor (benne a Box-lap) úton is látszik — a boxokhoz a kiindulás után érnek */}
       {isCrew && !inspectionLocked && !!today?.checkin && <TodayStepper />}
