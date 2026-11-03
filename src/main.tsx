@@ -26,8 +26,23 @@ installGlobalErrorHandlers()
 // az UpdateBanner mutatja, és a felhasználó koppint a frissítésre.
 const updateSW = registerSW({
   immediate: true,
-  // Frissítésre koppintva: a workbox-os út + biztonsági újratöltés (ha a SW nem venné át az oldalt)
-  onNeedRefresh() { setPendingUpdate(async () => { void updateSW(true); setTimeout(() => void forceUpdate(), 1500) }) },
+  // Új SW vár: ha a futó oldal MÁR a legújabb build (pl. kényszerített újratöltés után),
+  // csendben aktiváljuk, sáv nélkül; különben sáv, és koppintásra workbox-os út +
+  // biztonsági újratöltés (ha a SW nem venné át az oldalt)
+  onNeedRefresh() {
+    void (async () => {
+      try {
+        const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+        const j = r.ok ? ((await r.json()) as { build?: string }) : null
+        if (j?.build === __BUILD_TIME__) {
+          const reg = await navigator.serviceWorker.getRegistration()
+          reg?.waiting?.postMessage({ type: 'SKIP_WAITING' })
+          return
+        }
+      } catch { /* nem tudjuk — marad a sáv */ }
+      setPendingUpdate(async () => { void updateSW(true); setTimeout(() => void forceUpdate(), 1500) })
+    })()
+  },
   // Új verzió keresése: 5 percenként, és amikor az app előtérbe kerül —
   // a nyitva hagyott app sem marad napokig a régi verzión
   onRegisteredSW(_url, reg) {
