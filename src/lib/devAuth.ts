@@ -28,8 +28,9 @@ const isLocalHost =
   (['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) ||
     window.location.hostname.endsWith('.localhost'))
 
-// Csak a vite dev szerveren ÉS localhoston: éles buildből a fiókok szövege is kimarad (holt kód)
-const LOCAL_ONLY = import.meta.env.DEV && isLocalHost
+// Csak localhoston (dev szerver VAGY `npm run preview`). Az éles buildből a fiókok
+// szövege a vite.config.ts define-ja miatt mindig kimarad (mode=production → üres).
+const LOCAL_ONLY = isLocalHost
 
 function parseAccounts(): DevAccount[] {
   const raw = (import.meta.env.VITE_DEV_ACCOUNTS as string | undefined)?.trim()
@@ -61,5 +62,5 @@ export const DEV_LOGIN_ENABLED = DEV_ACCOUNTS.length > 0
 
 // Helyben futunk, de egy fiók sincs beállítva → a bejelentkező oldalon
 // megmutatjuk, mit kell a .env.local-ba írni
-// Csak a vite dev szerveren (npm run dev), a helyi előnézeti buildben nem
-export const DEV_LOGIN_SETUP_HINT = import.meta.env.DEV && DEV_ACCOUNTS.length === 0
+// Csak helyi (nem éles) buildben
+export const DEV_LOGIN_SETUP_HINT = isLocalHost && import.meta.env.MODE !== 'production' && DEV_ACCOUNTS.length === 0

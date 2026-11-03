@@ -8,7 +8,7 @@
     "dev": "vite",
     "prebuild": "node scripts/gen-icons.mjs",
     "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "preview": "vite build --mode preview && vite preview",
     "icons": "node scripts/gen-icons.mjs",
     "test": "vitest run",
     "test:watch": "vitest"

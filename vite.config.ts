@@ -3,9 +3,16 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  // Build-időbélyeg a Profil oldalon — látszik, melyik verzió fut az eszközön
-  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString()) },
+export default defineConfig(({ mode }) => ({
+  define: {
+    // Build-időbélyeg a Profil oldalon — látszik, melyik verzió fut az eszközön
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    // Fejlesztői gyors-belépés fiókjai: ÉLES buildből (mode=production, pl. Cloudflare,
+    // `npm run build`) mindig kimaradnak — akkor is, ha a gépen van .env.local.
+    // Helyi előnézethez `npm run preview` (mode=preview) tartja meg őket; a panel
+    // futásidőben csak localhoston jelenik meg (lásd src/lib/devAuth.ts).
+    ...(mode === 'production' ? { 'import.meta.env.VITE_DEV_ACCOUNTS': '""' } : {}),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -56,4 +63,4 @@ export default defineConfig({
   server: { host: true, port: 5173 },
   // Teszteléshez: a preview-t alagúton (trycloudflare) is elérjük telefonról
   preview: { host: true, port: 4173, allowedHosts: true },
-})
+}))
