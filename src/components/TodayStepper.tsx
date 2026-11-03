@@ -101,10 +101,23 @@ export default function TodayStepper() {
     <div className={`card stack${allDone ? '' : ' primary'}`} style={{ borderColor: allDone ? 'var(--success)' : undefined }}>
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="clipboard" />Mai nap</div>
-        {allDone && <span className="badge success"><Icon name="check" />Kész</span>}
+        {/* A kész becsekkolás és ellenőrzés nem sorként, csak kis ikonként a fejlécben */}
+        <span className="row" style={{ gap: 10, alignItems: 'center' }}>
+          {checkin && (
+            <span className="tiny muted row" style={{ gap: 3 }} title={`Becsekkolva ${hhmm(checkin.checked_in_at)}`}>
+              <Icon name="qr-code" size={14} style={{ color: 'var(--success)' }} />{car?.plate ?? ''}
+            </span>
+          )}
+          {checkin && (inspected || gate.waived) && (
+            <span className="tiny muted row" style={{ gap: 2 }} title={inspected ? 'Autó-ellenőrzés kész' : 'Vezetői engedéllyel fotó nélkül'}>
+              <Icon name={inspected ? 'camera' : 'shield-check'} size={14} style={{ color: 'var(--success)' }} /><Icon name="check" size={12} style={{ color: 'var(--success)' }} />
+            </span>
+          )}
+          {allDone && <span className="badge success"><Icon name="check" />Kész</span>}
+        </span>
       </div>
       <div className="stack" style={{ gap: 8 }}>
-        {steps.map((s) => {
+        {steps.filter((s) => !((s.key === 'checkin' || s.key === 'inspection') && s.state === 'done')).map((s) => {
           const st = STATE_ICON[s.state]
           return (
             <div key={s.key} className="row" style={{ gap: 12, alignItems: 'flex-start', opacity: s.state === 'todo' ? 0.65 : 1 }}>
