@@ -5,6 +5,7 @@ import { useToday } from '../hooks/useToday'
 import { isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
 import StatusCard from '../components/StatusCard'
+import SetOffCard from '../components/SetOffCard'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -34,15 +35,18 @@ export default function Home() {
     enabled: isCrew && !!currentWorkspaceId && !!profile?.id,
     refetchInterval: 60000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('status_events').select('kind, confirmed_at')
-        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO())
+      const { data, error } = await supabase.from('status_events').select('kind, at')
+        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO()).order('at')
       if (error) throw error
-      return (data ?? []).map((r) => r.kind as string)
+      return (data ?? []).map((r) => ({ kind: r.kind as string, at: r.at }))
     },
   })
+  const kinds = todayStatus?.map((s) => s.kind)
+  // „Elindultam” — a nap első jelzése, becsekkolás előtt; amíg nincs meg, a kezdőlapon csak ez a gomb van
+  const setOffAt = todayStatus?.find((s) => s.kind === 'set_off')?.at ?? null
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
-  const enRoute = !!todayStatus?.includes('departed') && !todayStatus.includes('done') && !todayStatus.includes('settled')
+  const enRoute = !!kinds?.includes('departed') && !kinds.includes('done') && !kinds.includes('settled')
   // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
   // Vezetőnek: valaki fotó nélkül kér továbbengedést — a kezdőlapon is kiemeljük, ne csak az Áttekintésben
@@ -108,8 +112,9 @@ export default function Home() {
   return (
     <div className="stack">
 
-      {/* Amíg nincs becsekkolva: a Mai nap lépéssor (a nagy QR-gombbal) legfelül; utána a járat és a jelzések */}
-      {isCrew && !today?.checkin && <TodayStepper />}
+      {/* Becsekkolás előtt: először az „Elindultam” (csak ez látszik, a mai autóval) — utána a Mai nap lépéssor a QR-gombbal */}
+      {isCrew && today && !today.checkin && todayStatus && <SetOffCard setOffAt={setOffAt} />}
+      {isCrew && !today?.checkin && !!setOffAt && <TodayStepper />}
       {/* Becsekkolás után, amíg az ellenőrzés (5 fotó vagy vezetői engedély) nincs meg: csak ez a kártya —
           a többi funkció zárva, elérhető: Beosztás, Autó-hiba */}
       {isCrew && inspectionLocked && today?.checkin && (
@@ -120,11 +125,11 @@ export default function Home() {
           <div className="tiny muted">Amíg ez nincs meg, csak a Beosztás és az Autó-hiba érhető el.</div>
         </div>
       )}
-      {isCrew && !inspectionLocked && <RouteCard />}
-      {isCrew && !inspectionLocked && <StatusCard />}
+      {isCrew && !inspectionLocked && !!today?.checkin && <RouteCard />}
+      {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
       {isCrew && !inspectionLocked && !!today?.checkin && !enRoute && <TodayStepper />}
 
-      {isCrew && !inspectionLocked && (
+      {isCrew && !inspectionLocked && !!today?.checkin && (
         <div>
           <div className="card-title" style={{ marginBottom: 8 }}>Gyorslinkek</div>
           <div className="chips">

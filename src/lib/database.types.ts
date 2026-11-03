@@ -2528,7 +2528,7 @@ export type Database = {
       inspection_reason: "day9" | "driver_change" | "manual"
       inspection_view: "front" | "rear" | "left" | "right" | "interior"
       pay_type: "daily" | "monthly"
-      status_kind: "arrived" | "departed" | "done" | "issue" | "settled"
+      status_kind: "arrived" | "departed" | "done" | "issue" | "set_off" | "settled"
       swap_status: "pending" | "approved" | "rejected"
       user_role: "driver" | "loader" | "manager" | "admin" | "crew"
       user_status: "pending" | "active" | "disabled" | "invited"
@@ -2666,7 +2666,7 @@ export const Constants = {
       inspection_reason: ["day9", "driver_change", "manual"],
       inspection_view: ["front", "rear", "left", "right", "interior"],
       pay_type: ["daily", "monthly"],
-      status_kind: ["arrived", "departed", "done", "issue", "settled"],
+      status_kind: ["arrived", "departed", "done", "issue", "set_off", "settled"],
       swap_status: ["pending", "approved", "rejected"],
       user_role: ["driver", "loader", "manager", "admin", "crew"],
       user_status: ["pending", "active", "disabled", "invited"],

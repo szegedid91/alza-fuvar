@@ -3,8 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
-import { submitNow } from '../lib/outbox'
-import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
+import { recordStatusEvent } from '../lib/statusEvents'
 import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { groupTarget, copyText, statusText, STATUS_META, type StatusKind } from '../lib/groupMessage'
@@ -51,16 +50,7 @@ export default function StatusCard() {
   async function record(kind: StatusKind, at: Date): Promise<string | null> {
     if (!currentWorkspaceId || !profile) return null
     try {
-      const gps = await getCurrentPosition(4000)
-      const outside = currentWorkspace ? isOutsideGeofence(gps, currentWorkspace) : false
-      const id = crypto.randomUUID()
-      await submitNow({
-        id, table: 'status_events', op: 'insert', label: `${STATUS_META[kind].title} – jelzés`,
-        values: {
-          id, workspace_id: currentWorkspaceId, user_id: profile.id, car_id: today?.car?.id ?? null, work_date: date, kind,
-          at: at.toISOString(), gps_lat: gps.lat, gps_lng: gps.lng, outside_geofence: outside, note: null, confirmed_at: at.toISOString(),
-        },
-      })
+      const id = await recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: today?.car?.id ?? null, kind, at, geofence: currentWorkspace })
       invalidate()
       return id
     } catch (e) {
