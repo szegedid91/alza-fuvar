@@ -10,7 +10,6 @@ import { groupTarget, copyText, statusText, sharePhotos, canShareFiles, STATUS_M
 import { submitNow } from '../lib/outbox'
 import MultiShotCamera from './MultiShotCamera'
 import { useState } from 'react'
-import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
@@ -47,11 +46,6 @@ export default function StatusCard() {
   })
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['status-events'] }) }
 
-  // Újraküldés: a már rögzített jelzés szövege még egyszer a csoportba
-  function resend(ev: StatusEvent) {
-    const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, route, ev.note)
-    window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
-  }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
   const lastOf = (kind: StatusKind) => [...(events ?? [])].reverse().find((e) => e.kind === kind) ?? null
 
@@ -101,13 +95,6 @@ export default function StatusCard() {
       else if (res === 'cancelled') toast.info('A megosztás megszakadt — a jelzés és a képek az appban megvannak, a listából újraküldheted.')
       else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
     })
-  }
-
-  async function undo(ev: StatusEvent) {
-    const { error } = await supabase.from('status_events').delete().eq('id', ev.id)
-    if (error) { toast.error('Nem sikerült visszavonni: ' + error.message); return }
-    toast.info('Jelzés visszavonva.')
-    invalidate()
   }
 
   const simple: StatusKind[] = ['arrived', 'departed', 'done', 'settled']
@@ -161,38 +148,6 @@ export default function StatusCard() {
         <MultiShotCamera title="Elszámolás — fotók" sendLabel="Küldés a csoportba" onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
-      {(events?.length ?? 0) > 0 && (
-        <div className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          {events!.map((ev) => {
-            const meta = STATUS_META[ev.kind as StatusKind]
-            const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, route, ev.note)
-            const iconBtn = { minHeight: 32, minWidth: 32, padding: 0, width: 32, flexShrink: 0 } as const
-            return (
-              <div key={ev.id} className="between" style={{ gap: 6, alignItems: 'flex-start' }}>
-                <div className="row" style={{ gap: 6, minWidth: 0, alignItems: 'flex-start', flex: 1 }}>
-                  <Icon name={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0, marginTop: 3 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div className="tiny"><strong>{hhmm(ev.at)}</strong> {meta.title}{ev.photos?.length ? ` · ${ev.photos.length} fotó` : ev.photo_path ? ' · fotó' : ''}</div>
-                    {ev.note && (
-                      <div className="tiny muted" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ev.note}</div>
-                    )}
-                  </div>
-                </div>
-                <span className="row" style={{ gap: 4, flexShrink: 0 }}>
-                  <a className="btn ghost sm auto" style={{ ...iconBtn, textDecoration: 'none' }} aria-label="Újraküldés WhatsAppon" title="Újraküldés WhatsAppon"
-                    href={groupTarget(currentWorkspace, text).url} target="_blank" rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); resend(ev) }}>
-                    <Icon name="send" size={15} />
-                  </a>
-                  <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={() => void undo(ev)} style={{ minHeight: 32, padding: '0 8px', flexShrink: 0 }}>
-                    <Icon name="x" size={15} />
-                  </ConfirmButton>
-                </span>
-              </div>
-            )
-          })}
-          <div className="tiny muted" style={{ marginTop: 2 }}><Icon name="send" size={12} style={{ verticalAlign: -2 }} /> = újraküldés WhatsAppon · × = visszavonás</div>
-        </div>
-      )}
       <p className="tiny muted" style={{ margin: 0 }}>
         Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: egy vagy több kép, a Küldésre a WhatsApp nyílik a képekkel — a képek az appba is mentődnek.
       </p>
