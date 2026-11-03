@@ -101,18 +101,8 @@ export default function TodayStepper() {
     <div className={`card stack${allDone ? '' : ' primary'}`} style={{ borderColor: allDone ? 'var(--success)' : undefined }}>
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="clipboard" />Mai nap</div>
-        {/* A kész becsekkolás és ellenőrzés nem sorként, csak kis ikonként a fejlécben */}
+        {/* A kész becsekkolás és ellenőrzés nem sor: kis ikonként a felső sávban (AppShell) látszik */}
         <span className="row" style={{ gap: 10, alignItems: 'center' }}>
-          {checkin && (
-            <span className="tiny muted row" style={{ gap: 3 }} title={`Becsekkolva ${hhmm(checkin.checked_in_at)}`}>
-              <Icon name="qr-code" size={14} style={{ color: 'var(--success)' }} />{car?.plate ?? ''}
-            </span>
-          )}
-          {checkin && (inspected || gate.waived) && (
-            <span className="tiny muted row" style={{ gap: 2 }} title={inspected ? 'Autó-ellenőrzés kész' : 'Vezetői engedéllyel fotó nélkül'}>
-              <Icon name={inspected ? 'camera' : 'shield-check'} size={14} style={{ color: 'var(--success)' }} /><Icon name="check" size={12} style={{ color: 'var(--success)' }} />
-            </span>
-          )}
           {allDone && <span className="badge success"><Icon name="check" />Kész</span>}
         </span>
       </div>

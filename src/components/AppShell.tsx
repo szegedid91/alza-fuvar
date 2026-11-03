@@ -245,6 +245,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Ellenőrzés-zár: becsekkolás után, amíg nincs 5 fotó vagy vezetői engedély, csak néhány oldal érhető el
   const { data: today } = useToday()
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
+  const showStatus = isCrew && !!today?.checkin && !today.checkin.checked_out_at
   const LOCK_ALLOWED = ['/', '/ellenorzes', '/beosztas', '/hibak', '/profil']
   // A QR-beolvasás (becsekkolás) csak az „Elindultam” jelzés után érhető el —
   // addig az alsó menüben sincs, és a /beolvasas a kezdőlapra visz
@@ -288,11 +289,25 @@ export default function AppShell({ children }: { children: ReactNode }) {
         ) : (
           <div className="brand">
             <img src="/pwa-192.png" alt="" />
-            <span>Alza</span>
+            {/* Becsekkolva a márkanév helyett a mai állapot ikonjai kapnak helyet, hogy a név kiférjen */}
+            {!showStatus && <span>Alza</span>}
           </div>
         )}
         <div className="spacer" />
         <SyncBadge />
+        {/* Mai állapot kis ikonokkal: becsekkolt autó, ellenőrzés kész (vagy engedély) */}
+        {showStatus && today?.checkin && (
+          <span className="row tiny muted" style={{ gap: 8, alignItems: 'center', flexShrink: 0 }}>
+            <span className="row" style={{ gap: 3 }} title={`Becsekkolva: ${today.car?.plate ?? ''}`}>
+              <Icon name="qr-code" size={14} style={{ color: 'var(--success)' }} /><span className="num">{today.car?.plate ?? ''}</span>
+            </span>
+            {(today.inspectionDone || today.checkin.inspection_waived_at) && (
+              <span className="row" style={{ gap: 1 }} title={today.inspectionDone ? 'Autó-ellenőrzés kész' : 'Vezetői engedéllyel fotó nélkül'}>
+                <Icon name={today.inspectionDone ? 'camera' : 'shield-check'} size={14} style={{ color: 'var(--success)' }} /><Icon name="check" size={11} style={{ color: 'var(--success)' }} />
+              </span>
+            )}
+          </span>
+        )}
         {/* Ki van bejelentkezve — koppintásra a Profil */}
         <NavLink to="/profil" aria-label="Profil megnyitása" style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', color: 'inherit', fontSize: 13, fontWeight: 700, maxWidth: '42vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '4px 6px', borderRadius: 999 }}>
           <Icon name="user" size={16} /><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile?.full_name || profile?.email || ''}</span>

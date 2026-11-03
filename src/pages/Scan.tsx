@@ -43,6 +43,8 @@ export default function Scan() {
   // "Tele" autó: ma már annyian vannak rajta nyitott becsekkolással, ahány fős
   // (Box = 1). Rákérdezünk — ha mégis, a vezetők jelzést kapnak.
   const [pendingConflict, setPendingConflict] = useState<{ car: Car; manual: boolean; others: CrewMember[]; capacity: number } | null>(null)
+  // Nem a beosztás szerinti autó: figyelmeztetünk, és csak megerősítéssel engedjük
+  const [pendingMismatch, setPendingMismatch] = useState<{ car: Car; manual: boolean } | null>(null)
   // Kézi becsekkolás (sérült matrica / tiltott kamera): autó a listából
   const [manualOpen, setManualOpen] = useState(false)
   const [manualCarId, setManualCarId] = useState('')
@@ -81,7 +83,12 @@ export default function Scan() {
   // 1) Tele az autó? (annyi nyitott becsekkolás, ahány fős — Box: 1) → rákérdezünk.
   // 2) Ma már egy MÁSIK autóra vagy becsekkolva és nem jelentkeztél ki → az
   //    autócsere okát kérjük. Egyébként azonnal becsekkolunk.
-  async function startCheckIn(car: Car, manual: boolean) {
+  async function startCheckIn(car: Car, manual: boolean, ignoreMismatch = false) {
+    // 0) Nem erre az autóra van ma beosztva → figyelmeztetés (a cserét a beosztás nem tiltja, de ne véletlenül legyen)
+    if (!ignoreMismatch && today?.planned && today.planned.plate !== car.plate) {
+      setPendingMismatch({ car, manual })
+      return
+    }
     let others: CrewMember[] = []
     try {
       others = (await getCrewForDay(car.id, todayISO(), true)).filter((c) => c.user_id !== profile?.id)
@@ -104,6 +111,23 @@ export default function Scan() {
     const closed = today?.checkin && today.checkin.checked_out_at && today.checkin.car_id === car.id ? today.checkin : null
     if (closed) { setPendingReopen({ car, checkinId: closed.id }); return }
     await doCheckIn(car, null, null, null, manual, conflict)
+  }
+
+  // „Mégis erre az autóra” a beosztástól eltérő autónál — a többi ellenőrzés (tele autó, csere) ezután jön
+  async function proceedMismatch() {
+    if (!pendingMismatch) return
+    const { car, manual } = pendingMismatch
+    setBusy(true)
+    setError(null)
+    try {
+      setPendingMismatch(null)
+      await startCheckIn(car, manual, true)
+    } catch (e) {
+      const msg = errMsg(e, 'Hiba')
+      setError(msg.includes('duplicate') ? 'Ma már becsekkoltál erre az autóra.' : msg)
+    } finally {
+      setBusy(false)
+    }
   }
 
   // "Mégis erre az autóra" — a figyelmeztetés ellenére, jelöléssel
@@ -430,6 +454,23 @@ export default function Scan() {
         </div>
       )}
 
+      {pendingMismatch && (
+        <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+          <div className="row"><Icon name="alert-triangle" size={24} style={{ color: 'var(--warning)' }} /><strong>Nem erre az autóra vagy beosztva</strong></div>
+          <p className="small" style={{ margin: 0 }}>
+            A mai beosztásod: <strong className="num">{today?.planned?.plate}</strong>{today?.planned?.routeCode ? ` (${today.planned.routeCode} járat)` : ''}.
+            Ezt olvastad be: <strong className="num">{pendingMismatch.car.plate}</strong>{pendingMismatch.car.label ? ` · ${pendingMismatch.car.label}` : ''}.
+          </p>
+          <p className="tiny muted" style={{ margin: 0 }}>Ha tévedés, olvasd be a beosztott autót. Ha a vezető mást mondott, mehetsz erre — a beosztás nem változik, a vezetők az Áttekintésben látják az eltérést.</p>
+          <div className="btn-grid">
+            <button className="btn ghost" disabled={busy} onClick={() => setPendingMismatch(null)}>Mégse</button>
+            <ConfirmButton className="btn danger-outline" confirmLabel="Igen, biztos erre" disabled={busy} onConfirm={() => void proceedMismatch()}>
+              {busy ? 'Feldolgozás…' : 'Mégis erre az autóra'}
+            </ConfirmButton>
+          </div>
+        </div>
+      )}
+
       {pendingConflict && (
         <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
           <div className="row"><Icon name="users" size={24} style={{ color: 'var(--danger)' }} /><strong>Ezen az autón már van valaki: {pendingConflict.car.plate}</strong></div>
@@ -461,7 +502,7 @@ export default function Scan() {
 
       {error && <div className="alert error">{error}</div>}
 
-      {!checkedIn && !isLoading && !pendingConflict && (
+      {!checkedIn && !isLoading && !pendingConflict && !pendingMismatch && (
         <div className="card stack primary">
           <p className="muted small">Olvasd be az autó QR-kódját a nap kezdéséhez. A beolvasás rögzíti a ledolgozott napot (idő + GPS).</p>
           <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy || !cars}>
@@ -476,7 +517,7 @@ export default function Scan() {
         </div>
       )}
 
-      {checkedIn && !pendingSwitch && !pendingConflict && (
+      {checkedIn && !pendingSwitch && !pendingConflict && !pendingMismatch && (
         <div className="stack">
           <button className="btn secondary" onClick={() => { setError(null); setScanning(true) }} disabled={busy}>
             <Icon name="qr-code" />Másik autó beolvasása
