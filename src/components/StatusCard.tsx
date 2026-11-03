@@ -6,7 +6,10 @@ import { useToday } from '../hooks/useToday'
 import { recordStatusEvent } from '../lib/statusEvents'
 import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
-import { groupTarget, copyText, statusText, STATUS_META, type StatusKind } from '../lib/groupMessage'
+import { groupTarget, copyText, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind } from '../lib/groupMessage'
+import { submitNow } from '../lib/outbox'
+import CameraCapture from './CameraCapture'
+import { useState } from 'react'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
@@ -24,7 +27,14 @@ export default function StatusCard() {
   const qc = useQueryClient()
   const date = todayISO()
   const name = profile?.full_name || profile?.email || 'Munkatárs'
-  const plate = today?.car?.plate ?? null
+  // A csoportba a kiosztott járat kódja megy (rendszám nem)
+  const route = today?.planned?.routeCode ?? null
+  // „Elszámoltam”: fotóval — a kamera nyílik, a kép az appba mentődik, és a
+  // megosztás-menün át a csoportba megy a szöveggel (mint a box-fotók)
+  const [settleCamera, setSettleCamera] = useState(false)
+  const [settleShot, setSettleShot] = useState<{ blob: Blob; previewUrl: string; at: Date } | null>(null)
+  const [settleBusy, setSettleBusy] = useState(false)
+  const shareOk = canShareFiles()
 
   const { data: events } = useQuery({
     queryKey: ['status-events', currentWorkspaceId, profile?.id, date],
@@ -40,7 +50,7 @@ export default function StatusCard() {
 
   // Újraküldés: a már rögzített jelzés szövege még egyszer a csoportba
   function resend(ev: StatusEvent) {
-    const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)
+    const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, route, ev.note)
     window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
   }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
@@ -57,6 +67,42 @@ export default function StatusCard() {
       toast.error('A jelzés rögzítése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
       return null
     }
+  }
+
+  // Elszámolás fotóval: a kép elkészültekor rögzül a jelzés (idő = a kattintás),
+  // a fotó a háttérben megy fel (offline is sorba áll) — a küldés külön koppintás,
+  // mert a megosztás-menüt a böngésző csak érintésre nyitja
+  async function onSettleCaptured(blob: Blob, previewUrl: string) {
+    setSettleCamera(false)
+    if (!currentWorkspaceId || !profile) return
+    const at = new Date()
+    setSettleBusy(true)
+    try {
+      const eventId = await record('settled', at)
+      if (!eventId) return
+      const photoId = crypto.randomUUID()
+      await submitNow({
+        id: photoId, table: 'status_event_photos', op: 'insert', label: 'Elszámolás fotó',
+        values: { id: photoId, workspace_id: currentWorkspaceId, event_id: eventId },
+        photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob },
+      })
+      invalidate()
+      setSettleShot({ blob, previewUrl, at })
+    } catch (e) {
+      toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
+      setSettleShot({ blob, previewUrl, at })
+    } finally {
+      setSettleBusy(false)
+    }
+  }
+
+  async function shareSettle() {
+    if (!settleShot) return
+    const text = statusText('settled', settleShot.at, name, route)
+    const res = await sharePhotos([settleShot.blob], text, 'elszamolas')
+    if (res === 'shared') { toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.'); setSettleShot(null) }
+    else if (res === 'cancelled') toast.info('A megosztás megszakadt — a kép az appban megvan, újra megoszthatod.')
+    else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
   }
 
   async function undo(ev: StatusEvent) {
@@ -79,7 +125,18 @@ export default function StatusCard() {
         {simple.map((kind) => {
           const meta = STATUS_META[kind]
           const last = lastOf(kind)
-          const text = statusText(kind, new Date(), name, plate)
+          if (kind === 'settled') {
+            return (
+              <button key={kind} type="button" className={`btn ${last ? 'secondary' : ''}`} disabled={settleBusy}
+                style={{ flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px' }}
+                onClick={() => { setSettleShot(null); setSettleCamera(true) }}>
+                <Icon name="camera" />
+                <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
+                <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : 'fotóval'}</span>
+              </button>
+            )
+          }
+          const text = statusText(kind, new Date(), name, route)
           const target = groupTarget(currentWorkspace, text)
           return (
             <a key={kind} className={`btn ${last ? 'secondary' : ''}`} href={target.url} target="_blank" rel="noopener noreferrer"
@@ -88,7 +145,7 @@ export default function StatusCard() {
               // csoport-linknél a szöveg a vágólapra megy
               onClick={(e) => {
                 const at = new Date()
-                const t = statusText(kind, at, name, plate)
+                const t = statusText(kind, at, name, route)
                 const tg = groupTarget(currentWorkspace, t)
                 e.currentTarget.href = tg.url
                 if (tg.viaClipboard) void copyText(t)
@@ -102,11 +159,31 @@ export default function StatusCard() {
         })}
       </div>
 
+      {settleCamera && (
+        <CameraCapture title="Elszámolás — fotó" onCancel={() => setSettleCamera(false)} onCapture={(b, u) => void onSettleCaptured(b, u)} />
+      )}
+      {settleShot && (
+        <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+          <div className="between">
+            <strong className="small">Elszámoltam {hhmm(settleShot.at.toISOString())} — fotó mentve</strong>
+            <button type="button" className="btn ghost sm auto" onClick={() => setSettleShot(null)}><Icon name="x" size={15} /></button>
+          </div>
+          <img src={settleShot.previewUrl} alt="Elszámolás fotó" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: '#000' }} />
+          <div className="btn-grid">
+            <button type="button" className="btn ghost" onClick={() => { setSettleShot(null); setSettleCamera(true) }}><Icon name="refresh" />Újra</button>
+            <button type="button" className="btn" onClick={() => void shareSettle()}>
+              <Icon name="send" />{shareOk ? 'Küldés a csoportba' : 'Küldés (szöveg)'}
+            </button>
+          </div>
+          {!shareOk && <div className="tiny muted">Ezen a készüléken a kép nem adható át a WhatsAppnak — a szöveg megy, a kép az appban megvan (a vezetők látják).</div>}
+        </div>
+      )}
+
       {(events?.length ?? 0) > 0 && (
         <div className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           {events!.map((ev) => {
             const meta = STATUS_META[ev.kind as StatusKind]
-            const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, plate, ev.note)
+            const text = statusText(ev.kind as StatusKind, new Date(ev.at), name, route, ev.note)
             const iconBtn = { minHeight: 32, minWidth: 32, padding: 0, width: 32, flexShrink: 0 } as const
             return (
               <div key={ev.id} className="between" style={{ gap: 6, alignItems: 'flex-start' }}>
@@ -135,7 +212,7 @@ export default function StatusCard() {
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják.
+        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: a kép az appba mentődik, és a csoportba is küldheted.
       </p>
     </div>
   )

@@ -60,9 +60,10 @@ export const STATUS_META: Record<StatusKind, { label: string; title: string; ico
   issue: { label: 'Hiba', title: 'Hiba', icon: 'alert-triangle', color: 'var(--danger)' },
 }
 
-// A csoportba menő szöveg: mi · mikor · ki (· autó) (· megjegyzés)
-export function statusText(kind: StatusKind, at: Date, name: string, plate?: string | null, note?: string | null): string {
-  const who = plate ? `${name} (${plate})` : name
+// A csoportba menő szöveg: mi · mikor · ki (· járat) (· megjegyzés)
+// Rendszám NEM megy a csoportba — a kiosztott járat kódja igen, ha van.
+export function statusText(kind: StatusKind, at: Date, name: string, route?: string | null, note?: string | null): string {
+  const who = route ? `${name} (${route} járat)` : name
   const base = `${STATUS_META[kind].title} – ${dt(at)} – ${who}`
   return note?.trim() ? `${base}: ${note.trim()}` : base
 }
