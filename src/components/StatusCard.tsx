@@ -8,7 +8,7 @@ import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { groupTarget, copyText, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
-import CameraCapture from './CameraCapture'
+import MultiShotCamera from './MultiShotCamera'
 import { useState } from 'react'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
@@ -29,11 +29,10 @@ export default function StatusCard() {
   const name = profile?.full_name || profile?.email || 'Munkatárs'
   // A csoportba a kiosztott járat kódja megy (rendszám nem)
   const route = today?.planned?.routeCode ?? null
-  // „Elszámoltam”: fotóval — a kamera nyílik, a kép az appba mentődik, és a
-  // megosztás-menün át a csoportba megy a szöveggel (mint a box-fotók)
+  // „Elszámoltam”: fotóval — a kamera nyílik (több kép is lehet), a „Küldés”
+  // koppintásra AZONNAL a WhatsApp nyílik a képekkel és a szöveggel; a jelzés és
+  // a képek mentése a háttérben megy (offline is sorba áll)
   const [settleCamera, setSettleCamera] = useState(false)
-  const [settleShot, setSettleShot] = useState<{ blob: Blob; previewUrl: string; at: Date } | null>(null)
-  const [settleBusy, setSettleBusy] = useState(false)
   const shareOk = canShareFiles()
 
   const { data: events } = useQuery({
@@ -69,40 +68,39 @@ export default function StatusCard() {
     }
   }
 
-  // Elszámolás fotóval: a kép elkészültekor rögzül a jelzés (idő = a kattintás),
-  // a fotó a háttérben megy fel (offline is sorba áll) — a küldés külön koppintás,
-  // mert a megosztás-menüt a böngésző csak érintésre nyitja
-  async function onSettleCaptured(blob: Blob, previewUrl: string) {
-    setSettleCamera(false)
+  // Elszámolás fotóval: a „Küldés” koppintáson belül nyílik a megosztás-menü
+  // (a böngésző csak érintésre engedi) — ezért ELŐBB a megosztás indul, és csak
+  // utána, párhuzamosan a rögzítés + feltöltés
+  function sendSettle(blobs: Blob[]) {
     if (!currentWorkspaceId || !profile) return
     const at = new Date()
-    setSettleBusy(true)
-    try {
-      const eventId = await record('settled', at)
-      if (!eventId) return
-      const photoId = crypto.randomUUID()
-      await submitNow({
-        id: photoId, table: 'status_event_photos', op: 'insert', label: 'Elszámolás fotó',
-        values: { id: photoId, workspace_id: currentWorkspaceId, event_id: eventId },
-        photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob },
-      })
-      invalidate()
-      setSettleShot({ blob, previewUrl, at })
-    } catch (e) {
-      toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
-      setSettleShot({ blob, previewUrl, at })
-    } finally {
-      setSettleBusy(false)
-    }
-  }
-
-  async function shareSettle() {
-    if (!settleShot) return
-    const text = statusText('settled', settleShot.at, name, route)
-    const res = await sharePhotos([settleShot.blob], text, 'elszamolas')
-    if (res === 'shared') { toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.'); setSettleShot(null) }
-    else if (res === 'cancelled') toast.info('A megosztás megszakadt — a kép az appban megvan, újra megoszthatod.')
+    const text = statusText('settled', at, name, route)
+    setSettleCamera(false)
+    let sharing: Promise<'shared' | 'cancelled' | 'unsupported'> | null = null
+    if (shareOk) sharing = sharePhotos(blobs, text, 'elszamolas')
     else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+    void (async () => {
+      try {
+        const eventId = await record('settled', at)
+        if (!eventId) return
+        for (const blob of blobs) {
+          const photoId = crypto.randomUUID()
+          await submitNow({
+            id: photoId, table: 'status_event_photos', op: 'insert', label: 'Elszámolás fotó',
+            values: { id: photoId, workspace_id: currentWorkspaceId, event_id: eventId },
+            photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob },
+          })
+        }
+        invalidate()
+      } catch (e) {
+        toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
+      }
+    })()
+    void sharing?.then((res) => {
+      if (res === 'shared') toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el. A képek az appban is megvannak.')
+      else if (res === 'cancelled') toast.info('A megosztás megszakadt — a jelzés és a képek az appban megvannak, a listából újraküldheted.')
+      else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+    })
   }
 
   async function undo(ev: StatusEvent) {
@@ -127,9 +125,9 @@ export default function StatusCard() {
           const last = lastOf(kind)
           if (kind === 'settled') {
             return (
-              <button key={kind} type="button" className={`btn ${last ? 'secondary' : ''}`} disabled={settleBusy}
+              <button key={kind} type="button" className={`btn ${last ? 'secondary' : ''}`}
                 style={{ flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px' }}
-                onClick={() => { setSettleShot(null); setSettleCamera(true) }}>
+                onClick={() => setSettleCamera(true)}>
                 <Icon name="camera" />
                 <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
                 <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : 'fotóval'}</span>
@@ -160,23 +158,7 @@ export default function StatusCard() {
       </div>
 
       {settleCamera && (
-        <CameraCapture title="Elszámolás — fotó" onCancel={() => setSettleCamera(false)} onCapture={(b, u) => void onSettleCaptured(b, u)} />
-      )}
-      {settleShot && (
-        <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-          <div className="between">
-            <strong className="small">Elszámoltam {hhmm(settleShot.at.toISOString())} — fotó mentve</strong>
-            <button type="button" className="btn ghost sm auto" onClick={() => setSettleShot(null)}><Icon name="x" size={15} /></button>
-          </div>
-          <img src={settleShot.previewUrl} alt="Elszámolás fotó" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: '#000' }} />
-          <div className="btn-grid">
-            <button type="button" className="btn ghost" onClick={() => { setSettleShot(null); setSettleCamera(true) }}><Icon name="refresh" />Újra</button>
-            <button type="button" className="btn" onClick={() => void shareSettle()}>
-              <Icon name="send" />{shareOk ? 'Küldés a csoportba' : 'Küldés (szöveg)'}
-            </button>
-          </div>
-          {!shareOk && <div className="tiny muted">Ezen a készüléken a kép nem adható át a WhatsAppnak — a szöveg megy, a kép az appban megvan (a vezetők látják).</div>}
-        </div>
+        <MultiShotCamera title="Elszámolás — fotók" sendLabel="Küldés a csoportba" onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
       {(events?.length ?? 0) > 0 && (
@@ -212,7 +194,7 @@ export default function StatusCard() {
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: a kép az appba mentődik, és a csoportba is küldheted.
+        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: egy vagy több kép, a Küldésre a WhatsApp nyílik a képekkel — a képek az appba is mentődnek.
       </p>
     </div>
   )
