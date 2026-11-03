@@ -31,12 +31,11 @@ export default function Home() {
   // Úton vagyok: a „Kiindultam” jelzés után (amíg nincs „Járat kész” / „Elszámoltam”)
   // a kezdőlap csak a járatot, a jelzéseket és a gyorslinkeket mutatja — a napi lépéssor és a fejléc részletei eltűnnek
   const { data: todayStatus } = useTodayStatusEvents()
-  const kinds = todayStatus?.map((s) => s.kind)
   // „Elindultam” — a nap első jelzése, becsekkolás előtt; amíg nincs meg, a kezdőlapon csak ez a gomb van
   const setOffAt = todayStatus?.find((s) => s.kind === 'set_off')?.at ?? null
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
-  const enRoute = !!kinds?.includes('departed') && !kinds.includes('done') && !kinds.includes('settled')
+
   // Vezetőnek: túl sokan egy autón — ezt rendezni kell, a kezdőlapon is kiemeljük
   const { data: conflicts } = useCrewConflicts(isManagerOrAdmin)
   // Vezetőnek: valaki fotó nélkül kér továbbengedést — a kezdőlapon is kiemeljük, ne csak az Áttekintésben
@@ -117,7 +116,8 @@ export default function Home() {
       )}
       {isCrew && !inspectionLocked && !!today?.checkin && <RouteCard />}
       {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
-      {isCrew && !inspectionLocked && !!today?.checkin && !enRoute && <TodayStepper />}
+      {/* A lépéssor (benne a Box-lap) úton is látszik — a boxokhoz a kiindulás után érnek */}
+      {isCrew && !inspectionLocked && !!today?.checkin && <TodayStepper />}
 
       {isCrew && !inspectionLocked && !!today?.checkin && (
         <div>
