@@ -14,7 +14,7 @@ import { WorkspaceProvider } from './context/WorkspaceContext'
 import { queryClient } from './lib/queryClient'
 import { initTheme } from './lib/theme'
 import { installGlobalErrorHandlers } from './lib/errorReport'
-import { setPendingUpdate } from './lib/swUpdate'
+import { setPendingUpdate, forceUpdate, startVersionWatch } from './lib/swUpdate'
 import ErrorBoundary from './components/ErrorBoundary'
 import Toaster from './components/Toaster'
 import UpdateBanner from './components/UpdateBanner'
@@ -26,7 +26,8 @@ installGlobalErrorHandlers()
 // az UpdateBanner mutatja, és a felhasználó koppint a frissítésre.
 const updateSW = registerSW({
   immediate: true,
-  onNeedRefresh() { setPendingUpdate(updateSW) },
+  // Frissítésre koppintva: a workbox-os út + biztonsági újratöltés (ha a SW nem venné át az oldalt)
+  onNeedRefresh() { setPendingUpdate(async () => { void updateSW(true); setTimeout(() => void forceUpdate(), 1500) }) },
   // Új verzió keresése: 5 percenként, és amikor az app előtérbe kerül —
   // a nyitva hagyott app sem marad napokig a régi verzión
   onRegisteredSW(_url, reg) {
@@ -40,6 +41,9 @@ const updateSW = registerSW({
 // A query-cache localStorage-be mentése -> offline újratöltés után is elérhető a legutóbbi adat
 // FONTOS: ha egy lekérdezés visszaadott adatszerkezete változik, a buster-t
 // léptetni kell — különben a régi mentett cache összeakad az új kóddal.
+// Verzió-figyelő (SW-től független) — a telefon ne ragadjon a régi buildnél
+startVersionWatch(__BUILD_TIME__)
+
 const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'alza-query-cache' })
 
 createRoot(document.getElementById('root')!).render(

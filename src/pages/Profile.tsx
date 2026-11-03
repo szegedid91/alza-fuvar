@@ -16,6 +16,7 @@ const THEME_UI: Record<ThemePref, { icon: IconName; label: string }> = {
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import HelpRequestCard from '../components/HelpRequestCard'
+import { forceUpdate } from '../lib/swUpdate'
 
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
@@ -43,24 +44,12 @@ export default function ProfilePage() {
     }
   }
 
-  // Új verzió keresése kézzel: ha van várakozó, azonnal aktiválja és újratölt; ha nincs,
-  // a gyorsítótárat is üríti és újratölt (a telefon néha napokig a régit tartja)
+  // Új verzió keresése kézzel: kényszerített frissítés (SW + gyorsítótár + újratöltés)
   const [updBusy, setUpdBusy] = useState(false)
   async function checkUpdate() {
     setUpdBusy(true)
-    try {
-      const reg = await navigator.serviceWorker?.getRegistration()
-      if (reg) {
-        await reg.update().catch(() => undefined)
-        if (reg.waiting) { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); await new Promise((r) => setTimeout(r, 400)) }
-      }
-      if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.filter((k) => !k.includes('supabase-storage')).map((k) => caches.delete(k))) }
-      toast.info('Frissítés — az app újratölt.')
-      setTimeout(() => window.location.reload(), 300)
-    } catch (e) {
-      toast.error('Nem sikerült frissíteni: ' + errMsg(e, 'ismeretlen hiba'))
-      setUpdBusy(false)
-    }
+    toast.info('Frissítés — az app újratölt.')
+    await forceUpdate()
   }
 
   async function save() {

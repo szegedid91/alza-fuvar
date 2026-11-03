@@ -3,10 +3,12 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
+const BUILD_TIME = new Date().toISOString()
+
 export default defineConfig(({ mode }) => ({
   define: {
     // Build-időbélyeg a Profil oldalon — látszik, melyik verzió fut az eszközön
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
     // Fejlesztői gyors-belépés fiókjai: ÉLES buildből (mode=production, pl. Cloudflare,
     // `npm run build`) mindig kimaradnak — akkor is, ha a gépen van .env.local.
     // Helyi előnézethez `npm run preview` (mode=preview) tartja meg őket; a panel
@@ -15,6 +17,8 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    // version.json: a futó app ebből tudja meg (service workertől függetlenül), hogy van-e újabb build
+    { name: 'alza-version', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_TIME }) }) } },
     VitePWA({
       // 'prompt': az új verzió nem tölti újra magától az oldalt — az app sávot
       // mutat, és a felhasználó dönt (lásd main.tsx / UpdateBanner)
@@ -38,7 +42,11 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        // Az aktivált új SW azonnal átveszi a nyitott lapokat — enélkül a „Frissítés” után
+        // nem jött controllerchange, és az oldal nem töltött újra
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globIgnores: ['**/version.json'],
         importScripts: ['/push-sw.js'], // Web Push kezelők
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
         runtimeCaching: [
