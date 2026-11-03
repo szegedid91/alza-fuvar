@@ -56,8 +56,6 @@ export default function Home() {
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
     { to: '/boxok', icon: 'package', title: 'AlzaBox kereső', desc: '' },
   ]
-  // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autóhoz — az XL-eseknek nincs
-  if (today?.car?.category?.box_sheet) crewLinks.unshift({ to: '/box-lap', icon: 'clipboard', title: 'Box-lap', desc: '' })
 
   // Számok a csempéken: mire kell ránézni (jóváhagyásra váró, nyitott autó-hiba, segítségkérés)
   const { data: counts } = useQuery({
