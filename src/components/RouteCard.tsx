@@ -188,7 +188,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, go, navAp
                       {lateNow != null && lateNow > 0 ? <strong> · késésben {lateNow} perc</strong> : null}
                     </div>
                   )}
-                  {cur.box.description && <div className="tiny muted" style={{ marginTop: 4 }}><Icon name="info" size={12} />{cur.box.description}</div>}
+                  {/* A box leírása csak a „Box” gombra nyíló kártyán — a járat-kártya maradjon rövid */}
                   {cur.box.notes && <div className="small" style={{ marginTop: 6, padding: '6px 8px', borderRadius: 8, background: 'var(--warning-ghost, rgba(245,158,11,0.12))', color: 'var(--warning)', fontWeight: 600 }}><Icon name="key" size={14} />{cur.box.notes}</div>}
                 </div>
                 <div className="row" style={{ gap: 6 }}>
