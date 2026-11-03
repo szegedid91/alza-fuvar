@@ -50,8 +50,8 @@ export default function Home() {
   // alsó menüben is ott van (beolvasás, autó-hiba, beosztás), azt nem ismételjük
   // Tankolás csak nem elektromos autónál (az autónál állítható a hajtás)
   const electric = today?.car?.fuel_type === 'electric'
+  // Autó-ellenőrzés gyorslink nincs: a fotósor a becsekkolás / autócsere után automatikusan jön
   const crewLinks: HubItem[] = [
-    { to: '/ellenorzes', icon: 'camera', title: 'Autó-ellenőrzés', desc: '' },
     ...(electric ? [] : [{ to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' } as HubItem]),
     { to: '/takaritas', icon: 'sparkles', title: 'Takarítás', desc: '' },
     { to: '/esemeny', icon: 'alert-triangle', title: 'Esemény / baleset', desc: '' },
