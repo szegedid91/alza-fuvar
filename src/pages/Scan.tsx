@@ -19,6 +19,7 @@ import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
 import { todayISO, formatHours } from '../lib/labels'
 import { errMsg } from '../lib/errors'
+import { toast } from '../lib/toast'
 
 // A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
 const QrScanner = lazy(() => import('../components/QrScanner'))
@@ -247,6 +248,20 @@ export default function Scan() {
       })
     }
     setInspection(req)
+    // Nem a beosztás szerinti autó: a mai beosztás (járat, haladás) átkerül erre az autóra —
+    // ha a cél autón már van beosztás abban a körben, nem mozgatjuk, a vezetők pusht kapnak
+    if (today?.planned && today.planned.plate !== car.plate) {
+      try {
+        const { data, error } = await supabase.rpc('follow_shift_to_car', { p_car_id: car.id })
+        if (error) throw error
+        const r = (data ?? {}) as { moved?: string[]; conflicts?: string[] }
+        if (r.moved?.length) toast.success('A járatod átkerült erre az autóra: ' + r.moved.join(' · '))
+        if (r.conflicts?.length) toast.info('A járat nem került át (ezen az autón már van beosztás) — a vezetők jelzést kaptak.')
+        await Promise.all([['my-routes-today'], ['route-stops'], ['route-runs'], ['route-progress'], ['shifts']].map((k) => qc.invalidateQueries({ queryKey: k })))
+      } catch (e) {
+        toast.info('A járat átrendezése nem sikerült (' + errMsg(e, 'hálózat') + ') — a vezetők a beosztásban rendezik.')
+      }
+    }
     await qc.invalidateQueries({ queryKey: ['today'] })
     // Beolvasás után egyből a fotók: az ellenőrzés oldal mutatja az autót + időt,
     // és sorban viszi végig a nézeteken (körbe az autón, végül a fülke)

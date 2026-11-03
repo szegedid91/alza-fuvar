@@ -2426,6 +2426,7 @@ export type Database = {
       }
       delete_workspace_rate: { Args: { p_id: string }; Returns: undefined }
       discard_empty_inspection: { Args: { p_id: string }; Returns: boolean }
+      follow_shift_to_car: { Args: { p_car_id: string }; Returns: Json }
       dissolve_relief_route: {
         Args: { p_route_id: string }
         Returns: undefined
