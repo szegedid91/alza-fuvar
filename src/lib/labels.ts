@@ -64,9 +64,13 @@ export const evidenceCategoryLabel: Record<Enums<'evidence_category'>, string> =
   other: 'Egyéb',
 }
 
+// Ezres tagolás kézzel (nem törő szóközzel): nem függ a böngésző nyelvi
+// adataitól — bérlapon, PDF-ben, képernyőn mindenhol „1 234 567 Ft”.
 export function formatHuf(n: number | null | undefined): string {
   if (n == null) return '–'
-  return new Intl.NumberFormat('hu-HU', { style: 'currency', currency: 'HUF', maximumFractionDigits: 0 }).format(n)
+  const v = Math.round(n)
+  const digits = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0')
+  return `${v < 0 ? '−' : ''}${digits}\u00a0Ft`
 }
 
 export function formatDate(d: string | Date | null | undefined): string {

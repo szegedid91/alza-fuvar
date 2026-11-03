@@ -23,3 +23,19 @@ export async function compressImage(blob: Blob, maxDim = 1600, quality = 0.6): P
     return blob // bármi hiba esetén az eredeti megy
   }
 }
+
+// Élő videó képkockája közvetlenül a végső méretben, EGY JPEG-kódolással.
+// (Korábban: teljes felbontású JPEG → visszadekódolás → újrakódolás — gyenge
+// telefonon másodpercekig tartott, az előnézet ezért jött lassan.)
+export function captureVideoFrame(video: HTMLVideoElement, maxDim = 1600, quality = 0.6): Promise<Blob | null> {
+  const vw = video.videoWidth, vh = video.videoHeight
+  if (!vw || !vh) return Promise.resolve(null)
+  const scale = Math.min(1, maxDim / Math.max(vw, vh))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(vw * scale)
+  canvas.height = Math.round(vh * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return Promise.resolve(null)
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+}

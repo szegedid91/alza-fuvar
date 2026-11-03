@@ -1,7 +1,9 @@
 import { payRoleLabel } from './payroll'
 import type { PayrollRow } from './payroll'
+import { formatHuf } from './labels'
 
-const HUF = (n: number) => new Intl.NumberFormat('hu-HU', { style: 'currency', currency: 'HUF', maximumFractionDigits: 0 }).format(n)
+// Ezres tagolt összeg (1 234 567 Ft) — a képernyővel azonos formázás
+const HUF = (n: number) => formatHuf(n)
 
 const WEEKDAY = ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat']
 

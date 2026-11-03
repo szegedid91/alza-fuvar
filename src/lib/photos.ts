@@ -37,17 +37,22 @@ export async function uploadPhoto(
   blob: Blob,
 ): Promise<string> {
   const path = `${workspaceId}/${folder}/${id}.jpg`
+  // A teljes kép és a bélyegkép párhuzamosan megy fel (egy kör helyett kettő
+  // egymás után — gyenge térerőnél ez volt a lassú).
+  // Bélyegkép: best effort — ha nem sikerül, a teljes kép attól még megvan,
+  // és a galéria arra esik vissza. (A hash-bizonyíték a TELJES képről készül.)
+  const thumbUpload = (async () => {
+    try {
+      const thumb = await compressImage(blob, THUMB_MAX_DIM, 0.6)
+      await supabase.storage.from(BUCKET).upload(thumbPath(path), thumb, { contentType: 'image/jpeg', upsert: true })
+    } catch { /* nincs bélyegkép — fallback a teljes képre */ }
+  })()
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
     contentType: blob.type || 'image/jpeg',
     upsert: true,
   })
+  await thumbUpload
   if (error) throw error
-  // Bélyegkép: best effort — ha nem sikerül, a teljes kép attól még megvan,
-  // és a galéria arra esik vissza. (A hash-bizonyíték a TELJES képről készül.)
-  try {
-    const thumb = await compressImage(blob, THUMB_MAX_DIM, 0.6)
-    await supabase.storage.from(BUCKET).upload(thumbPath(path), thumb, { contentType: 'image/jpeg', upsert: true })
-  } catch { /* nincs bélyegkép — fallback a teljes képre */ }
   return path
 }
 

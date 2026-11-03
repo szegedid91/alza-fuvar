@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { compressImage } from '../lib/image'
+import { captureVideoFrame } from '../lib/image'
 
 // Élő kamera (nincs galéria). Egy képkocka elkapása JPEG blobként.
 export default function CameraCapture({
@@ -49,27 +49,18 @@ export default function CameraCapture({
     }
   }, [])
 
-  function snap() {
+  const [snapping, setSnapping] = useState(false)
+  async function snap() {
     const video = videoRef.current
-    if (!video) return
-    const w = video.videoWidth
-    const h = video.videoHeight
-    if (!w || !h) return
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0, w, h)
-    canvas.toBlob(
-      async (blob) => {
-        if (!blob) return
-        const compressed = await compressImage(blob)
-        onCapture(compressed, URL.createObjectURL(compressed))
-      },
-      'image/jpeg',
-      0.9,
-    )
+    if (!video || snapping) return
+    setSnapping(true)
+    try {
+      const blob = await captureVideoFrame(video)
+      if (!blob) return
+      onCapture(blob, URL.createObjectURL(blob))
+    } finally {
+      setSnapping(false)
+    }
   }
 
   return (
@@ -86,7 +77,7 @@ export default function CameraCapture({
         </div>
       )}
       <div className="camera-foot">
-        <button className="shutter" onClick={snap} disabled={!ready || !!error} aria-label="Fotó" />
+        <button className="shutter" onClick={() => void snap()} disabled={!ready || !!error || snapping} aria-label="Fotó" />
       </div>
     </div>
   )

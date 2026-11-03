@@ -9,7 +9,8 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { supabase } from '../lib/supabase'
 import { submitNow, removeFromOutbox } from '../lib/outbox'
-import { getCurrentPosition } from '../lib/geo'
+import { getCurrentPosition, type GeoPoint } from '../lib/geo'
+import { uploadPhoto, recordPhotoProof } from '../lib/photos'
 import { checkInspectionRequirement, type Car } from '../lib/checkin'
 import { inspectionViewLabel, formatDateTime } from '../lib/labels'
 import { resolveNames } from '../lib/names'
@@ -54,6 +55,25 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   // azonnal indulhat a fotózás
   const fromCheckin = !!(location.state as { fromCheckin?: boolean } | null)?.fromCheckin
   const [photos, setPhotos] = useState<Partial<Record<Enums<'inspection_view'>, CapturedPhoto>>>({})
+  // GYORS MENTÉS: a fotó már készítéskor, a háttérben felmegy (amíg a futár a
+  // következő oldalhoz sétál), a GPS-t előre kérjük — a „Mentés” végén már csak
+  // az adatbázis-sorok mennek. Nézetenként FIX azonosító: újrafotózás ugyanazt a
+  // fájlt írja felül (a futár nem törölhet a tárból, de a sajátját felülírhatja).
+  const inspectionIdRef = useRef(crypto.randomUUID())
+  const photoIds = useRef<Partial<Record<Enums<'inspection_view'>, string>>>({})
+  const uploads = useRef<Partial<Record<Enums<'inspection_view'>, { blob: Blob; done: Promise<string | null> }>>>({})
+  const [phase, setPhase] = useState<'upload' | 'rows' | null>(null)
+  const gpsRef = useRef<Promise<GeoPoint> | null>(null)
+  useEffect(() => { gpsRef.current = getCurrentPosition() }, [])
+  const photoIdOf = (view: Enums<'inspection_view'>) => (photoIds.current[view] ??= crypto.randomUUID())
+  function startUpload(view: Enums<'inspection_view'>, blob: Blob) {
+    if (!currentWorkspaceId) return
+    const done = navigator.onLine
+      ? uploadPhoto(currentWorkspaceId, `inspections/${inspectionIdRef.current}`, photoIdOf(view), blob).catch(() => null)
+      : Promise.resolve<string | null>(null)
+    const entry = { blob, done }
+    uploads.current[view] = entry
+  }
   // Épp nyitott kamera-nézet, illetve az épp elkészült kép előnézete.
   // Sorrend: körbe az autón (elöl → jobb → hátul → bal), végül a fülke.
   // Felvétel után ELŐNÉZET jön "Újra" gombbal — homályos/rossz kép azonnal
@@ -63,6 +83,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   function onCaptured(blob: Blob, previewUrl: string) {
     if (!activeView) return
     setPhotos((prev) => ({ ...prev, [activeView]: { blob, previewUrl } }))
+    startUpload(activeView, blob)
     setPreviewView(activeView)
     setActiveView(null)
   }
@@ -111,10 +132,19 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   async function submit() {
     if (!currentWorkspaceId || !profile || !allCaptured) return
     setBusy(true); setMsg(null)
-    const inspectionId = crypto.randomUUID()
+    const inspectionId = inspectionIdRef.current
     const queuedIds: string[] = [inspectionId]
     try {
-      const gps = await getCurrentPosition()
+      // GPS: a megnyitáskor indított kérés — többnyire már megvan, nem várunk rá 8 mp-et
+      const gps = await (gpsRef.current ?? getCurrentPosition())
+      // A háttérben indított feltöltések bevárása (ami kész, az azonnal; ami nem
+      // sikerült vagy offline volt, azt a sor viszi fel a blobbal)
+      setPhase('upload')
+      const paths = await Promise.all(VIEWS.map(async (view) => {
+        const u = uploads.current[view]
+        return u && u.blob === photos[view]!.blob ? await u.done : null
+      }))
+      setPhase('rows')
       await submitNow({
         id: inspectionId, table: 'car_inspections', op: 'insert',
         label: `Ellenőrzés – ${car.plate}`,
@@ -123,17 +153,26 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
           user_id: profile.id, work_date: date, reason, gps_lat: gps.lat, gps_lng: gps.lng,
         },
       })
-      for (const view of VIEWS) {
+      const proofs: Promise<void>[] = []
+      for (const [i, view] of VIEWS.entries()) {
         const p = photos[view]!
-        const photoId = crypto.randomUUID()
+        const photoId = photoIdOf(view)
+        const path = paths[i]
         queuedIds.push(photoId)
+        const values: Record<string, unknown> = { id: photoId, workspace_id: currentWorkspaceId, inspection_id: inspectionId, view, gps_lat: gps.lat, gps_lng: gps.lng }
+        if (path) {
+          values.storage_path = path
+          // Fotó-hitelesség: hash a már feltöltött képről (párhuzamosan, nem blokkol)
+          proofs.push(recordPhotoProof(currentWorkspaceId, path, p.blob).catch((e) => console.error('Fotó-hash rögzítési hiba:', e)))
+        }
         await submitNow({
           id: photoId, table: 'car_inspection_photos', op: 'insert',
           label: `Fotó ${inspectionViewLabel[view]} – ${car.plate}`,
-          values: { id: photoId, workspace_id: currentWorkspaceId, inspection_id: inspectionId, view, gps_lat: gps.lat, gps_lng: gps.lng },
-          photo: { workspaceId: currentWorkspaceId, folder: `inspections/${inspectionId}`, id: photoId, column: 'storage_path', blob: p.blob },
+          values,
+          ...(path ? {} : { photo: { workspaceId: currentWorkspaceId, folder: `inspections/${inspectionId}`, id: photoId, column: 'storage_path', blob: p.blob } }),
         })
       }
+      await Promise.all(proofs)
       setPhotos({})
       setMsg('Kész: az ellenőrző fotók elmentve.')
       toast.success('Becsekkolás kész — az ellenőrző fotók elmentve, jó munkát!')
@@ -154,7 +193,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
       } catch { /* best effort */ }
       setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')) + ' — az ellenőrzés nem lett elmentve, próbáld újra.')
     } finally {
-      setBusy(false)
+      setBusy(false); setPhase(null)
     }
   }
 
@@ -239,7 +278,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
               {VIEWS.map((v) => (
                 <PhotoSlot key={v} label={inspectionViewLabel[v]} photo={photos[v] ?? null}
                   onOpen={() => setActiveView(v)}
-                  onCapture={(p) => setPhotos((prev) => ({ ...prev, [v]: p }))} />
+                  onCapture={(p) => { setPhotos((prev) => ({ ...prev, [v]: p })); startUpload(v, p.blob) }} />
               ))}
             </div>
             <div className="tiny muted">
@@ -260,7 +299,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
           <button className="btn" disabled={!allCaptured || busy} onClick={() => void submit()}
             style={allCaptured ? undefined : { opacity: 0.6 }}>
             <Icon name={allCaptured ? 'save' : 'camera'} />
-            {busy ? 'Mentés…' : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - captured} fotó hiányzik`}
+            {busy ? (phase === 'upload' ? 'Fotók feltöltése…' : 'Mentés…') : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - captured} fotó hiányzik`}
           </button>
         )}
         <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galériából nem tölthető fel, a telefonra nem mentődik.</p>
