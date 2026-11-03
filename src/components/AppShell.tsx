@@ -14,6 +14,7 @@ import OfflineHint from './OfflineHint'
 import HelpShareBanner from './HelpShareBanner'
 import { errMsg } from '../lib/errors'
 import { useToday } from '../hooks/useToday'
+import { useTodayStatusEvents } from '../lib/statusEvents'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 
@@ -245,17 +246,22 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { data: today } = useToday()
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
   const LOCK_ALLOWED = ['/', '/ellenorzes', '/beosztas', '/hibak', '/profil']
+  // A QR-beolvasás (becsekkolás) csak az „Elindultam” jelzés után érhető el —
+  // addig az alsó menüben sincs, és a /beolvasas a kezdőlapra visz
+  const { data: setOffAt } = useTodayStatusEvents((rows) => rows.find((r) => r.kind === 'set_off')?.at ?? null)
+  const scanLocked = isCrew && !!today && !today.checkin && setOffAt !== undefined && !setOffAt
   useEffect(() => {
     if (inspectionLocked && !LOCK_ALLOWED.includes(pathname)) navigate('/ellenorzes', { replace: true })
+    else if (scanLocked && pathname === '/beolvasas') navigate('/', { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inspectionLocked, pathname])
+  }, [inspectionLocked, scanLocked, pathname])
 
   const nav: NavItem[] = [{ to: '/', icon: 'home', label: 'Kezdőlap', end: true }]
   if (isCrew) {
     // A munkatárs napi útja: beolvasás → (autó-hiba, ha van) → (este) beosztás.
     // A fuvartervet külön alkalmazás kezeli. A Profil a kezdőlap fejlécéből
     // érhető el — az alsó menüben a Beosztás értékesebb.
-    if (!inspectionLocked) nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
+    if (!inspectionLocked && !scanLocked) nav.push({ to: '/beolvasas', icon: 'qr-code', label: 'Beolvasás' })
     nav.push({ to: '/hibak', icon: 'wrench', label: 'Autó-hiba' })
     nav.push({ to: '/beosztas', icon: 'calendar', label: 'Beosztás' })
   }

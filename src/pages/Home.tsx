@@ -6,6 +6,7 @@ import { isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
 import StatusCard from '../components/StatusCard'
 import SetOffCard from '../components/SetOffCard'
+import { useTodayStatusEvents } from '../lib/statusEvents'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -14,7 +15,6 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import ConfirmButton from '../components/ConfirmButton'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { todayISO } from '../lib/labels'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 import WaiverRequest from '../components/WaiverRequest'
 
@@ -30,17 +30,7 @@ export default function Home() {
   const { data: today } = useToday()
   // Úton vagyok: a „Kiindultam” jelzés után (amíg nincs „Járat kész” / „Elszámoltam”)
   // a kezdőlap csak a járatot, a jelzéseket és a gyorslinkeket mutatja — a napi lépéssor és a fejléc részletei eltűnnek
-  const { data: todayStatus } = useQuery({
-    queryKey: ['status-events', currentWorkspaceId, profile?.id, todayISO(), 'home'],
-    enabled: isCrew && !!currentWorkspaceId && !!profile?.id,
-    refetchInterval: 60000,
-    queryFn: async () => {
-      const { data, error } = await supabase.from('status_events').select('kind, at')
-        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', todayISO()).order('at')
-      if (error) throw error
-      return (data ?? []).map((r) => ({ kind: r.kind as string, at: r.at }))
-    },
-  })
+  const { data: todayStatus } = useTodayStatusEvents()
   const kinds = todayStatus?.map((s) => s.kind)
   // „Elindultam” — a nap első jelzése, becsekkolás előtt; amíg nincs meg, a kezdőlapon csak ez a gomb van
   const setOffAt = todayStatus?.find((s) => s.kind === 'set_off')?.at ?? null

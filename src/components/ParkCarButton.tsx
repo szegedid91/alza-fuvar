@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useQueryClient } from '@tanstack/react-query'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { submitNow } from '../lib/outbox'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
-import { todayISO } from '../lib/labels'
+import { useTodayStatusEvents } from '../lib/statusEvents'
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import ConfirmButton from './ConfirmButton'
@@ -18,22 +16,7 @@ import Icon from './Icon'
 // „Kijelentkezés” gomb nincs: vagy így ér véget a nap, vagy autócserével
 // (a Beolvasás oldalon), vagy napközben mások ülnek át az ő autójára.
 export function useSettledToday() {
-  const { profile } = useAuth()
-  const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
-  return useQuery({
-    // ugyanaz a kulcs, mint a kezdőlapé — egy cache, egy lekérdezés
-    queryKey: ['status-events', currentWorkspaceId, profile?.id, date, 'home'],
-    enabled: !!currentWorkspaceId && !!profile?.id,
-    refetchInterval: 60000,
-    queryFn: async () => {
-      const { data, error } = await supabase.from('status_events').select('kind, at')
-        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', date).order('at')
-      if (error) throw error
-      return (data ?? []).map((r) => ({ kind: r.kind as string, at: r.at }))
-    },
-    select: (rows) => rows.find((r) => r.kind === 'settled')?.at ?? null,
-  })
+  return useTodayStatusEvents((rows) => rows.find((r) => r.kind === 'settled')?.at ?? null)
 }
 
 export default function ParkCarButton({ className = 'btn' }: { className?: string }) {

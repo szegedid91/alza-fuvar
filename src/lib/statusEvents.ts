@@ -1,3 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from './supabase'
+import { useAuth } from '../context/AuthContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { submitNow } from './outbox'
 import { getCurrentPosition, isOutsideGeofence } from './geo'
 import { todayISO } from './labels'
@@ -24,4 +28,26 @@ export async function recordStatusEvent(p: {
     },
   })
   return id
+}
+
+export interface TodayStatusRow { kind: string; at: string }
+
+// A saját mai jelzések (elindultam, megérkeztem, …) — EGY cache-kulcs minden
+// felhasználónak (kezdőlap, AppShell, lépéssor), realtime/invalidate után frissül.
+export function useTodayStatusEvents<T = TodayStatusRow[]>(select?: (rows: TodayStatusRow[]) => T) {
+  const { profile } = useAuth()
+  const { currentWorkspaceId } = useWorkspace()
+  const date = todayISO()
+  return useQuery({
+    queryKey: ['status-events', currentWorkspaceId, profile?.id, date, 'home'],
+    enabled: !!currentWorkspaceId && !!profile?.id,
+    refetchInterval: 60000,
+    queryFn: async (): Promise<TodayStatusRow[]> => {
+      const { data, error } = await supabase.from('status_events').select('kind, at')
+        .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', date).order('at')
+      if (error) throw error
+      return (data ?? []).map((r) => ({ kind: r.kind as string, at: r.at }))
+    },
+    select,
+  })
 }
