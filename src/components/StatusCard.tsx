@@ -32,6 +32,7 @@ export default function StatusCard() {
   // koppintásra AZONNAL a WhatsApp nyílik a képekkel és a szöveggel; a jelzés és
   // a képek mentése a háttérben megy (offline is sorba áll)
   const [settleCamera, setSettleCamera] = useState(false)
+  const [sending, setSending] = useState<StatusKind | null>(null)
   const shareOk = canShareFiles()
 
   const { data: events } = useQuery({
@@ -132,12 +133,15 @@ export default function StatusCard() {
               // Az üzenet ideje a KOPPINTÁS pillanata — a href-et a navigáció előtt frissítjük;
               // csoport-linknél a szöveg a vágólapra megy
               onClick={(e) => {
+                // LOG-37: amíg az előző koppintás rögzítése fut, a második nem rögzít újra
+                if (sending) { e.preventDefault(); return }
                 const at = new Date()
                 const t = statusText(kind, at, name, route)
                 const tg = groupTarget(currentWorkspace, t)
                 e.currentTarget.href = tg.url
                 if (tg.viaClipboard) void copyText(t)
-                void record(kind, at)
+                setSending(kind)
+                void record(kind, at).finally(() => setSending(null))
               }}>
               <Icon name={meta.icon} />
               <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
