@@ -7,6 +7,7 @@ import { getCurrentPosition, distanceMeters } from '../lib/geo'
 import { searchBoxes, formatDistance, type AlzaBox } from '../lib/boxSheet'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
+import { batchStartFromRows } from '../lib/boxImport'
 import BoxCard from '../components/BoxCard'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
@@ -134,7 +135,9 @@ function ImportCard() {
       if (!Array.isArray(rows)) throw new Error('A JSON-nak egy listának kell lennie.')
       const valid = rows.filter((r) => r && typeof r.psid === 'number' && typeof r.name === 'string' && r.name.trim())
       if (valid.length === 0) throw new Error('Nincs feldolgozható sor (psid + name kell).')
-      const startedAt = new Date().toISOString()
+      // LOG-11: az inaktiválás határa a SZERVER időbélyegeiből (a most felvitt sorok updated_at-ja),
+      // nem a telefon órájából
+      const stamps: { updated_at: string | null }[] = []
       const toRow = (r: ImportRow) => ({
         parcel_shop_id: r.psid, name: r.name.trim(), address: r.address ?? null,
         lat: typeof r.lat === 'number' ? r.lat : null, lng: typeof r.lng === 'number' ? r.lng : null,
@@ -142,15 +145,17 @@ function ImportCard() {
         description: r.desc ?? null, active: true,
       })
       for (let i = 0; i < valid.length; i += 200) {
-        const { error } = await supabase.from('alza_boxes').upsert(valid.slice(i, i + 200).map(toRow), { onConflict: 'parcel_shop_id' })
+        const { data, error } = await supabase.from('alza_boxes').upsert(valid.slice(i, i + 200).map(toRow), { onConflict: 'parcel_shop_id' }).select('updated_at')
         if (error) throw error
+        stamps.push(...(data ?? []))
       }
+      const startedAt = batchStartFromRows(stamps)
       // A kézzel (az Alza előtt) felvett boxok összefésülése az importált sorral, ha a kódjuk egyezik
       const { error: mergeErr } = await supabase.rpc('merge_alza_box_duplicates')
       if (mergeErr) throw mergeErr
       // ami a mostani listában nincs benne, az megszűnt (inaktív — a régi lapokon marad a hivatkozás)
       let deactivated = 0
-      if (valid.length >= 100) {
+      if (valid.length >= 100 && startedAt) {
         const { data, error } = await supabase.from('alza_boxes').update({ active: false }).lt('updated_at', startedAt).eq('active', true).select('id')
         if (error) throw error
         deactivated = data?.length ?? 0
