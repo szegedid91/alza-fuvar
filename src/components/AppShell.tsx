@@ -12,6 +12,7 @@ import ConfirmButton from './ConfirmButton'
 import { pushSupported, isPushSubscribed, subscribePush } from '../lib/push'
 import OfflineHint from './OfflineHint'
 import HelpShareBanner from './HelpShareBanner'
+import PhotoHelpBanner from './PhotoHelpBanner'
 import { errMsg } from '../lib/errors'
 import { useToday } from '../hooks/useToday'
 import { useTodayStatusEvents } from '../lib/statusEvents'
@@ -286,6 +287,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <PullToRefresh />
       <PushPrompt />
       <HelpShareBanner />
+      {isManagerOrAdmin && <PhotoHelpBanner />}
       {isCrew && <InspectionZoneWatcher />}
       <header className="topbar">
         {pageTitle ? (

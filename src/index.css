@@ -521,6 +521,9 @@ input[type='date'].input {
   background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 14px;
 }
 .update-banner .btn { background: var(--bg-elev); color: var(--text); border-color: transparent; }
+/* Vezetői figyelmeztető sáv (engedélykérés fotó nélkül) — a frissítés-sávval azonos helyen, piros */
+.photo-help-banner { background: var(--danger); color: #fff; align-items: flex-start; }
+.photo-help-banner .btn { background: #fff; color: var(--danger); }
 
 /* ---------- Haladás-sáv (autó-ellenőrzés) ---------- */
 .progress { height: 6px; border-radius: 3px; background: var(--bg-elev-2); overflow: hidden; margin-top: 8px; }
