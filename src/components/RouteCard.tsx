@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
+import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
@@ -32,6 +33,8 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   const navApp: NavApp = getNavApp()
+  const { data: today } = useToday()
+  const needsBoxSheet = !!today?.car?.category?.box_sheet
   // A vezető módosítása (boxok, sorrend) és a páros másik tagjának lépése azonnal ideér
   useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts', 'box_sheet_stops'], [['route-stops'], ['route-runs'], ['my-routes-today'], ['box-sheet-filled']])
   const navigate = useNavigate()
@@ -132,7 +135,9 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active}
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
-            sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)} onFillSheet={() => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`)} />
+            sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)}
+            // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
+            onFillSheet={needsBoxSheet ? () => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`) : undefined} />
         )
       })}
     </>

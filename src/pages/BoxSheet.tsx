@@ -173,6 +173,8 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
 
   // ?box=<id>: ha a box még nincs a lapon, egyszer felvesszük (a lista végére kerül, és kinyílik a kitöltéshez)
   const prefilledRef = useRef<string | null>(null)
+  // Végzés idő szerkesztése (egy soros kijelzés, koppintásra mező)
+  const [editEnd, setEditEnd] = useState(false)
   useEffect(() => {
     if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
     if (data.stops.some((st) => st.box_id === prefillBoxId)) { prefilledRef.current = prefillBoxId; return }
@@ -203,10 +205,19 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
             ? <span className="badge success"><Icon name="check" />Lezárva {hhmmOfISO(sheet.submitted_at)}</span>
             : <span className="badge">Piszkozat{saving ? ' · mentés…' : ''}</span>}
         </div>
-        <div className="grid-2">
-          <TimeField label="Végzés (box) — automatikus" value={sheet.end_time} onCommit={(v) => updateSheet.mutate({ end_time: v })} />
-          <div className="tiny muted" style={{ alignSelf: 'end' }}>A végzés ideje akkor rögzül, amikor a járat-kártyáról rányomsz a Box-lapra az aktuális boxnál (az utolsó box ideje). Kézzel javítható.</div>
-        </div>
+        {/* Végzés: egy sor — az idő automatikus (az utolsó box ideje), koppintásra javítható */}
+        {editEnd ? (
+          <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}><TimeField label="Végzés (box)" value={sheet.end_time} onCommit={(v) => updateSheet.mutate({ end_time: v })} /></div>
+            <button type="button" className="btn ghost sm auto" onClick={() => setEditEnd(false)}>Kész</button>
+          </div>
+        ) : (
+          <div className="tiny muted row" style={{ gap: 6 }}>
+            <Icon name="clock" size={12} />Végzés: <span className="num" style={{ color: 'var(--text)' }}>{sheet.end_time ? sheet.end_time.slice(0, 5) : '—'}</span>
+            <span>(automatikus)</span>
+            {!submitted && <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={() => setEditEnd(true)}>javítás</button>}
+          </div>
+        )}
       </div>
 
       {prefillBoxId && (
@@ -373,13 +384,14 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
       {!open && stop.note && <div className="tiny muted">{stop.note}</div>}
       {open && (
         <>
+          {/* Fotó a box kijelzőjéről LEGFELÜL — egyből elérhető, nem kell a számok alá görgetni */}
+          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} />
           <div className="grid-2">
             {STOP_FIELDS.map((f) => (
               <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && (focus || isLast) && stop.placed === 0} />
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
-          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
               <Icon name="trash" size={16} />Megálló törlése

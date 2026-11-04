@@ -127,7 +127,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
   })
 
   return (
-    <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+    <div className="stack" style={{ gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
       <div className="small" style={{ fontWeight: 700 }}><Icon name="camera" size={16} style={{ verticalAlign: -3 }} /> Fotó a box kijelzőjéről</div>
       <div className="grid-3" style={{ gap: 6 }}>
         {photos.map((p, i) => (
