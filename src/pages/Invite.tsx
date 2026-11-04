@@ -61,10 +61,11 @@ export default function InvitePage({ token }: { token: string }) {
     if (password !== password2) { setError('A két jelszó nem egyezik.'); return }
     const email = (info.email ?? emailIn).trim().toLowerCase()
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('Adj meg egy érvényes email-címet.'); return }
-    const leak = await isPasswordPwned(password)
-    if (leak.pwned) { setError(PWNED_MESSAGE); return }
-    setBusy(true)
+    if (busy) return
+    setBusy(true) // LOG-44: a hálózati jelszó-ellenőrzés alatt se mehessen el két beváltás
     try {
+      const leak = await isPasswordPwned(password)
+      if (leak.pwned) { setError(PWNED_MESSAGE); return }
       const { data, error } = await supabase.functions.invoke('redeem-invite', {
         body: { action: 'redeem', token, password, email },
       })
