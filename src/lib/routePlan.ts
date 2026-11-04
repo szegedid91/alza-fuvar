@@ -125,3 +125,11 @@ export function resolveRunIndex<T extends { id: string; box_id: string }>(run: {
   return Math.min(run.current_index ?? 0, stops.length)
 }
 export function nowMin(): number { const d = new Date(); return d.getHours() * 60 + d.getMinutes() }
+// Késés percben a határidőhöz képest (pozitív = lejárt). A „most” ugyanazzal a hajnali szabállyal
+// tolódik, mint a határidő (04:00 előtt +1 nap) — különben 00:00–03:59 között sosem látszana késés (LOG-02).
+export function lateMinutes(deadline: string | null | undefined, round = 1, now = nowMin()): number | null {
+  const dl = deadlineMin(deadline, round)
+  if (dl == null) return null
+  const n = now < 240 ? now + 1440 : now
+  return n - dl
+}

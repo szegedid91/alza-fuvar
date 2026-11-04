@@ -10,7 +10,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
-import { fmtTime, nowMin, deadlineMin, resolveRunIndex } from '../lib/routePlan'
+import { fmtTime, lateMinutes, resolveRunIndex } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router'
 import Icon from './Icon'
@@ -176,8 +176,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   const [carry, setCarry] = useState<string[]>(() => { try { return JSON.parse(sessionStorage.getItem(carryKey) ?? '[]') as string[] } catch { return [] } })
   const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
-  const dlMin = deadlineMin(cur?.deadline, round)
-  const lateNow = dlMin != null ? nowMin() - dlMin : null
+  const lateNow = lateMinutes(cur?.deadline, round)
   const isLast = idx === stops.length - 1
   const finish = () => {
     if (lateNow != null && lateNow > 0) { setLate(lateNow); setReasons(carry); return }

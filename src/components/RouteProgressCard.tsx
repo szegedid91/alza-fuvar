@@ -8,7 +8,7 @@ import { useRouteStops } from '../hooks/useRouteStops'
 import { resolveNames } from '../lib/names'
 import { todayISO } from '../lib/labels'
 import Icon from './Icon'
-import { fmtTime, nowMin, deadlineMin, resolveRunIndex } from '../lib/routePlan'
+import { fmtTime, lateMinutes, resolveRunIndex } from '../lib/routePlan'
 
 // Vezetői nézet: a mai járatok (beosztásból), ki viszi, és hanyadik címnél tart
 // a futár — a route_runs haladásból, realtime frissülve
@@ -63,8 +63,7 @@ export default function RouteProgressCard() {
         const cur = stops[idx]
         const pct = stops.length ? Math.round((idx / stops.length) * 100) : 0
         // Késésben: az aktuális box határideje lejárt, még nincs leadva (a vezetők 5 percenként pusht is kapnak)
-        const dl = cur && !done ? deadlineMin(cur.deadline, s.round) : null
-        const lateNow = dl != null ? nowMin() - dl : null
+        const lateNow = cur && !done ? lateMinutes(cur.deadline, s.round) : null
         const lateLogs = s.logs.filter((l) => l.reason)
         return (
           <div key={s.id} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
