@@ -34,9 +34,11 @@ export default function Home() {
   const { data: todayStatus } = useTodayStatusEvents()
   // „Elindultam” — a nap első jelzése, becsekkolás előtt; amíg nincs meg, a kezdőlapon csak ez a gomb van
   const setOffAt = todayStatus?.find((s) => s.kind === 'set_off')?.at ?? null
-  // Járat: a „Megérkeztem” után jelenik meg, a „Kiindultam” után aktív
-  const arrived = !!todayStatus?.some((s) => s.kind === 'arrived')
-  const departed = !!todayStatus?.some((s) => s.kind === 'departed')
+  // Járat-fázis a jelzésekből (ciklus, 2. körre is): Megérkeztem → látszik, inaktív;
+  // Kiindultam → aktív és felülre kerül; Járat kész → eltűnik, újra a Megérkeztem következik
+  const lastPhase = [...(todayStatus ?? [])].reverse().find((s) => s.kind === 'arrived' || s.kind === 'departed' || s.kind === 'done')?.kind ?? null
+  const arrived = lastPhase === 'arrived' || lastPhase === 'departed'
+  const departed = lastPhase === 'departed'
   const settled = !!todayStatus?.some((s) => s.kind === 'settled')
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
@@ -117,8 +119,10 @@ export default function Home() {
           <div className="tiny muted">Amíg ez nincs meg, csak a Beosztás és az Autó-hiba érhető el.</div>
         </div>
       )}
-      {isCrew && !inspectionLocked && !!today?.checkin && arrived && <RouteCard active={departed} />}
+      {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
+      {isCrew && !inspectionLocked && !!today?.checkin && arrived && departed && <RouteCard active />}
       {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
+      {isCrew && !inspectionLocked && !!today?.checkin && arrived && !departed && <RouteCard active={false} />}
       {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
           Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}
       {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || !!today.checkin.checked_out_at) && <TodayStepper />}

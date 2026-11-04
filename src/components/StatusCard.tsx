@@ -98,6 +98,9 @@ export default function StatusCard() {
   }
 
   const simple: StatusKind[] = ['arrived', 'departed', 'done', 'settled']
+  // Melyik a következő lépés? (ciklus: Megérkeztem → Kiindultam → Járat kész → Megérkeztem…)
+  const lastPhase = [...(events ?? [])].reverse().find((e) => e.kind === 'arrived' || e.kind === 'departed' || e.kind === 'done')?.kind ?? null
+  const nextKind: StatusKind = lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? 'done' : 'arrived'
 
   return (
     <div className="card stack" style={{ gap: 10 }}>
@@ -124,8 +127,8 @@ export default function StatusCard() {
           const text = statusText(kind, new Date(), name, route)
           const target = groupTarget(currentWorkspace, text)
           return (
-            <a key={kind} className={`btn ${last ? 'secondary' : ''}`} href={target.url} target="_blank" rel="noopener noreferrer"
-              style={{ textDecoration: 'none', flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px' }}
+            <a key={kind} className={`btn ${kind === nextKind ? '' : 'secondary'}`} href={target.url} target="_blank" rel="noopener noreferrer"
+              style={{ textDecoration: 'none', flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px', opacity: kind === nextKind ? 1 : 0.7 }}
               // Az üzenet ideje a KOPPINTÁS pillanata — a href-et a navigáció előtt frissítjük;
               // csoport-linknél a szöveg a vágólapra megy
               onClick={(e) => {

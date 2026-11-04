@@ -15,6 +15,8 @@ import { Link, useNavigate } from 'react-router'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
 import { errMsg } from '../lib/errors'
+import { recordStatusEvent } from '../lib/statusEvents'
+import { groupTarget, statusText } from '../lib/groupMessage'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -115,9 +117,21 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
           if (late && done.length) done[done.length - 1] = { ...done[done.length - 1], lateMinutes: late.minutes, delayReason: late.reason }
           setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, stopId: stops[index]?.id ?? null, boxId: stops[index]?.box_id ?? null, done })
         }
+        // Az utolsó boxnál a „Járat kész”: ugyanaz, mint a jelzés-kártya gombja — a WhatsApp a kész
+        // szöveggel nyílik (a koppintáson belül), a jelzés rögzül (idő, GPS)
+        const onRouteDone = () => {
+          if (!currentWorkspaceId || !profile) return
+          const at = new Date()
+          const name = profile.full_name || profile.email || 'Munkatárs'
+          const text = statusText('done', at, name, codeOf(sh.route_id))
+          window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+          void recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: sh.car_id, kind: 'done', at, geofence: currentWorkspace })
+            .then(() => qc.invalidateQueries({ queryKey: ['status-events'] }))
+            .catch((e) => toast.error('A „Járat kész” jelzés rögzítése nem sikerült: ' + errMsg(e, 'ismeretlen hiba')))
+        }
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active}
-            go={go} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
+            go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)} onFillSheet={() => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`)} />
         )
       })}
@@ -129,8 +143,10 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, go, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
+  // az utolsó box leadásakor: „Járat kész” jelzés a csoportba
+  onRouteDone?: () => void
   // locked: még nem küldte el a „Kiindultam”-ot — a leadás gombjai inaktívak
   locked?: boolean
   go: (index: number, late?: { minutes: number; reason: string }) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
@@ -157,11 +173,13 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
   const dlMin = deadlineMin(cur?.deadline, round)
   const lateNow = dlMin != null ? nowMin() - dlMin : null
+  const isLast = idx === stops.length - 1
   const finish = () => {
     if (lateNow != null && lateNow > 0) { setLate(lateNow); setReasons(carry); return }
     // időben leadva: a késés behozva, az átvitt okok törlődnek
     if (carry.length) saveCarry([])
     go(idx + 1)
+    if (isLast) onRouteDone?.()
   }
   const toggleReason = (r: string) => setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
   const reasonAll = [...reasons, ...(reasonText.trim() ? [reasonText.trim()] : [])].join('; ')
@@ -169,6 +187,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
     if (late == null || !reasonAll) return
     saveCarry(reasons)
     go(idx + 1, { minutes: late, reason: reasonAll })
+    if (isLast) onRouteDone?.()
   }
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
@@ -224,7 +243,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy || locked || late != null || (!!onFillSheet && !sheetFilled)} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn secondary sm" disabled={busy || locked || late != null || (!!onFillSheet && !sheetFilled)} onClick={finish} style={{ flex: 2 }}><Icon name={isLast ? 'flag' : 'check'} size={14} />{isLast ? 'Járat kész' : 'Kész, következő'}</button>
                 </div>
                 {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A járat a „Kiindultam” jelzés után válik aktívvá — addig csak megnézheted a címeket.</div>}
                 {late != null && (
@@ -241,7 +260,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                     <input className="input" value={reasonText} onChange={(e) => setReasonText(e.target.value)} placeholder="egyéb ok röviden (nem kötelező)…" />
                     <div className="row" style={{ gap: 6 }}>
                       <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={() => { setLate(null); setReasons([]); setReasonText('') }}>Mégse</button>
-                      <button type="button" className="btn sm" style={{ flex: 2 }} disabled={busy || !reasonAll} onClick={saveLate}><Icon name="send" size={14} />Mentés és következő</button>
+                      <button type="button" className="btn sm" style={{ flex: 2 }} disabled={busy || !reasonAll} onClick={saveLate}><Icon name="send" size={14} />{isLast ? 'Mentés és járat kész' : 'Mentés és következő'}</button>
                     </div>
                     <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okokról.</div>
                   </div>
