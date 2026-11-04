@@ -7,6 +7,8 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
 import { todayISO, parseHuNumber } from '../lib/labels'
+import { addDays } from '../lib/calendar'
+import { fetchAll } from '../lib/fetchAll'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { useWaiveInspection } from '../lib/photoHelp'
 import { toast } from '../lib/toast'
@@ -345,14 +347,15 @@ export default function Dashboard() {
       // kötelező ellenőrzés hiányzik — EGY lekérdezéssel az összes autóra (nem autónként)
       const carsToCheck = [...checkedCarIds].filter((id) => !inspCars.has(id))
       if (carsToCheck.length > 0) {
-        const { data: prevCi, error: prevErr } = await supabase
+        // LOG-30: a .limit(2000) a PostgREST 1000-es plafonján csonkult, és a régebben használt autók
+        // kiestek — lapozva, az utolsó 120 napra (ennél régebbi „előző nap” úgyis kötelező ellenőrzést jelent)
+        const prevCi = await fetchAll((f, t) => supabase
           .from('check_ins')
           .select('car_id, user_id, work_date')
           .in('car_id', carsToCheck)
-          .lt('work_date', today)
-          .order('work_date', { ascending: false })
-          .limit(2000)
-        if (prevErr) throw prevErr
+          .lt('work_date', today).gte('work_date', addDays(today, -120))
+          .order('work_date', { ascending: false }).order('id')
+          .range(f, t))
         // Autónként a legutóbbi korábbi munkanap TELJES párosa — ugyanaz a szabály,
         // mint a becsekkolési kapunál (checkin.ts): csak új ember számít váltásnak
         const prevDateByCar = new Map<string, string>()
