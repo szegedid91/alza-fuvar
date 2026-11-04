@@ -122,7 +122,8 @@ export default function WeekTable() {
   // héten már van ilyen adat az autónál, automatikusan
   const [roundCars, setRoundCars] = useState<string[]>([])
   const [traineeCars, setTraineeCars] = useState<string[]>([])
-  const hasRound2 = (carId: string) => isBox(carId) && (roundCars.includes(carId) || (shifts ?? []).some((s) => s.car_id === carId && s.round === 2))
+  // LOG-27: a meglévő 2. körös sorok akkor is látszanak, ha az autó már nem Box-kategóriás
+  const hasRound2 = (carId: string) => (isBox(carId) && roundCars.includes(carId)) || (shifts ?? []).some((s) => s.car_id === carId && s.round === 2)
   const hasTrainee = (carId: string) => traineeCars.includes(carId) || (shifts ?? []).some((s) => s.car_id === carId && !!s.trainee_id)
   const round2Count = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && s.round === 2).length
   const traineeCount = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && !!s.trainee_id).length
@@ -217,6 +218,8 @@ export default function WeekTable() {
         .eq('car_id', carId).eq('work_date', date).eq('round', round).maybeSingle()
       if (curErr) throw curErr
       const next = nextShiftValues(cur, field, value, extra)
+      // LOG-28: járat személy nélkül nem menthető — ne tűnjön el csendben
+      if (field === 'route_id' && value && isEmptyShift(next)) { setError('Előbb válassz sofőrt vagy rakodót, utána a járatot.'); return }
       if (isEmptyShift(next)) {
         // Minden mező üres → a napi (köri) beosztás törlődik
         if (cur) {
@@ -256,8 +259,9 @@ export default function WeekTable() {
       driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, route_id: s.route_id, created_by: profile.id,
     }))
     const { error } = await supabase.from('shifts').upsert(rows, { onConflict: 'car_id,work_date,round' })
-    if (error) { setError(error.message); return }
-    setCopyMsg(`${rows.length} beosztás átmásolva az előző hétről.`)
+    // LOG-29: a trigger üzenete (ROUTE_TAKEN) itt is olvashatóan
+    if (error) { const m = errMsg(error, 'Mentési hiba'); setError(/ROUTE_TAKEN/.test(m) ? m.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem másolható: ') : m); return }
+    setCopyMsg(`${rows.length} beosztás átmásolva az előző hétről (a héten már meglévő többi sor megmaradt).`)
     await qc.invalidateQueries({ queryKey: ['shift-week'] })
     await qc.invalidateQueries({ queryKey: ['shift-cal'] })
   }
@@ -415,7 +419,7 @@ export default function WeekTable() {
         </div>
         <div className="btn-grid">
           <button className="btn secondary sm" onClick={() => setWeekStart(mondayOf(todayISO()))}><Icon name="calendar" />Ez a hét</button>
-          <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (felülír)" onConfirm={() => void copyPrevWeek()}><Icon name="clipboard" />Előző hét másolása</ConfirmButton>
+          <ConfirmButton className="btn secondary sm" confirmLabel="Másolás (az azonos cellákat felülírja)" onConfirm={() => void copyPrevWeek()}><Icon name="clipboard" />Előző hét másolása</ConfirmButton>
         </div>
         <ConfirmButton
           className="btn sm"
