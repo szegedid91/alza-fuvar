@@ -80,6 +80,8 @@ export default function Adjustments() {
       const amt = parseHuNumber(amount)
       // Negatív előleg/levonás fordítva hatna a bérre — csak pozitív összeg mehet
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Érvénytelen összeg — pozitív számot adj meg.')
+      // LOG-24: üres vagy jövőbeli dátum nem mehet (jövő hónapba könyvelt előleg)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) throw new Error('Érvénytelen dátum — mai vagy korábbi napot adj meg.')
       const { error } = await supabase.from('adjustments').insert({
         workspace_id: currentWorkspaceId!, user_id: userId, work_date: date,
         amount: amt,
