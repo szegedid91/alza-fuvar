@@ -17,6 +17,8 @@ import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG, weekLa
 import Icon from '../../components/Icon'
 import type { Tables } from '../../lib/database.types'
 import { errMsg } from '../../lib/errors'
+import { nextShiftValues, isEmptyShift } from '../../lib/shiftCell'
+import { useRealtimeInvalidate } from '../../hooks/useRealtime'
 
 type Car = Tables<'cars'>
 type Shift = Tables<'shifts'>
@@ -67,6 +69,8 @@ export default function WeekTable() {
   const [rowMenu, setRowMenu] = useState<{ carId: string; top: number; left: number } | null>(null)
   const [rowBusy, setRowBusy] = useState(false)
 
+  // Más vezető / másik fül módosítása azonnal látsszon (LOG-07)
+  useRealtimeInvalidate(currentWorkspaceId, ['shifts'], [['shift-week'], ['shift-cal']])
   const { data: shifts } = useQuery({
     queryKey: ['shift-week', currentWorkspaceId, weekStart],
     enabled: !!currentWorkspaceId,
@@ -207,19 +211,21 @@ export default function WeekTable() {
     setError(null)
     setBusyCell(`${carId}|${date}`)
     try {
-      const cur = shiftAt(carId, date, round)
-      const next = {
-        driver_id: cur?.driver_id ?? null, loader_id: cur?.loader_id ?? null, trainee_id: cur?.trainee_id ?? null,
-        route_id: cur?.route_id ?? null,
-        [field]: value || null,
-        ...(extra ?? {}),
-      }
-      if (!next.driver_id && !next.loader_id && !next.trainee_id) {
+      // LOG-07: a módosítás alapja a SZERVER aktuális sora, nem a cache — így két vezető / két fül
+      // nem írja felül egymás beírását (korábban mind a négy mező a régi cache-ből ment vissza)
+      const { data: cur, error: curErr } = await supabase.from('shifts').select('id, driver_id, loader_id, trainee_id, route_id')
+        .eq('car_id', carId).eq('work_date', date).eq('round', round).maybeSingle()
+      if (curErr) throw curErr
+      const next = nextShiftValues(cur, field, value, extra)
+      if (isEmptyShift(next)) {
         // Minden mező üres → a napi (köri) beosztás törlődik
         if (cur) {
           const { error } = await supabase.from('shifts').delete().eq('id', cur.id)
           if (error) throw error
         }
+      } else if (cur) {
+        const { error } = await supabase.from('shifts').update(next).eq('id', cur.id)
+        if (error) throw error
       } else {
         const { error } = await supabase.from('shifts').upsert({
           workspace_id: currentWorkspaceId, work_date: date, car_id: carId, round,
