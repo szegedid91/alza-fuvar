@@ -29,9 +29,14 @@ export default function SwapApprovals({ workspaceId }: { workspaceId: string | n
     },
   })
 
+  // LOG-33: dupla koppintás ellen — amíg fut, a gombok tiltva
+  const [busyId, setBusyId] = useState<string | null>(null)
   async function decide(id: string, approve: boolean) {
+    if (busyId) return
     setError(null)
+    setBusyId(id)
     const { error } = await supabase.rpc('decide_swap', { p_request_id: id, p_approve: approve })
+    setBusyId(null)
     if (error) { setError(error.message); return }
     await qc.invalidateQueries({ queryKey: ['swap-pending'] })
     await qc.invalidateQueries({ queryKey: ['shift-cal'] })
@@ -69,8 +74,8 @@ export default function SwapApprovals({ workspaceId }: { workspaceId: string | n
             </div>
             {/* Az elutasítás nem töröl adatot (a kérés "elutasítva" marad) — ezért nem piros */}
             <div className="stop-actions">
-              <button className="btn ghost" onClick={() => void decide(r.id, false)}>Elutasítás</button>
-              <button className="btn" onClick={() => void decide(r.id, true)}><Icon name="check" />Csere jóváhagyása</button>
+              <button className="btn ghost" disabled={!!busyId} onClick={() => void decide(r.id, false)}>Elutasítás</button>
+              <button className="btn" disabled={!!busyId} onClick={() => void decide(r.id, true)}><Icon name="check" />{busyId === r.id ? 'Mentés…' : 'Csere jóváhagyása'}</button>
             </div>
             {r.partner_decision !== 'approved' && (
               <p className="tiny muted" style={{ margin: 0 }}>A társ jóváhagyása nélkül is átteheted — a te döntésed a végső.</p>
