@@ -10,6 +10,7 @@ import { resolveNames } from '../lib/names'
 import { formatDateTime } from '../lib/labels'
 import { errMsg } from '../lib/errors'
 import type { HelpFrame } from '../lib/helpShare'
+import { sanitizeHelpHtml, sanitizeFrameAttrs, parseHelpFrame, HELP_FRAME_CSP } from '../lib/helpSanitize'
 import Icon from '../components/Icon'
 
 // Élő nézet (vezető): a futár felületének tükre. A futár a saját oldalát küldi (Realtime),
@@ -100,7 +101,7 @@ function Viewer({ id }: { id: string }) {
   useEffect(() => {
     if (!session || ended) return
     const ch = supabase.channel(`help:${id}`, { config: { broadcast: { self: false } } })
-    ch.on('broadcast', { event: 'frame' }, ({ payload }) => { setFrame(payload as HelpFrame); setLive(true) })
+    ch.on('broadcast', { event: 'frame' }, ({ payload }) => { const f = parseHelpFrame(payload); if (f) { setFrame(f); setLive(true) } })
       .on('broadcast', { event: 'ended' }, () => { setLive(false); void qc.invalidateQueries({ queryKey: ['help-session', id] }) })
       .subscribe((status) => { if (status === 'SUBSCRIBED') void ch.send({ type: 'broadcast', event: 'hello', payload: {} }) })
     channelRef.current = ch
@@ -108,25 +109,30 @@ function Viewer({ id }: { id: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, !!session, ended])
 
-  // Megjelenítés: azonos stíluslapok (ugyanaz a build), szkript nélkül, a futár nézet-méretében
+  // Megjelenítés: azonos stíluslapok (ugyanaz a build), a futár nézet-méretében.
+  // BIZTONSÁG (SEC-01): a kapott HTML és a keret-attribútumok NEM megbízhatóak (bárki írhat a
+  // saját help_sessions sorába / a csatornára) — fogadó oldali tisztítás + CSP a keretben +
+  // sandbox szkript nélkül. A sandboxhoz SOHA ne kerüljön `allow-scripts`: a keret az app originja.
   const shown: HelpFrame | null = frame ?? (session?.snapshot_html ? { html: session.snapshot_html, w: session.viewport_w ?? 390, h: session.viewport_h ?? 760, path: session.path ?? '/', scroll: 0, htmlAttrs: session.html_attrs ?? '', bodyAttrs: session.body_attrs ?? '', at: new Date(session.last_seen_at).getTime() } : null)
   useEffect(() => {
     const ifr = iframeRef.current
     if (!ifr || !shown) return
     const doc = ifr.contentDocument
     if (!doc) return
+    const htmlAttrs = sanitizeFrameAttrs(shown.htmlAttrs)
+    const bodyAttrs = sanitizeFrameAttrs(shown.bodyAttrs)
     if (!doc.getElementById('root')) {
       const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map((n) => n.outerHTML).join('')
       doc.open()
-      doc.write(`<!doctype html><html ${shown.htmlAttrs}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">${styles}<style>html,body{margin:0} .camera-overlay{position:static!important}</style></head><body ${shown.bodyAttrs}><div id="root"></div></body></html>`)
+      doc.write(`<!doctype html><html ${htmlAttrs}><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${HELP_FRAME_CSP}"><meta name="viewport" content="width=device-width">${styles}<style>html,body{margin:0} .camera-overlay{position:static!important}</style></head><body ${bodyAttrs}><div id="root"></div></body></html>`)
       doc.close()
     } else {
-      // attribútumok (téma) frissítése
+      // attribútumok (téma) frissítése — csak az engedélyezettek
       const html = doc.documentElement
-      for (const m of shown.htmlAttrs.matchAll(/([\w-]+)="([^"]*)"/g)) html.setAttribute(m[1], m[2].replace(/&quot;/g, '"'))
+      for (const m of htmlAttrs.matchAll(/([\w-]+)="([^"]*)"/g)) html.setAttribute(m[1], m[2])
     }
     const root = doc.getElementById('root')
-    if (root) root.innerHTML = shown.html
+    if (root) root.innerHTML = sanitizeHelpHtml(shown.html)
     doc.documentElement.scrollTop = shown.scroll
     doc.body.scrollTop = shown.scroll
   }, [shown])
