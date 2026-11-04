@@ -57,8 +57,8 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   const [photos, setPhotos] = useState<Partial<Record<Enums<'inspection_view'>, CapturedPhoto>>>({})
   // GYORS MENTÉS: a fotó már készítéskor, a háttérben felmegy (amíg a futár a
   // következő oldalhoz sétál), a GPS-t előre kérjük — a „Mentés” végén már csak
-  // az adatbázis-sorok mennek. Nézetenként FIX azonosító: újrafotózás ugyanazt a
-  // fájlt írja felül (a futár nem törölhet a tárból, de a sajátját felülírhatja).
+  // az adatbázis-sorok mennek. Nézetenként egy azonosító; újrafotózásnál ÚJ azonosító
+  // jön (LOG-12), a régi fájl árván marad a tárban (a futár nem törölhet).
   const inspectionIdRef = useRef(crypto.randomUUID())
   const photoIds = useRef<Partial<Record<Enums<'inspection_view'>, string>>>({})
   const uploads = useRef<Partial<Record<Enums<'inspection_view'>, { blob: Blob; done: Promise<string | null> }>>>({})
@@ -82,6 +82,9 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
   const [previewView, setPreviewView] = useState<Enums<'inspection_view'> | null>(null)
   function onCaptured(blob: Blob, previewUrl: string) {
     if (!activeView) return
+    // LOG-12: újrafotózásnál ÚJ azonosító (új storage-útvonal) — a még futó régi feltöltés
+    // nem írhatja felül az új képet, a hash-bizonyíték a ténylegesen tárolt képről készül
+    if (photos[activeView]) photoIds.current[activeView] = crypto.randomUUID()
     setPhotos((prev) => ({ ...prev, [activeView]: { blob, previewUrl } }))
     startUpload(activeView, blob)
     setPreviewView(activeView)
