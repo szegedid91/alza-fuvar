@@ -50,8 +50,11 @@ export default function MultiShotCamera({
       streamRef.current?.getTracks().forEach((t) => t.stop())
     }
   }, [])
-  // az előnézeti URL-ek felszabadítása bezáráskor
-  useEffect(() => () => { shots.forEach((s) => URL.revokeObjectURL(s.url)) }, [shots])
+  // az előnézeti URL-ek felszabadítása bezáráskor — LOG-40: csak unmountkor (ref-ből), nem minden
+  // új felvételnél (az minden meglévő bélyegkép URL-jét érvénytelenítette)
+  const shotsRef = useRef(shots)
+  shotsRef.current = shots
+  useEffect(() => () => { shotsRef.current.forEach((s) => URL.revokeObjectURL(s.url)) }, [])
 
   async function snap() {
     const video = videoRef.current
@@ -81,7 +84,7 @@ export default function MultiShotCamera({
               {shots.map((s, i) => (
                 <div key={s.url} style={{ position: 'relative', flexShrink: 0 }}>
                   <img src={s.url} alt={`${i + 1}. kép`} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: '2px solid #fff' }} />
-                  <button type="button" aria-label="Kép törlése" onClick={() => setShots((prev) => prev.filter((_, j) => j !== i))}
+                  <button type="button" aria-label="Kép törlése" onClick={() => setShots((prev) => { URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i) })}
                     style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, border: 'none', background: '#b00020', color: '#fff', display: 'grid', placeItems: 'center', padding: 0 }}>
                     <Icon name="x" size={12} />
                   </button>
