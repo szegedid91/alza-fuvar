@@ -6,6 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber, isCrewRole } from '../lib/labels'
 import { resolveNames } from '../lib/names'
+import { sumAdvances } from '../lib/payroll'
 import ConfirmButton from '../components/ConfirmButton'
 import type { Enums } from '../lib/database.types'
 import { toast } from '../lib/toast'
@@ -47,6 +48,20 @@ export default function Adjustments() {
       // Ki rögzítette — a profiles-t a névfeloldó RPC-n át (csak nevek)
       const names = await resolveNames(rows.map((r) => r.created_by))
       return rows.map((r) => ({ ...r, _by: r.created_by ? names[r.created_by] ?? null : null }))
+    },
+  })
+
+  // LOG-10: a kiválasztott munkatárs E HAVI tételei külön, korlát nélkül — a 60-as listából
+  // kieshettek a korábbi e havi előlegei, és a vezető túl alacsony összeget látott
+  const ym = todayISO().slice(0, 7)
+  const { data: monthRows } = useQuery({
+    queryKey: ['adjustments', 'month', currentWorkspaceId, userId, ym],
+    enabled: !!currentWorkspaceId && !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('adjustments').select('type, amount, work_date')
+        .eq('workspace_id', currentWorkspaceId!).eq('user_id', userId).gte('work_date', `${ym}-01`)
+      if (error) throw error
+      return data ?? []
     },
   })
 
@@ -139,9 +154,8 @@ export default function Adjustments() {
         const all = list ?? []
         const selected = userId && !showAll ? crew.find((m) => m.id === userId) : null
         const shown = selected ? all.filter((a) => a.user_id === userId) : all
-        // A kiválasztott munkatárs e havi előlege — rögzítés előtt jó látni
-        const ym = todayISO().slice(0, 7)
-        const monthAdv = selected ? shown.filter((a) => a.type === 'advance' && a.work_date.startsWith(ym)).reduce((x, a) => x + Number(a.amount), 0) : 0
+        // A kiválasztott munkatárs e havi előlege — rögzítés előtt jó látni (teljes havi lista, LOG-10)
+        const monthAdv = selected ? sumAdvances(monthRows ?? [], ym) : 0
         if (all.length === 0) return null
         return (
           <div className="card stack">

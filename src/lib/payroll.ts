@@ -71,3 +71,9 @@ export interface PayrollRow {
   advanceItems: AdjustmentItem[]
   deductionItems: AdjustmentItem[]
 }
+
+// A kiválasztott munkatárs adott havi előlegeinek összege — a TELJES havi listából,
+// nem a munkaterület utolsó N tételéből (LOG-10: abból kieshettek a tag korábbi tételei)
+export function sumAdvances(rows: { type: string; amount: number | string; work_date: string }[], ym: string): number {
+  return rows.filter((a) => a.type === 'advance' && a.work_date.startsWith(ym)).reduce((x, a) => x + Number(a.amount), 0)
+}
