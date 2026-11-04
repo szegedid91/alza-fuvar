@@ -16,7 +16,6 @@ import PhotoHelpBanner from './PhotoHelpBanner'
 import { errMsg } from '../lib/errors'
 import { useToday } from '../hooks/useToday'
 import { useTodayStatusEvents } from '../lib/statusEvents'
-import { usePendingUpdate } from '../lib/swUpdate'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 
@@ -248,14 +247,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const { data: today } = useToday()
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
   const showStatus = isCrew && !!today?.checkin && !today.checkin.checked_out_at
-  // Várakozó új verzió: a következő oldalváltáskor magától frissül — ilyenkor nincs
-  // félbehagyott űrlap, így nem vész el semmi (a sáv is marad, aki nem vált oldalt)
-  const pendingUpdate = usePendingUpdate()
-  const lastPath = useRef(pathname)
-  useEffect(() => {
-    if (pendingUpdate && lastPath.current !== pathname) void pendingUpdate(true)
-    lastPath.current = pathname
-  }, [pathname, pendingUpdate])
+  // Új verzió: SOHA nem töltünk újra magunktól (a futár elveszítené, hol tart) — az
+  // „Új verzió elérhető” sávra koppintva frissül, vagy a Profilban kézzel
   const LOCK_ALLOWED = ['/', '/ellenorzes', '/beosztas', '/hibak', '/profil']
   // A QR-beolvasás (becsekkolás) csak az „Elindultam” jelzés után érhető el —
   // addig az alsó menüben sincs, és a /beolvasas a kezdőlapra visz

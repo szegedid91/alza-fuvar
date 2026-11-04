@@ -53,6 +53,9 @@
 
 html, body, #root { height: 100%; }
 
+/* A böngésző natív „húzd le = újratöltés” kikapcsolva (html + body) — a saját
+   lehúzás csak az adatokat frissíti, az oldal nem töltődik újra */
+html { overscroll-behavior-y: none; }
 body {
   margin: 0;
   background: var(--bg);

@@ -22,6 +22,8 @@ export function usePendingUpdate(): UpdateFn | null {
 // Kényszerített frissítés: a várakozó SW-nek SKIP_WAITING, a precache törlése, és
 // MINDENKÉPP újratöltés (ha a controllerchange nem jönne, akkor is).
 export async function forceUpdate(): Promise<void> {
+  // Hálózat nélkül nem szabad a gyorsítótárat ürítve újratölteni — a lap elérhetetlen lenne
+  if (!navigator.onLine) return
   try {
     const reg = await navigator.serviceWorker?.getRegistration()
     if (reg) {
