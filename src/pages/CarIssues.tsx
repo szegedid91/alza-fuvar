@@ -40,17 +40,20 @@ export default function CarIssues() {
   const { data: cars } = useCars()
   const { data: categories } = useCarCategories()
 
-  const { data: issues } = useQuery({
+  const { data: issues, error: issuesError } = useQuery({
     queryKey: ['car-issues', currentWorkspaceId, profile?.id, todayISO()],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from('car_issues')
-        .select('*, car:cars(plate)')
-        .eq('workspace_id', currentWorkspaceId!)
-        .order('created_at', { ascending: false })
-        .limit(40)
-      const rows = (data ?? []) as unknown as (Issue & { car: { plate: string } | null })[]
+      type Row = Issue & { car: { plate: string } | null }
+      const base = () => supabase.from('car_issues').select('*, car:cars(plate)').eq('workspace_id', currentWorkspaceId!).order('created_at', { ascending: false })
+      // LOG-09: vezetőnél a NYITOTT hibák mind látszanak (korábban a 40 legfrissebb sorból szűrtünk,
+      // a régebbi nyitottak eltűntek), a megoldottakból a legutóbbi 40; hibánál nem „nincs hiba”
+      const [openRes, doneRes] = isManagerOrAdmin
+        ? await Promise.all([base().neq('status', 'resolved'), base().eq('status', 'resolved').limit(40)])
+        : [await base().limit(40), { data: [], error: null }]
+      if (openRes.error) throw openRes.error
+      if (doneRes.error) throw doneRes.error
+      const rows = [...(openRes.data ?? []), ...(doneRes.data ?? [])] as unknown as Row[]
       const names = await resolveNames([...rows.map((r) => r.user_id), ...rows.map((r) => r.resolved_by)])
       return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null, _resolver: r.resolved_by ? names[r.resolved_by] ?? null : null }))
     },
@@ -211,7 +214,8 @@ export default function CarIssues() {
         </div>
       )}
 
-      {shown.length === 0 && (
+      {issuesError && <div className="alert error">A hibalista nem töltődött be: {errMsg(issuesError, 'ismeretlen hiba')}</div>}
+      {shown.length === 0 && !issuesError && (
         <div className="empty">
           <span className="ico"><Icon name={statusFilter === 'active' && isManagerOrAdmin ? 'check-circle' : 'wrench'} size={40} /></span>
           {isCrew && !isManagerOrAdmin
