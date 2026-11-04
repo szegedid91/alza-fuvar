@@ -127,7 +127,13 @@ function isNetworkError(e: unknown): boolean {
     || msg.includes('network timeout') || msg.includes('load failed') || msg.includes('the internet connection') || msg.includes('err_internet') || msg.includes('err_network')
 }
 
+// LOG-14: update csak sor-szűrővel mehet — üres match az összes (RLS-en belül) saját sort írná át
+export function assertUpdateMatch(rec: Pick<OutboxRecord, 'op' | 'match' | 'table'>): void {
+  if (rec.op === 'update' && Object.keys(rec.match ?? {}).length === 0) throw new Error(`Belső hiba: frissítés sor-szűrő nélkül (${rec.table})`)
+}
+
 async function runRecord(rec: OutboxRecord): Promise<void> {
+  assertUpdateMatch(rec)
   const values = { ...rec.values }
   if (rec.photo) {
     if (!rec.photo.blob) throw new Error('A fotó adata elveszett a helyi tárból — készítsd el újra')
@@ -200,7 +206,8 @@ async function doFlush(): Promise<{ done: number; remaining: number }> {
         rec.lastError = errMsg(e, 'ismeretlen hiba')
         failedIds.add(rec.id)
         if (rec.attempts >= MAX_ATTEMPTS) console.error('Outbox elem parkolva (túl sok hiba):', rec.label, e)
-        await d.put('outbox', rec)
+        // LOG-13: csak akkor írjuk vissza, ha közben nem törölte egy sikeres közvetlen küldés
+        if (await d.get('outbox', rec.id)) await d.put('outbox', rec)
       }
     }
   } finally {
@@ -280,19 +287,32 @@ export async function submitNow(
   }
   // a helyi példányt akkor is töröljük, ha a sorba írás „sikertelennek” látszott — különben később újrajátszódna
   const forget = async () => { try { await (await db()).delete('outbox', stored.id) } catch { /* nincs helyi példány */ } }
-  try {
-    await runRecord(stored)
-    await forget()
-    notify()
-    return { queued: false }
-  } catch (e) {
-    if (isNetworkError(e) && persisted) {
-      notify()
-      return { queued: true }
+  // LOG-13: a közvetlen küldés is a flush zárja alatt fut — így egy közben induló flush (online
+  // esemény, időzítő) nem futtatja ugyanazt a rekordot kétszer. Ha a várakozás alatt a flush már
+  // elvitte, az eredményét vesszük át.
+  const runDirect = async (): Promise<{ queued: boolean }> => {
+    if (persisted) {
+      let cur: OutboxRecord | undefined
+      try { cur = await (await db()).get('outbox', stored.id) } catch { cur = stored }
+      if (!cur) { notify(); return { queued: false } }
+      if (cur.attempts > 0) { await forget(); notify(); throw new Error(cur.lastError ?? 'A mentést a szerver elutasította') }
     }
-    // valódi adat-hiba (pl. RLS): a hívó kezeli — ne ragadjon a sorban
-    await forget()
-    notify()
-    throw e
+    try {
+      await runRecord(stored)
+      await forget()
+      notify()
+      return { queued: false }
+    } catch (e) {
+      if (isNetworkError(e) && persisted) {
+        notify()
+        return { queued: true }
+      }
+      // valódi adat-hiba (pl. RLS): a hívó kezeli — ne ragadjon a sorban
+      await forget()
+      notify()
+      throw e
+    }
   }
+  if ('locks' in navigator) return navigator.locks.request('alza-outbox-flush', runDirect)
+  return runDirect()
 }
