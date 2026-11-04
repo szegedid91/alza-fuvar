@@ -42,10 +42,7 @@ export async function getCrewForDay(carId: string, date: string, openOnly = fals
     .order('checked_in_at')
   if (openOnly) q = q.is('checked_out_at', null)
   const { data, error } = await q
-  if (error) {
-    console.error('Páros lekérési hiba:', error.message)
-    return []
-  }
+  if (error) throw error // LOG-41: elnyelve üres párosnak látszana (kapacitás, mai állapot tévesen)
   const names = await resolveNames((data ?? []).map((r) => r.user_id))
   return (data ?? []).map((r) => ({
     user_id: r.user_id,
@@ -61,7 +58,7 @@ export async function getCrewForDay(carId: string, date: string, openOnly = fals
 export async function traineeScheduled(carId: string, date: string): Promise<boolean> {
   const { data, error } = await supabase.from('shifts').select('id')
     .eq('car_id', carId).eq('work_date', date).not('trainee_id', 'is', null).limit(1)
-  if (error) { console.error('Betanuló lekérési hiba:', error.message); return false }
+  if (error) throw error // LOG-41
   return (data ?? []).length > 0
 }
 

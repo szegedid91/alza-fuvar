@@ -38,7 +38,7 @@ export default function Scan() {
 
   // Napközbeni autócsere: a beolvasott új autó + a kötelező ok
   // (conflict: a "tele autó" figyelmeztetést már elfogadta — a csere után is jelöljük)
-  const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean; conflict: boolean } | null>(null)
+  const [pendingSwitch, setPendingSwitch] = useState<{ car: Car; manual: boolean; conflict: boolean; prev: { id: string; car_id: string } } | null>(null)
   // Lezárt nap után ugyanazt az autót beolvasva: csak megerősítéssel nyílik újra (a kijelentkezés ideje elveszne)
   const [pendingReopen, setPendingReopen] = useState<{ car: Car; checkinId: string } | null>(null)
   // "Tele" autó: ma már annyian vannak rajta nyitott becsekkolással, ahány fős
@@ -95,7 +95,9 @@ export default function Scan() {
       others = (await getCrewForDay(car.id, todayISO(), true)).filter((c) => c.user_id !== profile?.id)
     } catch { /* offline: nem tudjuk ellenőrizni — a flush után az Áttekintés jelzi */ }
     // betanulóval az autón eggyel többen lehetnek
-    const capacity = crewSizeFor(cars, categories, car.id) + ((await traineeScheduled(car.id, todayISO())) ? 1 : 0)
+    let trainee = false
+    try { trainee = await traineeScheduled(car.id, todayISO()) } catch { /* offline: betanuló nélkül számolunk */ }
+    const capacity = crewSizeFor(cars, categories, car.id) + (trainee ? 1 : 0)
     if (others.length >= capacity) {
       setPendingConflict({ car, manual, others, capacity })
       return
@@ -104,9 +106,19 @@ export default function Scan() {
   }
 
   async function continueCheckIn(car: Car, manual: boolean, conflict: boolean) {
-    const openCi = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
+    // LOG-17: a nyitott becsekkolás a SZERVERRŐL — a cache egy másik fül/eszköz becsekkolása után
+    // elavult lehet, és két nyitott sor maradna (csere-ok nélkül); offline a cache marad
+    let openCi: { id: string; car_id: string } | null = today?.checkin && !today.checkin.checked_out_at ? today.checkin : null
+    if (profile) {
+      try {
+        const { data, error } = await supabase.from('check_ins').select('id, car_id')
+          .eq('user_id', profile.id).eq('work_date', todayISO()).is('checked_out_at', null)
+          .order('checked_in_at', { ascending: false }).limit(1).maybeSingle()
+        if (!error) openCi = data ?? null
+      } catch { /* offline */ }
+    }
     if (openCi && openCi.car_id !== car.id) {
-      setPendingSwitch({ car, manual, conflict })
+      setPendingSwitch({ car, manual, conflict, prev: openCi })
       return
     }
     const closed = today?.checkin && today.checkin.checked_out_at && today.checkin.car_id === car.id ? today.checkin : null
@@ -288,12 +300,12 @@ export default function Scan() {
 
   // Autócsere megerősítése a megadott okkal
   async function confirmSwitch() {
-    if (!pendingSwitch || !today?.checkin) return
+    if (!pendingSwitch) return
     setBusy(true)
     setError(null)
     try {
       const reason = switchNote.trim() ? `${switchReason}: ${switchNote.trim()}` : switchReason
-      await doCheckIn(pendingSwitch.car, reason, today.checkin.car_id, today.checkin.id, pendingSwitch.manual, pendingSwitch.conflict)
+      await doCheckIn(pendingSwitch.car, reason, pendingSwitch.prev.car_id, pendingSwitch.prev.id, pendingSwitch.manual, pendingSwitch.conflict)
       setPendingSwitch(null)
       setSwitchNote('')
     } catch (e) {
