@@ -266,8 +266,10 @@ export default function Cars() {
 
   const toggleActive = useMutation({
     mutationFn: async (car: Car) => {
-      const { error } = await supabase.from('cars').update({ active: !car.active }).eq('id', car.id)
+      // LOG-34: a célérték a látott állapotból — ha közben más fül már átállította, nem fordítjuk vissza
+      const { data, error } = await supabase.from('cars').update({ active: !car.active }).eq('id', car.id).eq('active', car.active).select('id')
       if (error) throw error
+      if ((data ?? []).length === 0) throw new Error('Közben már módosult — a lista frissül.')
     },
     onSuccess: () => { setError(null); void qc.invalidateQueries({ queryKey: ['cars'] }) },
     onError: (e) => setError('Az autó állapotának módosítása nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
