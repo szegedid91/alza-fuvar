@@ -36,6 +36,7 @@ export function useInspectionZone(): void {
         .select('id', { count: 'exact', head: true })
         .eq('car_id', carId!)
         .eq('work_date', workDate!)
+        .not('completed_at', 'is', null) // LOG-03: a félbehagyott ellenőrzés nem számít (a kapu sem fogadja el)
       if (error) throw error
       return (count ?? 0) > 0
     },
