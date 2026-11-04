@@ -50,7 +50,11 @@ export async function unsubscribePush(): Promise<void> {
   const reg = await navigator.serviceWorker.ready
   const sub = await reg.pushManager.getSubscription()
   if (sub) {
-    await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
+    // SEC-03: közös telefonon a böngésző-feliratkozás AKKOR IS szűnjön meg, ha a DB-sor törlése
+    // elhasal (offline/hiba) — különben az előző felhasználó értesítései a következő belépőhöz
+    // érkeznének, és ő nem is tudna feliratkozni (idegen endpoint-sor az RLS miatt). A megszűnt
+    // endpointot a push-szolgáltató 404/410-zel jelzi, a send-push akkor törli a sort.
+    try { await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint) } catch { /* lent takarít a szerver */ }
     await sub.unsubscribe()
   }
 }
