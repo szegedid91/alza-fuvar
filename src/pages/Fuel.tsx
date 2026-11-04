@@ -82,8 +82,9 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
     if (res.parsed.location) setLocation(res.parsed.location)
     // csak érvényes ISO dátumot töltünk a date-mezőbe (az OCR bármit adhat)
     if (isValidISODate(res.parsed.date)) setFuelDate(res.parsed.date)
-    if (res.parsed.amount != null) setAmount(String(res.parsed.amount))
-    if (res.parsed.liters != null) setLiters(String(res.parsed.liters))
+    // magyar vesszős alak a mezőbe, hogy a parser egyértelműen tizedesnek vegye (LOG-01)
+    if (res.parsed.amount != null) setAmount(String(res.parsed.amount).replace('.', ','))
+    if (res.parsed.liters != null) setLiters(String(res.parsed.liters).replace('.', ','))
   }
 
   const canSave = !!photo && verified && !!odometer && !!amount && !!liters && !!fuelDate && !busy

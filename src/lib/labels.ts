@@ -105,9 +105,11 @@ export function parseHuNumber(input: string): number {
     // csak vessző: az utolsó a tizedesjel
     s = t.slice(0, lastComma).replace(/,/g, '') + '.' + t.slice(lastComma + 1)
   } else if (lastDot > -1) {
-    // csak pont: ha ezres-csoportokat formáz (minden pont után pontosan 3 számjegy), elválasztó
+    // csak pont: EGY pont mindig tizedesjel (12.5, 45.123 liter, 1.234 — az OCR és az Android
+    // billentyűzet is pontot ad); ezres-elválasztónak csak a legalább két pontos, 3-as csoportú
+    // alak számít (1.234.567). Így egy 3 tizedesű liter nem lesz ezerszeres (LOG-01).
     const groups = t.split('.')
-    const thousands = groups.length > 1 && groups.slice(1).every((g) => /^\d{3}$/.test(g)) && /^-?\d{1,3}$/.test(groups[0])
+    const thousands = groups.length > 2 && groups.slice(1).every((g) => /^\d{3}$/.test(g)) && /^-?\d{1,3}$/.test(groups[0])
     s = thousands ? groups.join('') : t
   }
   return parseFloat(s)

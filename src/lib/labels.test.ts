@@ -9,10 +9,12 @@ describe('parseHuNumber — magyar számbevitel', () => {
   it('pontozott ezres + vessző tizedes', () => {
     expect(parseHuNumber('1.234,56')).toBe(1234.56)
   })
-  it('csak pont: ezres-csoport vs. tizedes', () => {
-    expect(parseHuNumber('1.234')).toBe(1234)
+  it('csak pont: egy pont tizedes, több pont ezres-csoport (LOG-01)', () => {
+    expect(parseHuNumber('1.234')).toBe(1.234)
+    expect(parseHuNumber('45.123')).toBe(45.123) // 3 tizedesű liter a blokkon
     expect(parseHuNumber('12.5')).toBe(12.5)
     expect(parseHuNumber('1.234.567')).toBe(1234567)
+    expect(parseHuNumber('12.345.678')).toBe(12345678)
   })
   it('egyszerű egész és negatív', () => {
     expect(parseHuNumber('25000')).toBe(25000)
