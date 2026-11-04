@@ -67,17 +67,17 @@ export default function History() {
         fetchAll<CheckIn>((f, t) => supabase.from('check_ins')
           .select('car_id, prev_car_id, user_id, work_date, checked_in_at, checked_out_at, switch_reason')
           .eq('workspace_id', ws).gte('work_date', from).lte('work_date', to)
-          .order('checked_in_at').range(f, t)),
+          .order('checked_in_at').order('id').range(f, t)),
         fetchAll<Incident>((f, t) => supabase.from('incidents')
           .select('id, car_id, user_id, work_date, note, created_at')
           .eq('workspace_id', ws).gte('work_date', from).lte('work_date', to)
-          .order('created_at').range(f, t)),
+          .order('created_at').order('id').range(f, t)),
         fetchAll<Issue>((f, t) => supabase.from('car_issues')
           .select('id, car_id, user_id, note, status, created_at')
           .eq('workspace_id', ws)
           .gte('created_at', new Date(`${from}T00:00:00`).toISOString())
           .lte('created_at', new Date(`${to}T23:59:59.999`).toISOString())
-          .order('created_at').range(f, t)),
+          .order('created_at').order('id').range(f, t)),
         // Jóváhagyott sofőr ↔ rakodó cserék: a beosztás napja szerint szűrve
         fetchAll<RoleSwap>((f, t) => supabase.from('swap_requests')
           .select('id, requested_by, partner_id, decided_at, created_at, shift:shifts!inner(work_date, car_id)')
@@ -88,7 +88,7 @@ export default function History() {
         fetchAll<Cleaning>((f, t) => supabase.from('cleanings')
           .select('id, car_id, user_id, work_date, created_at')
           .eq('workspace_id', ws).gte('work_date', from).lte('work_date', to)
-          .order('created_at').range(f, t)),
+          .order('created_at').order('id').range(f, t)),
       ])
       if (carsRes.error) throw carsRes.error
       const names = await resolveNames([
