@@ -128,7 +128,7 @@ export default function Incident() {
                   src={i._url}
                   alt="Eseményfotó"
                   style={{ width: '100%', maxWidth: 320, borderRadius: 10, cursor: 'zoom-in' }}
-                  onClick={() => window.open(i._url!, '_blank')}
+                  onClick={() => window.open(i._url!, '_blank', 'noopener')}
                 />
               )}
               <span className="small">{i.note || '(nincs leírás)'}</span>

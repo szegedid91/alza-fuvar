@@ -16,8 +16,12 @@ function fmtDay(iso: string): string {
 
 // Nyomtatható bérlap külön ablakban — a böngésző "Mentés PDF-ként" opciójával
 // lesz belőle PDF. Szándékosan függőség-mentes (nincs jsPDF).
-export function openPayslip(row: PayrollRow, ym: string): void {
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// HTML-escape a bérlaphoz (SEC-18: idézőjelek is, és a hónap-string is ezen megy át)
+export const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+export function openPayslip(row: PayrollRow, ymRaw: string): void {
+  const esc = escHtml
+  const ym = esc(ymRaw)
   const html = `<!doctype html>
 <html lang="hu"><head><meta charset="utf-8"><title>Bérlap — ${esc(row.name)} — ${ym}</title>
 <style>

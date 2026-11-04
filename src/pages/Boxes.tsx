@@ -141,7 +141,7 @@ function ImportCard() {
       const toRow = (r: ImportRow) => ({
         parcel_shop_id: r.psid, name: r.name.trim(), address: r.address ?? null,
         lat: typeof r.lat === 'number' ? r.lat : null, lng: typeof r.lng === 'number' ? r.lng : null,
-        code: r.code ?? null, photo_url: r.photo ?? null, article_url: typeof r.article === 'string' && /^https?:\/\//i.test(r.article) ? r.article : null,
+        code: r.code ?? null, photo_url: typeof r.photo === 'string' && /^https?:\/\//i.test(r.photo) ? r.photo : null, article_url: typeof r.article === 'string' && /^https?:\/\//i.test(r.article) ? r.article : null,
         description: r.desc ?? null, active: true,
       })
       for (let i = 0; i < valid.length; i += 200) {

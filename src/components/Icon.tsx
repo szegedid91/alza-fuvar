@@ -113,7 +113,10 @@ export default function Icon({
       aria-hidden={title ? undefined : true}
       role={title ? 'img' : undefined}
       style={{ flexShrink: 0, ...style }}
-      dangerouslySetInnerHTML={{ __html: (title ? `<title>${title}</title>` : '') + d }}
-    />
+    >
+      {/* SEC-18: a title React-szövegként (escape-elve), csak a statikus ikon-útvonal megy innerHTML-lel */}
+      {title && <title>{title}</title>}
+      <g dangerouslySetInnerHTML={{ __html: d }} />
+    </svg>
   )
 }

@@ -261,7 +261,7 @@ export default function PhotoReview() {
                       src={it.url}
                       alt=""
                       style={{ width: '100%', borderRadius: 10, cursor: 'zoom-in' }}
-                      onClick={() => window.open(it.url, '_blank')}
+                      onClick={() => window.open(it.url, '_blank', 'noopener')}
                     />
                   : <div className="thumb thumb-empty"><div className="spinner" /></div>}
                 <div className="small" style={{ fontWeight: 700 }}>{it.title}</div>
@@ -297,7 +297,7 @@ export default function PhotoReview() {
               {/* Normál módban a képre koppintva a teljes méret nyílik */}
               <div
                 style={{ cursor: !compare && it.url ? 'zoom-in' : undefined }}
-                onClick={!compare && it.url ? () => window.open(it.url, '_blank') : undefined}
+                onClick={!compare && it.url ? () => window.open(it.url, '_blank', 'noopener') : undefined}
               >
                 <PhotoThumb path={it.path} src={it.thumb ?? it.url} />
               </div>
