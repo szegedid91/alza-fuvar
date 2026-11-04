@@ -19,24 +19,36 @@ export function usePendingUpdate(): UpdateFn | null {
   )
 }
 
-// Kényszerített frissítés: a várakozó SW-nek SKIP_WAITING, a precache törlése, és
-// MINDENKÉPP újratöltés (ha a controllerchange nem jönne, akkor is).
+// Kényszerített frissítés — gyorsítótár-törlés NÉLKÜL (az tette elérhetetlenné az oldalt
+// telefonon: a félig letöltött új SW mellett az oldal cache nélkül maradt).
+// 1) SW-frissítés keresése, 2) megvárjuk, míg az új SW letöltődik (precache), 3) SKIP_WAITING,
+// 4) amikor átvette az oldalt (controllerchange) újratöltünk; ha nincs új SW, sima újratöltés.
 export async function forceUpdate(): Promise<void> {
-  // Hálózat nélkül nem szabad a gyorsítótárat ürítve újratölteni — a lap elérhetetlen lenne
   if (!navigator.onLine) return
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration()
-    if (reg) {
-      await reg.update().catch(() => undefined)
-      reg.waiting?.postMessage({ type: 'SKIP_WAITING' })
-    }
-    if ('caches' in window) {
-      const keys = await caches.keys()
-      await Promise.all(keys.filter((k) => !k.includes('supabase-storage')).map((k) => caches.delete(k)))
-    }
-  } catch { /* az újratöltés attól még megy */ }
-  await new Promise((r) => setTimeout(r, 500))
-  window.location.reload()
+  const reload = () => window.location.reload()
+  let reg: ServiceWorkerRegistration | undefined
+  try { reg = await navigator.serviceWorker?.getRegistration() } catch { /* nincs SW */ }
+  if (!reg) { reload(); return }
+  try { await reg.update() } catch { /* hálózati hiba — alább sima újratöltés */ }
+  // várakozás az új SW letöltésére (installing → installed/waiting), max 25 mp
+  const waitInstalled = () => new Promise<ServiceWorker | null>((resolve) => {
+    if (reg!.waiting) { resolve(reg!.waiting); return }
+    const sw = reg!.installing
+    if (!sw) { resolve(null); return }
+    const t = setTimeout(() => resolve(reg!.waiting ?? null), 25000)
+    sw.addEventListener('statechange', () => {
+      if (sw.state === 'installed') { clearTimeout(t); resolve(sw) }
+      else if (sw.state === 'redundant') { clearTimeout(t); resolve(null) }
+    })
+  })
+  const waiting = await waitInstalled()
+  if (!waiting) { reload(); return }
+  // az új SW átveszi az oldalt → újratöltés; biztonsági tartalék, ha az esemény elmaradna
+  let done = false
+  const finish = () => { if (!done) { done = true; reload() } }
+  navigator.serviceWorker.addEventListener('controllerchange', finish, { once: true })
+  waiting.postMessage({ type: 'SKIP_WAITING' })
+  setTimeout(finish, 4000)
 }
 
 // Verzió-figyelő a service workertől FÜGGETLENÜL: a /version.json (no-store) build-idejét

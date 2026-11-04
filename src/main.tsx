@@ -24,7 +24,7 @@ installGlobalErrorHandlers()
 
 // Új verzió: NEM töltünk újra magunktól (félbehagyott űrlap elveszne) —
 // az UpdateBanner mutatja, és a felhasználó koppint a frissítésre.
-const updateSW = registerSW({
+registerSW({
   immediate: true,
   // Új SW vár: ha a futó oldal MÁR a legújabb build (pl. kényszerített újratöltés után),
   // csendben aktiváljuk, sáv nélkül; különben sáv, és koppintásra workbox-os út +
@@ -40,7 +40,7 @@ const updateSW = registerSW({
           return
         }
       } catch { /* nem tudjuk — marad a sáv */ }
-      setPendingUpdate(async () => { void updateSW(true); setTimeout(() => void forceUpdate(), 1500) })
+      setPendingUpdate(() => forceUpdate())
     })()
   },
   // Új verzió keresése: 5 percenként, és amikor az app előtérbe kerül —
