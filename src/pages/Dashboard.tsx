@@ -269,14 +269,15 @@ export default function Dashboard() {
 
   useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues', 'status_events'], [['dashboard'], ['crew-conflicts'], ['photo-help']])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: loadError } = useQuery({
     queryKey: ['dashboard', currentWorkspaceId, today],
     enabled: !!currentWorkspaceId,
     refetchInterval: 60000,
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }, { data: statusEv }] =
-        await Promise.all([
+      // LOG-08: bármelyik lekérdezés hibája a teljes kártyát hibásnak jelöli — RLS/timeout/kiesés
+      // esetén NE zöld „minden rendben” látsszon
+      const results = await Promise.all([
           supabase.from('cars').select('id, plate, label').eq('workspace_id', ws),
           supabase.from('check_ins').select('id, car_id, user_id, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, manual_checkin, inspection_waived_at, inspection_help_requested_at').eq('workspace_id', ws).eq('work_date', today),
           supabase.from('shifts').select('car_id, driver_id, loader_id, trainee_id').eq('workspace_id', ws).eq('work_date', today),
@@ -285,6 +286,8 @@ export default function Dashboard() {
           supabase.from('car_issues').select('id, car_id, status').eq('workspace_id', ws).neq('status', 'resolved'),
           supabase.from('status_events').select('id, user_id, kind, at, outside_geofence, note, photo_path, car_id, photos:status_event_photos(storage_path)').eq('workspace_id', ws).eq('work_date', today).order('at'),
         ])
+      for (const r of results) if (r.error) throw r.error
+      const [{ data: cars }, { data: checkins }, { data: shifts }, { data: fuel }, { data: insp }, { data: issues }, { data: statusEv }] = results
 
       const carMap = new Map((cars ?? []).map((c) => [c.id, c]))
       const names = await resolveNames([...(checkins ?? []).map((c) => c.user_id), ...(shifts ?? []).flatMap((sh) => [sh.driver_id, sh.loader_id, sh.trainee_id]), ...(statusEv ?? []).map((a) => a.user_id)])
@@ -388,6 +391,7 @@ export default function Dashboard() {
       {data && <PhotoPendingCard items={data.pendingPhoto} />}
       <RouteProgressCard />
       {isLoading && <><Skeleton rows={2} /><Skeleton rows={3} /></>}
+      {loadError && <div className="alert error">Az áttekintés nem töltődött be: {errMsg(loadError, 'ismeretlen hiba')} — a lenti adatok elavultak lehetnek.</div>}
       {data && (
         <>
           <div className="card primary">
