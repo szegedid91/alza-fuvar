@@ -25,6 +25,8 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
   const { data: settledAt, isLoading } = useSettledToday()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
+  // LOG-25: offline sorba állás után is eltűnik a gomb — ne lehessen kétszer lezárni
+  const [parked, setParked] = useState<string | null>(null)
   const checkin = today?.checkin ?? null
   const electric = today?.car?.fuel_type === 'electric'
   const label = electric ? 'Autó lerakva, töltőre téve' : 'Autó lerakva'
@@ -40,6 +42,7 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
         label: `${label} – nap vége`,
         values: { checked_out_at: new Date().toISOString(), out_gps_lat: gps.lat, out_gps_lng: gps.lng, out_outside_geofence: outside },
       })
+      setParked(checkin.id)
       toast.success(electric ? 'Nap lezárva — autó lerakva, töltőn. Szép munka!' : 'Nap lezárva — autó lerakva. Szép munka!')
       await qc.invalidateQueries({ queryKey: ['today'] })
     } catch (e) {
@@ -49,7 +52,7 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
     }
   }
 
-  if (!checkin || checkin.checked_out_at) return null
+  if (!checkin || checkin.checked_out_at || parked === checkin.id) return null
   const ready = !!settledAt
   return (
     <div className="stack" style={{ gap: 6 }}>
