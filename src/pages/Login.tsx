@@ -126,7 +126,7 @@ export default function Login() {
             <div className="field">
               <label htmlFor="pw">Jelszó</label>
               <div className="input-icon input-icon-right">
-                <input id="pw" className="input" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={6} required />
+                <input id="pw" className="input" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={8} required />
                 <button type="button" className="icon-btn" aria-label={showPw ? 'Jelszó elrejtése' : 'Jelszó mutatása'} onClick={() => setShowPw((v) => !v)}>
                   <Icon name={showPw ? 'eye-off' : 'eye'} size={18} />
                 </button>
@@ -219,9 +219,12 @@ function translateAuthError(msg: string): string {
   if (m.includes('invalid login credentials')) return 'Hibás email cím vagy jelszó.'
   if (m.includes('email not confirmed')) return 'Az email cím még nincs megerősítve.'
   if (m.includes('user already registered')) return 'Ezzel az email címmel már van fiók.'
-  if (m.includes('password should be at least')) return 'A jelszó túl rövid (min. 6 karakter).'
+  if (m.includes('password should be at least')) return 'A jelszó túl rövid (min. 8 karakter).'
   if (m.includes('unable to validate email')) return 'Érvénytelen email cím.'
   if (m.includes('rate limit') || m.includes('too many requests')) return 'Túl sok próbálkozás — várj pár percet, és próbáld újra.'
   if (m.includes('for security purposes')) return 'Biztonsági okból várni kell egy kicsit két kérés között — próbáld újra pár másodperc múlva.'
-  return msg
+  if (m.includes('failed to fetch') || m.includes('network')) return 'Nincs kapcsolat — ellenőrizd a hálózatot, és próbáld újra.'
+  // SEC-23: ismeretlen szerverhibát nem mutatunk nyersen (belső részletek); a konzolba kerül
+  console.error('Auth hiba:', msg)
+  return 'Nem sikerült — próbáld újra később.'
 }

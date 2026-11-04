@@ -100,7 +100,7 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
             <label htmlFor="np">Új jelszó</label>
             <div className="input-icon input-icon-right">
               <input id="np" className="input" type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)}
-                placeholder="legalább 6 karakter" autoComplete="new-password" minLength={6} required />
+                placeholder="legalább 8 karakter" autoComplete="new-password" minLength={8} required />
               <button type="button" className="icon-btn" aria-label={show ? 'Jelszó elrejtése' : 'Jelszó mutatása'} onClick={() => setShow((v) => !v)}>
                 <Icon name={show ? 'eye-off' : 'eye'} size={18} />
               </button>
@@ -109,9 +109,9 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
           <div className="field">
             <label htmlFor="np2">Új jelszó még egyszer</label>
             <input id="np2" className="input" type={show ? 'text' : 'password'} value={pw2} onChange={(e) => setPw2(e.target.value)}
-              placeholder="ugyanaz még egyszer" autoComplete="new-password" minLength={6} required />
+              placeholder="ugyanaz még egyszer" autoComplete="new-password" minLength={8} required />
             {pw2 && pw !== pw2 && <div className="tiny" style={{ color: 'var(--error-text)' }}>A két jelszó még nem egyezik.</div>}
-            {pw2 && pw === pw2 && pw.length >= 6 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
+            {pw2 && pw === pw2 && pw.length >= 8 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
           </div>
 
           {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
