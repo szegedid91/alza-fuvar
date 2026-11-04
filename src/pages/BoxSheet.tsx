@@ -81,9 +81,19 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
       if (data) return data.id
       const { data: ins, error: e2 } = await supabase.from('box_sheets')
         .insert({ workspace_id: currentWorkspaceId!, user_id: profile!.id, car_id: car.id, work_date: date }).select('id').single()
-      if (e2) throw e2
+      if (e2) {
+        // LOG-19: két fül / párhuzamos mount — a másik már létrehozta (UNIQUE): azt vesszük át
+        if (e2.code === '23505') {
+          const { data: again, error: e3 } = await supabase.from('box_sheets').select('id')
+            .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', date).maybeSingle()
+          if (e3) throw e3
+          if (again) return again.id
+        }
+        throw e2
+      }
       return ins.id
     },
+    retry: false, // a queryFn ír is — ne ismételje gépiesen
   })
 
   if (!needsSheet) {
@@ -130,7 +140,9 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
     void qc.invalidateQueries({ queryKey: ['box-sheet-status'] })
     void qc.invalidateQueries({ queryKey: ['box-sheets'] })
   }
-  const fail = (e: unknown) => toast.error(errMsg(e, 'A mentés nem sikerült'))
+  // LOG-21: sikertelen mentés után a számmezők a szerver értékére állnak vissza (resetTick)
+  const [resetTick, setResetTick] = useState(0)
+  const fail = (e: unknown) => { setResetTick((t) => t + 1); toast.error(errMsg(e, 'A mentés nem sikerült')) }
 
   const updateSheet = useMutation({
     mutationFn: async (patch: Partial<BoxSheet>) => {
@@ -151,8 +163,10 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
       if (error) throw error
       // A lap „végzés” ideje = az utolsó box ideje (a futár ekkor nyomott rá a Box-lapra ennél a boxnál)
       const hm = now.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', hour12: false })
+      // LOG-20: a megálló már mentve — a végzés-idő hibája nem „sikertelen hozzáadás” (különben a
+      // futár újra hozzáadná → dupla megálló); a következő megálló úgyis frissíti
       const { error: e2 } = await supabase.from('box_sheets').update({ end_time: hm }).eq('id', sheetId)
-      if (e2) throw e2
+      if (e2) toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba'))
     },
     onSuccess: invalidate, onError: fail,
   })
@@ -240,7 +254,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
             <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
-              courierName={name ?? 'Futár'} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
+              courierName={name ?? 'Futár'} resetKey={resetTick} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
       </div>
@@ -265,13 +279,13 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
         <div className="tiny muted">Ezeket a nap legvégén, a raktárba visszaérve töltsd ki, az egész napra összesítve.</div>
         <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" />Raktári problémák</div>
         <div className="grid-2">
-          {WH_FIELDS.slice(0, 2).map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
+          {WH_FIELDS.slice(0, 2).map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} resetKey={resetTick} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
         </div>
-        <NumField label={WH_FIELDS[2].label} value={sheet.wh_pallet_items} onCommit={(v) => updateSheet.mutate({ wh_pallet_items: v })} />
+        <NumField label={WH_FIELDS[2].label} value={sheet.wh_pallet_items} resetKey={resetTick} onCommit={(v) => updateSheet.mutate({ wh_pallet_items: v })} />
         <TextField label={'Megjegyzés („MENT” stb.)'} value={sheet.wh_note ?? ''} onCommit={(v) => updateSheet.mutate({ wh_note: v || null })} />
         <div className="card-title" style={{ margin: 0, marginTop: 6 }}><Icon name="truck" />Raktárban leadott (db)</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-          {RET_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
+          {RET_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} resetKey={resetTick} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
         </div>
       </div>
       )}
@@ -280,7 +294,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
       <div className="card stack" style={{ gap: 8 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Komplikációk</div>
         <div className="grid-2">
-          {COMP_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
+          {COMP_FIELDS.map((f) => <NumField key={f.key} label={f.label} value={sheet[f.key]} resetKey={resetTick} onCommit={(v) => updateSheet.mutate({ [f.key]: v })} />)}
         </div>
         <TextField label="Egyéb" value={sheet.comp_note ?? ''} onCommit={(v) => updateSheet.mutate({ comp_note: v || null })} />
       </div>
@@ -350,9 +364,9 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove }: {
+function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0 }: {
   stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
-  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void
+  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number
 }) {
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
   // hogy 10-20 boxnál is áttekinthető maradjon a lap. Járat-módban a kijelölt box nyitva.
@@ -388,7 +402,7 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
           <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} />
           <div className="grid-2">
             {STOP_FIELDS.map((f) => (
-              <NumField key={f.key} label={f.label} value={stop[f.key]} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && (focus || isLast) && stop.placed === 0} />
+              <NumField key={f.key} label={f.label} value={stop[f.key]} resetKey={resetKey} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && (focus || isLast) && stop.placed === 0} />
             ))}
           </div>
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
@@ -405,9 +419,10 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
 
 // Számmező: szerkesztés közben helyi szöveg, elhagyáskor (blur) ment — így egy
 // koppintás-sorozat nem indít mentést minden karakterre.
-function NumField({ label, value, onCommit, highlight = false, autoFocus = false }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean; autoFocus?: boolean }) {
+function NumField({ label, value, onCommit, highlight = false, autoFocus = false, resetKey = 0 }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean; autoFocus?: boolean; resetKey?: number }) {
   const [txt, setTxt] = useState(String(value))
-  useEffect(() => { setTxt(String(value)) }, [value])
+  // resetKey: sikertelen mentés után a beírt (nem mentett) szám helyett a szerver értéke látszik (LOG-21)
+  useEffect(() => { setTxt(String(value)) }, [value, resetKey])
   return (
     <div className="field">
       <label>{label}</label>
