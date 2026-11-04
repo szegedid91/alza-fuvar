@@ -52,14 +52,20 @@ export default function RoutePlanImport() {
     mutationFn: async () => {
       if (!preview || !currentWorkspaceId) return
       const ws = currentWorkspaceId
-      let nextOrder = (routes?.length ?? 0) + 1
+      // LOG-05: a járatlista a mutáción belül FRISSEN a szerverről — a komponens `routes` cache-e
+      // egy félbeszakadt/ismételt importnál elavult (a már létrehozott kódot újra insertelné)
+      const { data: existing, error: exErr } = await supabase.from('route_names').select('*').eq('workspace_id', ws)
+      if (exErr) throw exErr
+      const current = [...(existing ?? [])]
+      let nextOrder = current.reduce((m, r) => Math.max(m, r.sort_order ?? 0), 0) + 1
       for (const pr of preview.routes) {
         // 1) járat (kód szerint), ha nincs, létrejön
-        let route = (routes ?? []).find((r) => r.code.toUpperCase() === pr.code)
+        let route = current.find((r) => r.code.toUpperCase() === pr.code)
         if (!route) {
           const { data, error } = await supabase.from('route_names').insert({ workspace_id: ws, code: pr.code, sort_order: nextOrder++ }).select('*').single()
           if (error) throw error
           route = data
+          current.push(data)
         }
         // 2) boxok: ismeretlen → új jegyzék-sor a fájl adataival; ismert, koordináta nélkül → koordináta pótlás
         const ids = new Map<string, string>()

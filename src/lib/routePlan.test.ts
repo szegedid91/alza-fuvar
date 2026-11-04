@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deadlineMin, lateMinutes, timeToMin } from './routePlan'
+import { deadlineMin, lateMinutes, timeToMin, assertUniqueRouteCodes } from './routePlan'
 
 describe('lateMinutes — késés a határidőhöz képest (LOG-02)', () => {
   it('nappal: most − határidő', () => {
@@ -18,5 +18,15 @@ describe('lateMinutes — késés a határidőhöz képest (LOG-02)', () => {
   it('2. kör és hiányzó határidő → null', () => {
     expect(lateMinutes('10:00', 2, 700)).toBeNull()
     expect(lateMinutes(null, 1, 700)).toBeNull()
+  })
+})
+
+describe('assertUniqueRouteCodes — duplikált járatkód a tervfájlban (LOG-05)', () => {
+  it('két jármű azonos kóddal → hiba a nevekkel', () => {
+    expect(() => assertUniqueRouteCodes([{ vehicle: 'Budapest G', code: 'G' }, { vehicle: 'Pest G', code: 'G' }, { vehicle: 'Buda H', code: 'H' }]))
+      .toThrow(/G \(Budapest G, Pest G\)/)
+  })
+  it('egyedi kódok → nincs hiba', () => {
+    expect(() => assertUniqueRouteCodes([{ vehicle: 'A 1', code: '1' }, { vehicle: 'B 2', code: '2' }])).not.toThrow()
   })
 })

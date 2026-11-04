@@ -100,7 +100,17 @@ export async function parseRoutePlan(file: File): Promise<PlanRoute[]> {
   const routes = [...byVehicle.values()].filter((r) => r.stops.length > 0)
   for (const r of routes) r.stops.sort((a, b) => a.order - b.order)
   if (routes.length === 0) throw new Error('A fájlban nincs egyetlen járat sem boxokkal.')
+  assertUniqueRouteCodes(routes)
   return routes
+}
+
+// Két jármű azonos járatkóddal (pl. „Budapest G” és „Pest G”) → az import a másodikkal
+// csendben felülírná az elsőt (LOG-05): inkább hiba, a fájlt kell javítani
+export function assertUniqueRouteCodes(routes: { vehicle: string; code: string }[]): void {
+  const byCode = new Map<string, string[]>()
+  for (const r of routes) byCode.set(r.code, [...(byCode.get(r.code) ?? []), r.vehicle])
+  const dup = [...byCode.entries()].filter(([, v]) => v.length > 1)
+  if (dup.length) throw new Error(`Azonos járatkód több járműnél: ${dup.map(([c, v]) => `${c} (${v.join(', ')})`).join('; ')} — a fájlban a jármű neve utolsó szava a járat kódja.`)
 }
 
 // "HH:MM[:SS]" → perc éjféltől; a késés-számításhoz
