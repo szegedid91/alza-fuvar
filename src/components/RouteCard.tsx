@@ -224,7 +224,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
-                  <button type="button" className="btn secondary sm" disabled={busy || locked || late != null} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
+                  <button type="button" className="btn secondary sm" disabled={busy || locked || late != null || (!!onFillSheet && !sheetFilled)} onClick={finish} style={{ flex: 2 }}><Icon name="check" size={14} />Kész, következő</button>
                 </div>
                 {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A járat a „Kiindultam” jelzés után válik aktívvá — addig csak megnézheted a címeket.</div>}
                 {late != null && (
@@ -246,12 +246,13 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                     <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okokról.</div>
                   </div>
                 )}
+                {/* Box-lap MINDEN címen kötelező: a „Kész, következő” csak kitöltött sor után aktív */}
                 {onFillSheet && (sheetFilled
-                  ? <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Ehhez a boxhoz van sor a mai Box-lapon. <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={onFillSheet}>Megnyitás</button></div>
-                  : <button type="button" className="btn ghost sm" style={{ borderColor: 'var(--warning)' }} onClick={onFillSheet}>
-                      <Icon name="clipboard" size={16} />Volt eltérés? Box-lap ehhez a boxhoz
+                  ? <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Box-lap kitöltve ehhez a boxhoz. <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={onFillSheet}>Módosítás</button></div>
+                  : <button type="button" className="btn sm" disabled={locked} onClick={onFillSheet}>
+                      <Icon name="clipboard" size={16} />Box-lap kitöltése (kötelező)
                     </button>)}
-                {!sheetFilled && <div className="tiny muted">Ha minden csomag rendben a helyére került, nem kell lapot tölteni és fotózni — mehetsz tovább. Box-lap csak eltérésnél (hiány, NF, rossz szortírozás, visszáru, ÉK/NHB…).</div>}
+                {onFillSheet && !sheetFilled && <div className="tiny muted">Minden boxnál ki kell tölteni a Box-lapot (behelyezett, hiány, visszáru…) — enélkül nem léphetsz a következő címre. Fotó csak eltérésnél kell.</div>}
               </>
             ) : null}
             {stops.length > 0 && (

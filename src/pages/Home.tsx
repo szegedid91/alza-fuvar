@@ -4,6 +4,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { isCrewRole } from '../lib/labels'
 import TodayStepper from '../components/TodayStepper'
+import ParkCarButton from '../components/ParkCarButton'
 import StatusCard from '../components/StatusCard'
 import SetOffCard from '../components/SetOffCard'
 import { useTodayStatusEvents } from '../lib/statusEvents'
@@ -36,6 +37,7 @@ export default function Home() {
   // Járat: a „Megérkeztem” után jelenik meg, a „Kiindultam” után aktív
   const arrived = !!todayStatus?.some((s) => s.kind === 'arrived')
   const departed = !!todayStatus?.some((s) => s.kind === 'departed')
+  const settled = !!todayStatus?.some((s) => s.kind === 'settled')
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
 
@@ -117,8 +119,15 @@ export default function Home() {
       )}
       {isCrew && !inspectionLocked && !!today?.checkin && arrived && <RouteCard active={departed} />}
       {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
-      {/* A lépéssor (benne a Box-lap) úton is látszik — a boxokhoz a kiindulás után érnek */}
-      {isCrew && !inspectionLocked && !!today?.checkin && <TodayStepper />}
+      {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
+          Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}
+      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || !!today.checkin.checked_out_at) && <TodayStepper />}
+      {isCrew && !inspectionLocked && !!today?.checkin && arrived && !today.checkin.checked_out_at && settled && (
+        <div className="card stack" style={{ borderColor: 'var(--success)', gap: 8 }}>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="flag" />Nap vége</div>
+          <ParkCarButton />
+        </div>
+      )}
 
       {isCrew && !inspectionLocked && !!today?.checkin && (
         <div>
