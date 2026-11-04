@@ -61,12 +61,14 @@ export default function CarIssues() {
 
   const setStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: Enums<'car_issue_status'> }) => {
-      const { error } = await supabase.from('car_issues').update({
+      // LOG-32: csak tényleges átmenet — egy régi fülről már megoldott hibát nem írunk felül másik megoldóval
+      const { data, error } = await supabase.from('car_issues').update({
         status,
         resolved_by: status === 'resolved' ? profile!.id : null,
         resolved_at: status === 'resolved' ? new Date().toISOString() : null,
-      }).eq('id', id)
+      }).eq('id', id).neq('status', status).select('id')
       if (error) throw error
+      if ((data ?? []).length === 0) throw new Error('Közben már módosult — a lista frissül.')
     },
     onSuccess: (_d, v) => { toast.success(v.status === 'resolved' ? 'Megoldva — lekerült a nyitott hibák közül.' : v.status === 'open' ? 'Újranyitva.' : 'Folyamatban.'); void qc.invalidateQueries({ queryKey: ['car-issues'] }) },
     onError: (e) => setMsg('Hiba: az állapot mentése nem sikerült — ' + (errMsg(e, 'ismeretlen hiba'))),
