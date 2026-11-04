@@ -390,6 +390,8 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       if (!Number.isFinite(d) || !Number.isFinite(l) || !Number.isFinite(tr) || !Number.isFinite(bx) || !Number.isFinite(bt) || !Number.isFinite(b2) || d < 0 || l < 0 || tr < 0 || bx < 0 || bt < 0 || b2 < 0) {
         throw new Error('Érvénytelen összeg — írj be számot, pl. 25 000')
       }
+      // LOG-23: üres hónap-mező „-01”-ként ment volna a szervernek
+      if (!asBase && !/^\d{4}-\d{2}$/.test(addFrom)) throw new Error('Add meg a hónapot, amelytől a díj érvényes.')
       const { error } = await supabase.rpc('set_workspace_rate_from', {
         p_workspace_id: ws.id, p_valid_from: asBase ? '2000-01-01' : `${addFrom}-01`, p_driver_rate: d, p_loader_rate: l, p_trainee_rate: tr, p_box_rate: bx, p_box_trainee_rate: bt, p_box_round2_rate: b2,
       })
@@ -501,6 +503,10 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       )}
 
       {error && <div className="alert error">{error}</div>}
+      {/* LOG-22: kiinduló díj nélkül az első emelés ELŐTTI hónapok a jelenlegi díjjal számolnak — jelezzük */}
+      {!base && rows.length > 0 && (
+        <div className="alert warning tiny">Nincs kiinduló napidíj: a {rows[rows.length - 1].valid_from.slice(0, 7)} előtti hónapok a jelenlegi díjjal számolnak. Add meg a kiinduló díjat („minden korábbi hónapra”).</div>
+      )}
 
       <div className="stack" style={{ gap: 6 }}>
         <div className="tiny muted" style={{ fontWeight: 700 }}>Emelések (onnantól érvényes, amíg újabb nincs)</div>
