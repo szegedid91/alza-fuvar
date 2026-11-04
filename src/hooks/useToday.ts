@@ -54,6 +54,7 @@ export function useToday() {
           .eq('workspace_id', currentWorkspaceId!)
           .eq('work_date', date)
           .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id},trainee_id.eq.${profile!.id}`)
+          .order('round') // LOG-26: kétkörös napon az 1. kör a „tervezett”, ne véletlenszerű
           .limit(1)
           .maybeSingle(),
       ])
