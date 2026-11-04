@@ -11,6 +11,7 @@ import Icon, { type IconName } from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import FeedbackList from '../components/FeedbackList'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { localDateOf } from '../lib/calendar'
 
 const ENTITY_LABEL: Record<string, string> = {
@@ -299,19 +300,24 @@ function describe(
 const ID_KEYS = ['driver_id', 'loader_id', 'trainee_id', 'user_id', 'partner_id', 'requested_by', 'reported_by', 'actor_id', 'inspection_waived_by', 'resolved_by', 'locked_by', 'decided_by', 'placeholder_id', 'used_by', 'approved_by']
 
 export default function AuditLog() {
+  // LOG-35: több munkaterületes adminnál a napló az AKTÍV munkaterületre szűr (a munkaterület
+  // nélküli sorok — pl. függő profilok — mindig látszanak), és váltáskor újratölt
+  const { currentWorkspaceId: ws } = useWorkspace()
   const { data: cars } = useQuery({
-    queryKey: ['audit-cars'],
+    queryKey: ['audit-cars', ws],
+    enabled: !!ws,
     queryFn: async () => {
-      const { data, error } = await supabase.from('cars').select('id, plate')
+      const { data, error } = await supabase.from('cars').select('id, plate').eq('workspace_id', ws!)
       if (error) throw error
       return data ?? []
     },
   })
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit'],
+    queryKey: ['audit', ws],
+    enabled: !!ws,
     queryFn: async () => {
-      const { data, error } = await supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(300)
+      const { data, error } = await supabase.from('audit_log').select('*').or(`workspace_id.eq.${ws},workspace_id.is.null`).order('created_at', { ascending: false }).limit(300)
       if (error) throw error
       const rows = data ?? []
       const ids = new Set<string>()
@@ -333,8 +339,8 @@ export default function AuditLog() {
   })
 
   const plateOf = (id: string | null) => (id ? cars?.find((c) => c.id === id)?.plate ?? null : null)
-  const { data: routes } = useQuery({ queryKey: ['audit-routes'], queryFn: async () => { const { data, error } = await supabase.from('route_names').select('id, code'); if (error) throw error; return data ?? [] } })
-  const { data: cats } = useQuery({ queryKey: ['audit-cats'], queryFn: async () => { const { data, error } = await supabase.from('car_categories').select('id, name'); if (error) throw error; return data ?? [] } })
+  const { data: routes } = useQuery({ queryKey: ['audit-routes', ws], enabled: !!ws, queryFn: async () => { const { data, error } = await supabase.from('route_names').select('id, code').eq('workspace_id', ws!); if (error) throw error; return data ?? [] } })
+  const { data: cats } = useQuery({ queryKey: ['audit-cats', ws], enabled: !!ws, queryFn: async () => { const { data, error } = await supabase.from('car_categories').select('id, name').eq('workspace_id', ws!); if (error) throw error; return data ?? [] } })
   const routeOf = (id: string | null) => (id ? routes?.find((r) => r.id === id)?.code ?? null : null)
   const { data: boxes } = useAlzaBoxes()
   const boxOf = (id: string | null) => { if (!id) return null; const b = boxes?.find((x) => x.id === id); return b ? `${b.code ? b.code + ' · ' : ''}${b.name}` : null }
