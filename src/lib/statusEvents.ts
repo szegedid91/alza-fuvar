@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { submitNow } from './outbox'
 import { getCurrentPosition, isOutsideGeofence } from './geo'
-import { todayISO } from './labels'
+import { todayISO, localISODate } from './labels'
 import { STATUS_META, type StatusKind } from './groupMessage'
 
 // Jelzés rögzítése (idő, GPS, autó) — offline is sorba áll. A StatusCard
@@ -23,7 +23,7 @@ export async function recordStatusEvent(p: {
   await submitNow({
     id, table: 'status_events', op: 'insert', label: `${STATUS_META[p.kind].title} – jelzés`,
     values: {
-      id, workspace_id: p.workspaceId, user_id: p.userId, car_id: p.carId, work_date: todayISO(), kind: p.kind,
+      id, workspace_id: p.workspaceId, user_id: p.userId, car_id: p.carId, work_date: localISODate(p.at), kind: p.kind, // LOG-38: a koppintás napja, nem a GPS-várakozás utáni
       at: p.at.toISOString(), gps_lat: gps.lat, gps_lng: gps.lng, outside_geofence: outside, note: null, confirmed_at: p.at.toISOString(),
     },
   })

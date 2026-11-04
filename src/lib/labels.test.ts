@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHuNumber, formatHours, isCrewRole, todayISO } from './labels'
+import { parseHuNumber, formatHours, isCrewRole, todayISO, localISODate } from './labels'
 
 describe('parseHuNumber — magyar számbevitel', () => {
   it('ezres szóköz + vessző tizedes', () => {
@@ -52,5 +52,13 @@ describe('todayISO — helyi naptári nap', () => {
     const now = new Date()
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     expect(todayISO()).toBe(expected)
+  })
+})
+
+describe('localISODate — helyi nap egy időpontból (LOG-38)', () => {
+  it('éjfél körül a helyi nap, nem az UTC', () => {
+    const d = new Date(2026, 10, 4, 0, 30) // 2026-11-04 00:30 helyi idő
+    expect(localISODate(d)).toBe('2026-11-04')
+    expect(localISODate(new Date(2026, 10, 3, 23, 59))).toBe('2026-11-03')
   })
 })

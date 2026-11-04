@@ -116,7 +116,11 @@ export function parseHuNumber(input: string): number {
 }
 
 export function todayISO(): string {
-  const now = new Date()
-  const tz = now.getTimezoneOffset() * 60000
-  return new Date(now.getTime() - tz).toISOString().slice(0, 10)
+  return localISODate(new Date())
+}
+
+// Egy időpont HELYI naptári napja (YYYY-MM-DD) — pl. a jelzés work_date-je a koppintás idejéből (LOG-38)
+export function localISODate(d: Date): string {
+  const tz = d.getTimezoneOffset() * 60000
+  return new Date(d.getTime() - tz).toISOString().slice(0, 10)
 }
