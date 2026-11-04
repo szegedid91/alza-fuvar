@@ -99,7 +99,7 @@ function InviteCard() {
     onError: (e) => setError(errMsg(e, 'A törlés nem sikerült')),
   })
 
-  const linkOf = (id: string) => `${window.location.origin}/meghivo/${id}`
+  const linkOf = (id: string) => `${window.location.origin}/meghivo#${id}` // SEC-24: a token a hash-ben — nem kerül szerver/CDN naplóba
 
   async function copyLink(id: string) {
     try {

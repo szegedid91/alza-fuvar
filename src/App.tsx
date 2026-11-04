@@ -73,7 +73,9 @@ export default function App() {
   const navigate = useNavigate()
 
   // Meghívó-oldal: bejelentkezés NÉLKÜL is elérhető (a token a jogosultság)
+  // SEC-24: az új linkek a tokent a hash-ben hozzák (/meghivo#uuid), a régi /meghivo/uuid alak is él
   const inviteMatch = pathname.match(/^\/meghivo\/([0-9a-f-]{36})$/i)
+    ?? (pathname === '/meghivo' ? window.location.hash.match(/^#([0-9a-f-]{36})$/i) : null)
   if (inviteMatch) return <InvitePage token={inviteMatch[1]} />
 
   if (loading) return <FullScreenSpinner />
