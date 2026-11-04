@@ -32,7 +32,7 @@ function RoutesCard() {
     mutationFn: async () => {
       const c = code.trim().toUpperCase()
       if (!c) return
-      const { error } = await supabase.from('route_names').insert({ workspace_id: currentWorkspaceId!, code: c, sort_order: (routes?.length ?? 0) + 1 })
+      const { error } = await supabase.from('route_names').insert({ workspace_id: currentWorkspaceId!, code: c, sort_order: (routes ?? []).reduce((m, r) => Math.max(m, r.sort_order ?? 0), 0) + 1 }) // LOG-43: törlés után se duplikáljon
       if (error) throw new Error(/duplicate|unique/i.test(error.message) ? 'Ez a járat már létezik' : error.message)
     },
     onSuccess: () => { setCode(''); invalidate() }, onError: fail,
