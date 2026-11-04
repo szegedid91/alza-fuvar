@@ -16,7 +16,9 @@ export const RECOVERY_URL_ERROR: string | null = (() => {
     return 'A jelszó-visszaállító link lejárt. Kérj újat a bejelentkezési oldalon.'
   }
   if (err === 'access_denied') return 'Ez a link már nem érvényes. Kérj újat a bejelentkezési oldalon.'
-  return params.get('error_description') ?? err
+  // SEC-17: az URL-ben érkező szabad szöveg (error_description) NEM kerül a felületre —
+  // egy hamis link tetszőleges „hivatalos” üzenetet mutathatna; csak fix szöveg
+  return 'A jelszó-visszaállító link nem érvényes. Kérj újat a bejelentkezési oldalon.'
 })()
 
 // A visszaállító útvonal — ide irányít az emailben lévő link

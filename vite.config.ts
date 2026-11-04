@@ -13,7 +13,9 @@ export default defineConfig(({ mode }) => ({
     // `npm run build`) mindig kimaradnak — akkor is, ha a gépen van .env.local.
     // Helyi előnézethez `npm run preview` (mode=preview) tartja meg őket; a panel
     // futásidőben csak localhoston jelenik meg (lásd src/lib/devAuth.ts).
-    ...(mode === 'production' ? { 'import.meta.env.VITE_DEV_ACCOUNTS': '""' } : {}),
+    // SEC-15: csak a dev szerver (mode=development) és a helyi preview (mode=preview) tartja meg
+    // őket; bármely más build-mód (production, staging, …) nélkülük készül
+    ...(mode === 'development' || mode === 'preview' ? {} : { 'import.meta.env.VITE_DEV_ACCOUNTS': '""' }),
   },
   plugins: [
     react(),

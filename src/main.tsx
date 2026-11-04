@@ -66,11 +66,17 @@ document.addEventListener('visibilitychange', () => {
 })
 
 const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'alza-query-cache' })
+// SEC-16: a képernyő-pillanatképek (help-session, akár 900 KB), az audit-napló (bér, telefon),
+// a hibajelentések és a bér NEM kerülnek a localStorage-be — közös telefonon ne maradjanak ott,
+// és egy nagy tétel ne lépje túl a kvótát (akkor a teljes offline cache elveszne)
+const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-history', 'feedback']
+const shouldDehydrateQuery = (q: { queryKey: readonly unknown[]; state: { status: string } }) =>
+  q.state.status === 'success' && !NO_PERSIST.some((k) => String(q.queryKey[0]).startsWith(k))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v5' }}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v5', dehydrateOptions: { shouldDehydrateQuery } }}>
         <BrowserRouter>
           <AuthProvider>
             <WorkspaceProvider>
