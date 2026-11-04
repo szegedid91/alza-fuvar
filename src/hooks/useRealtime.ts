@@ -18,8 +18,31 @@ export function useRealtimeInvalidate(channelId: string | null | undefined, tabl
         for (const key of queryKeys) void qc.invalidateQueries({ queryKey: key })
       })
     }
-    ch.subscribe()
-    return () => { void supabase.removeChannel(ch) }
+    const invalidateAll = () => { for (const key of queryKeys) void qc.invalidateQueries({ queryKey: key }) }
+    // Ha a csatorna elszakad (telefon háttérben, hálózatváltás), újra feliratkozunk, és a
+    // kimaradt eseményeket egy frissítéssel pótoljuk — a vezetőnek ne kelljen újratöltenie
+    let retry: ReturnType<typeof setTimeout> | null = null
+    let closed = false
+    const subscribe = () => ch.subscribe((status) => {
+      if (closed) return
+      if (status === 'SUBSCRIBED') invalidateAll()
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        if (retry) clearTimeout(retry)
+        retry = setTimeout(() => { if (!closed) subscribe() }, 3000)
+      }
+    })
+    subscribe()
+    // Előtérbe kerüléskor (háttérből vissza) mindig pótlás — a websocket közben alhatott
+    const onVisible = () => { if (document.visibilityState === 'visible') invalidateAll() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', invalidateAll)
+    return () => {
+      closed = true
+      if (retry) clearTimeout(retry)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', invalidateAll)
+      void supabase.removeChannel(ch)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, tables.join(','), JSON.stringify(queryKeys)])
 }

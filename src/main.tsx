@@ -59,6 +59,12 @@ const updateSW = registerSW({
 // Verzió-figyelő (SW-től független) — a telefon ne ragadjon a régi buildnél
 startVersionWatch(__BUILD_TIME__)
 
+// Előtérbe kerüléskor minden aktív lekérdezés frissül: a háttérben alvó app
+// (telefon) nem kapta meg a realtime eseményeket — ne kelljen kézzel újratölteni
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine) void queryClient.invalidateQueries({ refetchType: 'active' })
+})
+
 const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'alza-query-cache' })
 
 createRoot(document.getElementById('root')!).render(
