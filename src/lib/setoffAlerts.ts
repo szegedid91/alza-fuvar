@@ -48,3 +48,30 @@ export function nextNewRule(existing: { deadline: string; scope: AlertScope }[])
 export function isDuplicateRule(rules: { id: string; deadline: string; scope: AlertScope }[], id: string | null, deadline: string, scope: AlertScope): boolean {
   return rules.some((r) => r.id !== id && normalizeDeadline(r.deadline) === normalizeDeadline(deadline) && r.scope === scope)
 }
+
+// ---- Futó riasztás (hangos szabály): a riasztó-képernyő adatai ----
+export interface AlarmPerson { id: string; name: string; plate: string | null; route: string | null; round: number | null }
+export interface SetOffAlarm { id: string; fired_at: string; deadline: string; missing: unknown; ended_reason: string | null }
+
+// Mely riasztásokat kell mutatni: a le nem zártak közül azokat, amelyek nem oldódtak meg maguktól
+// (közben mindenki elindult), és 3 óránál nem régebbiek
+export function activeAlarms<T extends SetOffAlarm>(rows: T[], now = Date.now()): T[] {
+  return rows.filter((a) => a.ended_reason !== 'resolved' && now - new Date(a.fired_at).getTime() < 3 * 3_600_000)
+}
+
+// A hiányzók egy listában (több szabály ugyanazt az embert is jelezheti — egyszer szerepeljen)
+export function alarmPeople(alarms: SetOffAlarm[]): AlarmPerson[] {
+  const seen = new Map<string, AlarmPerson>()
+  for (const a of alarms) {
+    if (!Array.isArray(a.missing)) continue
+    for (const m of a.missing as Record<string, unknown>[]) {
+      if (!m || typeof m.id !== 'string' || seen.has(m.id)) continue
+      seen.set(m.id, {
+        id: m.id, name: typeof m.name === 'string' && m.name ? m.name : 'Munkatárs',
+        plate: typeof m.plate === 'string' ? m.plate : null, route: typeof m.route === 'string' ? m.route : null,
+        round: typeof m.round === 'number' ? m.round : null,
+      })
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'hu'))
+}

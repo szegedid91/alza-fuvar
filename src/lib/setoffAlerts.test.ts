@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, type AlertScope } from './setoffAlerts'
+import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, activeAlarms, alarmPeople, type AlertScope } from './setoffAlerts'
 
 describe('„nem indult el” riasztás — szabály-segédek', () => {
   it('határidő egységes alakja (az adatbázis másodperccel adja vissza)', () => {
@@ -25,5 +25,24 @@ describe('„nem indult el” riasztás — szabály-segédek', () => {
     expect(isDuplicateRule(rules, 'b', '05:00', 'all')).toBe(true)
     expect(isDuplicateRule(rules, 'a', '05:00', 'all')).toBe(false)
     expect(isDuplicateRule(rules, null, '05:00', 'xl')).toBe(false)
+  })
+})
+
+describe('futó riasztás — mit mutat a riasztó-képernyő', () => {
+  const now = new Date('2026-11-06T05:10:00Z').getTime()
+  const alarm = (over: Record<string, unknown>) => ({ id: 'a', fired_at: '2026-11-06T05:00:00Z', deadline: '05:00:00', ended_reason: null, missing: [], ...over })
+  it('a magától megoldódott és a 3 óránál régebbi riasztás nem jelenik meg; a lejárt (senki nem nyitotta meg) igen', () => {
+    const rows = [alarm({ id: '1' }), alarm({ id: '2', ended_reason: 'resolved' }), alarm({ id: '3', ended_reason: 'expired' }), alarm({ id: '4', fired_at: '2026-11-06T01:00:00Z' })]
+    expect(activeAlarms(rows, now).map((a) => a.id)).toEqual(['1', '3'])
+  })
+  it('a hiányzók egyszer szerepelnek, névsorban; a hibás elemeket kihagyja', () => {
+    const people = alarmPeople([
+      alarm({ missing: [{ id: 'u2', name: 'Nagy Gábor', plate: 'AUFS-312', route: 'G', round: 1 }, { id: 'u1', name: 'Császár Dávid', plate: 'LOD-483' }] }),
+      alarm({ missing: [{ id: 'u2', name: 'Nagy Gábor' }, null, { name: 'azonosító nélkül' }] }),
+      alarm({ missing: 'nem lista' }),
+    ])
+    expect(people.map((p) => p.name)).toEqual(['Császár Dávid', 'Nagy Gábor'])
+    expect(people[1]).toMatchObject({ plate: 'AUFS-312', route: 'G', round: 1 })
+    expect(people[0]).toMatchObject({ route: null, round: null })
   })
 })

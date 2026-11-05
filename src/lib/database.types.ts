@@ -1907,6 +1907,57 @@ export type Database = {
           },
         ]
       }
+      setoff_alarms: {
+        Row: {
+          deadline: string
+          dismissed_at: string | null
+          ended_reason: string | null
+          fired_at: string
+          id: string
+          last_push_at: string
+          missing: Json
+          push_count: number
+          rule_id: string
+          scope: string
+          seen_at: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          deadline: string
+          dismissed_at?: string | null
+          ended_reason?: string | null
+          fired_at?: string
+          id?: string
+          last_push_at?: string
+          missing?: Json
+          push_count?: number
+          rule_id: string
+          scope: string
+          seen_at?: string | null
+          user_id: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          deadline?: string
+          dismissed_at?: string | null
+          ended_reason?: string | null
+          fired_at?: string
+          id?: string
+          last_push_at?: string
+          missing?: Json
+          push_count?: number
+          rule_id?: string
+          scope?: string
+          seen_at?: string | null
+          user_id?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       setoff_alert_rules: {
         Row: {
           created_at: string
@@ -2506,6 +2557,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      setoff_alarms_dismiss: { Args: never; Returns: number }
+      setoff_alarms_seen: { Args: never; Returns: number }
       set_user_status: {
         Args: {
           p_status: Database["public"]["Enums"]["user_status"]

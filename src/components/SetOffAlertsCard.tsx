@@ -120,7 +120,7 @@ export default function SetOffAlertsCard() {
           </div>
           <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tabs" style={{ margin: 0, flex: 1, minWidth: 180 }}>
-              <button type="button" className={r.loud ? 'active' : ''} aria-pressed={r.loud} disabled={busy} onClick={() => { if (!r.loud) patch.mutate({ id: r.id, values: { loud: true } }) }}><Icon name="bell" size={16} />Hangos</button>
+              <button type="button" className={r.loud ? 'active' : ''} aria-pressed={r.loud} disabled={busy} onClick={() => { if (!r.loud) patch.mutate({ id: r.id, values: { loud: true } }) }}><Icon name="bell" size={16} />Hangos riasztás</button>
               <button type="button" className={!r.loud ? 'active' : ''} aria-pressed={!r.loud} disabled={busy} onClick={() => { if (r.loud) patch.mutate({ id: r.id, values: { loud: false } }) }}><Icon name="moon" size={16} />Néma</button>
             </div>
             <button type="button" className={`btn sm auto ${r.enabled ? 'secondary' : 'ghost'}`} aria-pressed={r.enabled} disabled={busy}
@@ -139,8 +139,10 @@ export default function SetOffAlertsCard() {
       </button>
       <p className="tiny muted" style={{ margin: 0 }}>
         Több riasztás is felvehető (pl. 23:30 az éjszakai Box-körre, 05:00 a hajnalira). Az időpont budapesti idő; az adott naptári nap
-        beosztását nézi. „Hangos”: hanggal és hosszú rezgéssel, a képernyőn marad. „Néma”: hang és rezgés nélkül érkezik.
-        iPhone-on a hangot a telefon értesítési beállítása határozza meg.
+        beosztását nézi. „Hangos”: riasztás — 20 másodpercenként újra szól (hang és rezgés), amíg meg nem nyitod az appot,
+        legfeljebb 30 percig; az appban villogó, csipogó riasztó-képernyő fogad a hiányzók nevével és hívás-gombbal. Ha közben
+        mindenki elindul, magától leáll. „Néma”: egyetlen értesítés hang és rezgés nélkül. A telefon ne legyen lenémítva vagy
+        „Ne zavarjanak” módban — azt a riasztás nem tudja felülírni.
       </p>
     </div>
   )

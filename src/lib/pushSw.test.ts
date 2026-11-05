@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 
 // A service worker push-kezelője (public/push-sw.js) sima szkript — itt egy ál-`self`-fel futtatjuk,
 // és azt nézzük, milyen beállításokkal jelenne meg az értesítés.
+let lastWait: Promise<unknown> = Promise.resolve()
+let clientMessages: unknown[] = []
 function showFor(data: unknown): { title: string; options: Record<string, unknown> } {
   const src = readFileSync(resolve(__dirname, '../../public/push-sw.js'), 'utf8')
   const handlers: Record<string, (e: unknown) => void> = {}
@@ -11,9 +13,11 @@ function showFor(data: unknown): { title: string; options: Record<string, unknow
   const self = {
     addEventListener: (name: string, fn: (e: unknown) => void) => { handlers[name] = fn },
     registration: { showNotification: (title: string, options: Record<string, unknown>) => { shown = { title, options }; return Promise.resolve() } },
+    clients: { matchAll: () => Promise.resolve([{ postMessage: (m: unknown) => { clientMessages.push(m) } }, { postMessage: () => { throw new Error('bezárt ablak') } }]) },
   }
+  clientMessages = []
   new Function('self', src)(self)
-  handlers.push({ data: { json: () => data }, waitUntil: () => undefined })
+  handlers.push({ data: { json: () => data }, waitUntil: (p: Promise<unknown>) => { lastWait = p } })
   if (!shown) throw new Error('nem jelent meg értesítés')
   return shown
 }
@@ -39,5 +43,18 @@ describe('push-sw — az értesítés megjelenése', () => {
   })
   it('hibás csomag sem akad el: alapértelmezett cím', () => {
     expect(showFor(null).title).toBe('Alza')
+  })
+})
+
+describe('push-sw — riasztásnál a nyitott app azonnal értesül', () => {
+  it('riasztás: üzenet minden nyitott ablaknak (a hibás ablak nem akasztja meg)', async () => {
+    showFor({ title: 'x', alarm: true, tag: 'setoff-1' })
+    await lastWait
+    expect(clientMessages).toEqual([{ type: 'setoff-alarm' }])
+  })
+  it('sima értesítésnél nincs üzenet az appnak', async () => {
+    showFor({ title: 'x' })
+    await lastWait
+    expect(clientMessages).toEqual([])
   })
 })

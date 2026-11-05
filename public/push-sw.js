@@ -4,12 +4,21 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {} } catch (e) { data = {} }
   if (!data || typeof data !== 'object') data = {}
   const title = data.title || 'Alza'
-  event.waitUntil(self.registration.showNotification(title, notificationOptions(data)))
+  const shown = self.registration.showNotification(title, notificationOptions(data))
+  // Riasztásnál a nyitva lévő app is azonnal megtudja (nem a következő lekérdezéskor): ott villogó,
+  // csipogó riasztó-képernyő jelenik meg
+  const notifyOpenApp = data.alarm === true && self.clients && self.clients.matchAll
+    ? self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((list) => { for (const c of list) { try { c.postMessage({ type: 'setoff-alarm' }) } catch (e) { /* bezárt ablak */ } } })
+        .catch(() => undefined)
+    : Promise.resolve()
+  event.waitUntil(Promise.all([shown, notifyOpenApp]))
 })
 
 // Az értesítés megjelenése a küldő jelzői szerint:
 //  silent — hang és rezgés nélkül (a „néma” riasztás); a silent mellé rezgés NEM adható meg
-//  alarm  — hangos riasztás: hosszabb rezgés, és a képernyőn marad, amíg rá nem koppintanak
+//  alarm  — riasztás: hosszú rezgés, a képernyőn marad, amíg rá nem koppintanak; a szerver
+//           20 mp-enként újraküldi, amíg az appot meg nem nyitják (a címke miatt mindig újra szól)
 //  tag    — az azonos címkéjű értesítés az előzőt váltja (hangosnál újra jelez)
 function notificationOptions(data) {
   const options = {
@@ -21,7 +30,7 @@ function notificationOptions(data) {
   if (data.silent === true) {
     options.silent = true
   } else if (data.alarm === true) {
-    options.vibrate = [300, 120, 300, 120, 300, 120, 600]
+    options.vibrate = [600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 1200]
     options.requireInteraction = true
   } else {
     options.vibrate = [80, 40, 80]
