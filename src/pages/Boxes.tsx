@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
@@ -7,7 +7,7 @@ import { getCurrentPosition, distanceMeters } from '../lib/geo'
 import { searchBoxes, formatDistance, type AlzaBox } from '../lib/boxSheet'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
-import { batchStartFromRows } from '../lib/boxImport'
+import { batchStartFromRows, boxSyncStatus } from '../lib/boxImport'
 import BoxCard from '../components/BoxCard'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
@@ -128,6 +128,18 @@ function ImportCard() {
   const [text, setText] = useState('')
   const [result, setResult] = useState<string | null>(null)
 
+  // Az automatikus (napi) frissítés utolsó futása — amíg nincs hivatalos Alza API, egy ütemezett
+  // böngészős futás gyűjti be a listát az alza.hu-ról
+  const { data: lastSync, isSuccess: syncLoaded } = useQuery({
+    queryKey: ['box-sync-last'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('box_sync_runs').select('ran_at, ok, listed, added, deactivated, note').order('ran_at', { ascending: false }).limit(1)
+      if (error) throw error
+      return data?.[0] ?? null
+    },
+  })
+  const sync = syncLoaded ? boxSyncStatus(lastSync, formatDateTime) : null
+
   const run = useMutation({
     mutationFn: async () => {
       let rows: ImportRow[]
@@ -177,10 +189,15 @@ function ImportCard() {
         <div className="card-title" style={{ margin: 0 }}><Icon name="upload" />Jegyzék frissítése (alza.hu)</div>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
       </button>
+      {sync && (
+        <div className={sync.tone === 'error' ? 'alert error' : sync.tone === 'warn' ? 'alert info' : 'tiny muted'} style={sync.tone === 'ok' ? undefined : { fontSize: 13 }}>
+          {sync.tone === 'ok' && <Icon name="refresh" size={13} style={{ verticalAlign: -2, marginRight: 4 }} />}{sync.text}
+        </div>
+      )}
       {open && (
         <>
           <p className="tiny muted" style={{ margin: 0 }}>
-            Az alza.hu-ról begyűjtött AlzaBox-lista (JSON) beillesztése. Új boxok bekerülnek, a meglévők frissülnek
+            A jegyzék naponta magától frissül az alza.hu-ról. Kézi frissítés: az alza.hu-ról begyűjtött AlzaBox-lista (JSON) beillesztése. Új boxok bekerülnek, a meglévők frissülnek
             (név, cím, GPS, „hol található" leírás, fotó), a listából hiányzók inaktívvá válnak. A saját megjegyzések megmaradnak.
           </p>
           <textarea className="textarea" rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder='[{"psid":1122884,"name":"…","address":"…","lat":47.6,"lng":16.5,"code":"AB9455","desc":"…"}]' />

@@ -93,6 +93,7 @@ export type Database = {
           code: string | null
           created_at: string
           description: string | null
+          details_checked_at: string | null
           id: string
           lat: number | null
           lng: number | null
@@ -109,6 +110,7 @@ export type Database = {
           code?: string | null
           created_at?: string
           description?: string | null
+          details_checked_at?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
@@ -125,6 +127,7 @@ export type Database = {
           code?: string | null
           created_at?: string
           description?: string | null
+          details_checked_at?: string | null
           id?: string
           lat?: number | null
           lng?: number | null
@@ -133,6 +136,42 @@ export type Database = {
           parcel_shop_id?: number | null
           photo_url?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      box_sync_runs: {
+        Row: {
+          added: number | null
+          deactivated: number | null
+          details: number | null
+          id: string
+          listed: number | null
+          note: string | null
+          ok: boolean
+          ran_at: string
+          source: string
+        }
+        Insert: {
+          added?: number | null
+          deactivated?: number | null
+          details?: number | null
+          id?: string
+          listed?: number | null
+          note?: string | null
+          ok?: boolean
+          ran_at?: string
+          source?: string
+        }
+        Update: {
+          added?: number | null
+          deactivated?: number | null
+          details?: number | null
+          id?: string
+          listed?: number | null
+          note?: string | null
+          ok?: boolean
+          ran_at?: string
+          source?: string
         }
         Relationships: []
       }
