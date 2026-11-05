@@ -14,7 +14,7 @@ import { WorkspaceProvider } from './context/WorkspaceContext'
 import { queryClient } from './lib/queryClient'
 import { initTheme } from './lib/theme'
 import { installGlobalErrorHandlers } from './lib/errorReport'
-import { setPendingUpdate, forceUpdate, startVersionWatch } from './lib/swUpdate'
+import { setPendingUpdate, forceUpdate, startVersionWatch, healBrokenPrecache } from './lib/swUpdate'
 import ErrorBoundary from './components/ErrorBoundary'
 import Toaster from './components/Toaster'
 import UpdateBanner from './components/UpdateBanner'
@@ -58,6 +58,8 @@ registerSW({
 // léptetni kell — különben a régi mentett cache összeakad az új kóddal.
 // Verzió-figyelő (SW-től független) — a telefon ne ragadjon a régi buildnél
 startVersionWatch(__BUILD_TIME__)
+// Sérült előtöltött gyorsítótár (hiányzó kezdőlap) helyreállítása — különben offline nem indulna az app
+void healBrokenPrecache()
 
 // Előtérbe kerüléskor minden aktív lekérdezés frissül: a háttérben alvó app
 // (telefon) nem kapta meg a realtime eseményeket — ne kelljen kézzel újratölteni

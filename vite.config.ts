@@ -50,6 +50,15 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         globIgnores: ['**/version.json'],
         importScripts: ['/push-sw.js'], // Web Push kezelők
+        // A kezdőlap '/' néven kerül a gyorsítótárba (nem 'index.html'-ként): a Cloudflare Pages az
+        // /index.html-t átirányítja a '/'-re, és ha a gyorsítótárból valamiért hiányzik a kezdőlap,
+        // a service worker hálózati tartaléka átirányított választ kapna — azt a böngésző oldal-
+        // betöltésre nem fogadja el („a webhely nem érhető el”). A '/' közvetlenül, átirányítás
+        // nélkül jön, így hiány esetén is betölt az oldal a hálózatról.
+        navigateFallback: '/',
+        manifestTransforms: [
+          (entries) => ({ manifest: entries.map((e) => (e.url === 'index.html' ? { ...e, url: '/' } : e)), warnings: [] }),
+        ],
         navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
         runtimeCaching: [
           {
