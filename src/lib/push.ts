@@ -47,7 +47,10 @@ export async function subscribePush(userId: string): Promise<void> {
 
 export async function unsubscribePush(): Promise<void> {
   if (!pushSupported()) return
-  const reg = await navigator.serviceWorker.ready
+  // getRegistration, nem .ready: ha nincs regisztrált service worker (sikertelen telepítés, helyi
+  // fejlesztés), a .ready SOSEM teljesül, és a kijelentkezés örökre várakozna rá
+  const reg = await navigator.serviceWorker.getRegistration()
+  if (!reg) return
   const sub = await reg.pushManager.getSubscription()
   if (sub) {
     // SEC-03: közös telefonon a böngésző-feliratkozás AKKOR IS szűnjön meg, ha a DB-sor törlése
