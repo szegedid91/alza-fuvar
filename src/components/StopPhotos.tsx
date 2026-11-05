@@ -6,14 +6,14 @@ import { uploadPhoto, signedUrl } from '../lib/photos'
 import { sharePhotos, canShareFiles } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
+import { MAX_STOP_PHOTOS, aiPhotoPaths, photoLabel } from '../lib/stopPhotos'
 import PhotoSlot, { type CapturedPhoto } from './PhotoSlot'
-
-type Shot = CapturedPhoto & { path?: string }
+import CameraCapture from './CameraCapture'
 import PhotoThumb from './PhotoThumb'
 import Icon from './Icon'
 import { errMsg } from '../lib/errors'
 
-const MAX = 4
+type Shot = CapturedPhoto & { path?: string }
 type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[]; screen?: string | null; confidence?: number | null; note?: string | null }
 
 // A box kijelzőjének fotói az appban: a kép az adatbázisba kerül, az AI kiolvassa a
@@ -24,9 +24,11 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
 }) {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
-  const [photos, setPhotos] = useState<(Shot | null)[]>([null])
+  // a most készített fotók; új fotónál a kamera EGY koppintásra nyílik (nincs üres hely, amire újra rá kell nyomni)
+  const [photos, setPhotos] = useState<Shot[]>([])
+  const [camOpen, setCamOpen] = useState(false)
   const [ai, setAi] = useState<AiResult | null>(null)
-  const taken = photos.filter((p): p is Shot => !!p)
+  const taken = photos
   const shareOk = canShareFiles()
 
   // A korábban feltöltött képek blobjai a WhatsApp-megosztáshoz (előre letöltve — a megosztást
@@ -65,22 +67,20 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
     mutationFn: async () => {
       if (!currentWorkspaceId || !hasAny) return null
       // csak a még fel nem töltött fotók mennek fel (újbóli kiolvasásnál nem duplázódnak)
-      const paths: string[] = []
-      const next = [...photos]
-      for (let i = 0; i < next.length; i++) {
-        const p = next[i]
-        if (!p) continue
-        if (p.path) { paths.push(p.path); continue }
+      const fresh: string[] = []
+      for (const p of photos) {
+        if (p.path) { fresh.push(p.path); continue }
         const id = crypto.randomUUID()
         const path = await uploadPhoto(currentWorkspaceId, `boxsheet/${stop.id}`, id, p.blob)
         const { error } = await supabase.from('box_sheet_stop_photos').insert({ id, workspace_id: currentWorkspaceId, stop_id: stop.id, storage_path: path })
         if (error) throw error
-        next[i] = { ...p, path }
-        paths.push(path)
+        // helyben jelöljük feltöltöttnek (közben készülhetett újabb fotó — azt nem írjuk felül)
+        setPhotos((prev) => prev.map((x) => (x === p ? { ...x, path } : x)))
+        fresh.push(path)
       }
-      setPhotos(next)
-      for (const sp of savedPaths) if (!paths.includes(sp)) paths.push(sp)
-      const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths: paths.slice(-4), box: stop.box_code ?? boxLabel } })
+      // a kiolvasó a legfrissebb képeket kapja (a korábban feltöltöttek elöl, a mostaniak a végén)
+      const paths = aiPhotoPaths(fresh, savedPaths)
+      const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths, box: stop.box_code ?? boxLabel } })
       if (error) {
         // a függvény hibaüzenete a válasz törzsében van
         let msg = error.message
@@ -131,14 +131,24 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
       <div className="small" style={{ fontWeight: 700 }}><Icon name="camera" size={16} style={{ verticalAlign: -3 }} /> Fotó a box kijelzőjéről</div>
       <div className="grid-3" style={{ gap: 6 }}>
         {photos.map((p, i) => (
-          <PhotoSlot key={i} label={i === 0 ? 'Kijelző' : `${i + 1}. fotó`} photo={p} onCapture={(cp) => { setAi(null); setPhotos((prev) => prev.map((x, j) => (j === i ? cp : x))) }} />
+          <PhotoSlot key={i} label={photoLabel(i)} photo={p} onCapture={(cp) => { setAi(null); setPhotos((prev) => prev.map((x, j) => (j === i ? cp : x))) }} />
         ))}
-        {photos.length < MAX && taken.length === photos.length && (
-          <button type="button" className="thumb thumb-empty" style={{ cursor: 'pointer', color: 'var(--primary)' }} onClick={() => setPhotos((prev) => [...prev, null])}>
-            <div style={{ textAlign: 'center' }}><Icon name="plus" size={24} /><div className="tiny">még egy fotó</div></div>
+        {photos.length < MAX_STOP_PHOTOS && (
+          <button type="button" className="thumb thumb-empty" style={{ cursor: 'pointer', color: photos.length ? 'var(--primary)' : undefined }} onClick={() => setCamOpen(true)}>
+            <div style={{ textAlign: 'center' }}>
+              <Icon name={photos.length ? 'plus' : 'camera'} size={photos.length ? 24 : 28} />
+              <div className="tiny" style={{ marginTop: photos.length ? 0 : 4 }}>{photos.length ? 'még egy fotó' : photoLabel(0)}</div>
+            </div>
           </button>
         )}
       </div>
+      {camOpen && (
+        <CameraCapture
+          title={photoLabel(photos.length)}
+          onCancel={() => setCamOpen(false)}
+          onCapture={(blob, previewUrl) => { setAi(null); setPhotos((prev) => [...prev, { blob, previewUrl }]); setCamOpen(false) }}
+        />
+      )}
       {hasAny && (
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm" style={{ flex: 1 }} disabled={read.isPending} onClick={() => read.mutate()}>

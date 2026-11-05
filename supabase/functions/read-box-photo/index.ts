@@ -10,6 +10,7 @@ const json = (b: unknown, status = 200) =>
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 const MODEL = Deno.env.get('BOX_PHOTO_MODEL') ?? 'claude-haiku-5-5'
 const DAILY_LIMIT = 150 // kiolvasás / felhasználó / nap (kb. 40 box × 3-4 próba)
+const MAX_IMAGES = 8 // ennyi (a legfrissebb) képet kap meg a modell egy kiolvasáshoz
 const PATH_RE = /^[0-9a-f-]{36}\/boxsheet\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/
 // SEC-25: a napi keret a BUDAPESTI nap szerint számol (a takarító cron is ezt nézi), nem UTC szerint
 const budapestDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' }).format(new Date())
@@ -23,6 +24,21 @@ const SCHEMA = {
     codes: { type: 'array', items: { type: 'string' } }, screen: { type: ['string', 'null'] }, confidence: { type: ['number', 'null'] }, note: { type: ['string', 'null'] },
   },
   required: ['placed', 'shortage', 'nf', 'oversize', 'missorted', 'returned', 'damaged', 'left_on_car', 'codes', 'screen', 'confidence', 'note'],
+}
+
+// Csonka JSON-ból a már kiírt mezők kinyerése: "placed":35, "shortage":null, "codes":["1610608725", …
+function salvage(text: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const f of FIELDS) {
+    const m = text.match(new RegExp(`"${f}"\\s*:\\s*(-?\\d+)`))
+    if (m) out[f] = parseInt(m[1], 10)
+  }
+  const codes = text.match(/"codes"\s*:\s*\[([^\]]*)/)
+  if (codes) { const list = [...codes[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]); if (list.length) out.codes = list }
+  const screen = text.match(/"screen"\s*:\s*"([^"]*)"/)
+  if (screen) out.screen = screen[1]
+  if (Object.keys(out).length) out.note = 'A kiolvasás félbeszakadt — ellenőrizd a számokat a képen.'
+  return out
 }
 
 Deno.serve(async (req: Request) => {
@@ -48,7 +64,7 @@ Deno.serve(async (req: Request) => {
 
   let payload: { paths?: unknown; box?: unknown; debug?: unknown }
   try { payload = await req.json() } catch { return json({ error: 'érvénytelen kérés' }, 400) }
-  const rawPaths = Array.isArray(payload.paths) ? (payload.paths as unknown[]).filter((p): p is string => typeof p === 'string').slice(0, 4) : []
+  const rawPaths = Array.isArray(payload.paths) ? (payload.paths as unknown[]).filter((p): p is string => typeof p === 'string').slice(-MAX_IMAGES) : []
   if (rawPaths.length === 0) return json({ error: 'nincs kép' }, 400)
   // szigorú minta + saját munkaterület + létező box-fotó sor (nem tetszőleges fájl)
   if (rawPaths.some((p) => !PATH_RE.test(p) || p.includes('..') || !ws.has(p.split('/')[0]))) return json({ error: 'Nincs jogosultság a képekhez' }, 403)
@@ -85,7 +101,8 @@ Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: MODEL, max_tokens: 800, system,
+      // a modell a válasz előtt gondolkodik is: szűk kerettel a JSON félbevágva (vagy meg sem) érkezett
+      model: MODEL, max_tokens: 4000, system,
       output_config: { effort: 'low', format: { type: 'json_schema', schema: SCHEMA } },
       messages: [{ role: 'user', content: [...images, { type: 'text', text: userText }] }],
     }),
@@ -102,7 +119,11 @@ Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 
   const m = cleaned.match(/\{[\s\S]*\}/)
   let parsed: Record<string, unknown> = {}
   try { parsed = m ? JSON.parse(m[0]) : {} } catch { parsed = {} }
-  if (Object.keys(parsed).length === 0) console.error('no json in response', out.stop_reason, text.slice(0, 300))
+  if (Object.keys(parsed).length === 0) {
+    // félbevágott válasz: ami szám már leíródott, azt megmentjük (a többi mező üres marad)
+    parsed = salvage(cleaned)
+    console.error('no json in response', out.stop_reason, Object.keys(parsed).length ? 'salvaged ' + Object.keys(parsed).join(',') : '', text.slice(0, 300))
+  }
   const result: Record<string, unknown> = { codes: Array.isArray(parsed.codes) ? parsed.codes.map(String).slice(0, 60) : [], screen: parsed.screen ?? null, confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null, note: parsed.note ?? null }
   for (const f of FIELDS) { const v = parsed[f]; result[f] = typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : null }
   console.log('read-box-photo ok', MODEL, Date.now() - started, 'ms', JSON.stringify(out.usage ?? {}))
