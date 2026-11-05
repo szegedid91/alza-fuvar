@@ -104,7 +104,8 @@ export async function startHelpShare(workspaceId: string, userId: string, note: 
   }).select('id').single()
   if (error || !data) { set({ error: (error as { message?: string } | null)?.message ?? 'A segítségkérés nem indult el' }); throw error ?? new Error('insert failed') }
   const id = data.id as string
-  channel = supabase.channel(`help:${id}`, { config: { broadcast: { self: false } } })
+  // SEC-02: privát csatorna — csak a kérő és a munkaterület vezetői csatlakozhatnak (realtime.messages RLS)
+  channel = supabase.channel(`help:${id}`, { config: { private: true, broadcast: { self: false } } })
   channel
     .on('broadcast', { event: 'hello' }, () => { set({ watching: true }); lastSig = ''; void tick() })
     .on('broadcast', { event: 'bye' }, () => set({ watching: false }))

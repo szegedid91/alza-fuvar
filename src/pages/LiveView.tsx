@@ -100,7 +100,8 @@ function Viewer({ id }: { id: string }) {
   // Csatorna: a futár kockái; belépéskor „hello” (nála „a vezető nézi” lesz)
   useEffect(() => {
     if (!session || ended) return
-    const ch = supabase.channel(`help:${id}`, { config: { broadcast: { self: false } } })
+    // SEC-02: privát csatorna (a szerver a munkaterület-hozzáférést ellenőrzi csatlakozáskor)
+    const ch = supabase.channel(`help:${id}`, { config: { private: true, broadcast: { self: false } } })
     ch.on('broadcast', { event: 'frame' }, ({ payload }) => { const f = parseHelpFrame(payload); if (f) { setFrame(f); setLive(true) } })
       .on('broadcast', { event: 'ended' }, () => { setLive(false); void qc.invalidateQueries({ queryKey: ['help-session', id] }) })
       .subscribe((status) => { if (status === 'SUBSCRIBED') void ch.send({ type: 'broadcast', event: 'hello', payload: {} }) })
