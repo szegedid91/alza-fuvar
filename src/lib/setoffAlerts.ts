@@ -83,6 +83,6 @@ export interface CallStatus { configured: boolean; phone: string | null }
 export function callProblem(st: CallStatus | null | undefined): string | null {
   if (!st) return null
   if (!st.configured) return 'A telefonhívás még nincs bekötve (a telefonos szolgáltató kulcsai hiányoznak) — addig csak az értesítés szól.'
-  if (!st.phone) return 'Nincs megadva hívható magyar mobilszámod — írd be fent (pl. +36 30 123 4567), különben a hívás nem indul el.'
+  if (!st.phone) return 'Nincs megadva hívható magyar mobilszámod — az „Adataim” résznél add meg (pl. +36 30 123 4567), különben a hívás nem indul el.'
   return null
 }

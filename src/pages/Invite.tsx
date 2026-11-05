@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { normalizePhone, PHONE_PLACEHOLDER, PHONE_ERROR } from '../lib/phone'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { roleLabel } from '../lib/labels'
@@ -25,6 +26,7 @@ export default function InvitePage({ token }: { token: string }) {
   const [password2, setPassword2] = useState('')
   // Email nélküli meghívónál a meghívott adja meg
   const [emailIn, setEmailIn] = useState('')
+  const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'form' | 'signing-in'>('form')
@@ -61,13 +63,16 @@ export default function InvitePage({ token }: { token: string }) {
     if (password !== password2) { setError('A két jelszó nem egyezik.'); return }
     const email = (info.email ?? emailIn).trim().toLowerCase()
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('Adj meg egy érvényes email-címet.'); return }
+    // Telefonszám nélkül nincs regisztráció — a vezetők ezen érik el a munkatársat
+    const phoneE164 = normalizePhone(phone)
+    if (!phoneE164) { setError(PHONE_ERROR); return }
     if (busy) return
     setBusy(true) // LOG-44: a hálózati jelszó-ellenőrzés alatt se mehessen el két beváltás
     try {
       const leak = await isPasswordPwned(password)
       if (leak.pwned) { setError(PWNED_MESSAGE); return }
       const { data, error } = await supabase.functions.invoke('redeem-invite', {
-        body: { action: 'redeem', token, password, email },
+        body: { action: 'redeem', token, password, email, phone: phoneE164 },
       })
       if (error) {
         try {
@@ -142,6 +147,11 @@ export default function InvitePage({ token }: { token: string }) {
               </div>
             )}
             <div className="field">
+              <label htmlFor="iph">Telefonszámod</label>
+              <input id="iph" className="input" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} autoComplete="tel" />
+              <div className="tiny muted">Kötelező — a vezetők ezen érnek el. Később a Profilodban módosíthatod.</div>
+            </div>
+            <div className="field">
               <label htmlFor="ip">Jelszó</label>
               <div className="input-icon input-icon-right">
                 <input id="ip" className="input" type={show ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
@@ -159,7 +169,7 @@ export default function InvitePage({ token }: { token: string }) {
               {password2 && password === password2 && password.length >= 8 && <div className="tiny" style={{ color: 'var(--success-text)' }}>Egyezik.</div>}
             </div>
             {error && <div className="alert error row" style={{ gap: 8, alignItems: 'flex-start' }}><Icon name="alert-circle" style={{ flexShrink: 0 }} /><span>{error}</span></div>}
-            <button className="btn" disabled={busy || !password || !password2 || (!info.email && !emailIn.trim())} onClick={() => void redeem()}>
+            <button className="btn" disabled={busy || !password || !password2 || !phone.trim() || (!info.email && !emailIn.trim())} onClick={() => void redeem()}>
               <Icon name="log-in" />
               {phase === 'signing-in' ? 'Belépés…' : busy ? 'Fiók létrehozása…' : 'Jelszó beállítása és belépés'}
             </button>

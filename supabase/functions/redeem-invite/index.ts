@@ -17,11 +17,24 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
+// Telefonszám egységes +ország… alakra (ugyanaz a szabály, mint a kliensben és a DB clean_phone-ban)
+function cleanPhone(input: unknown): string | null {
+  if (typeof input !== 'string') return null
+  let d = input.replace(/[^\d+]/g, '')
+  if (d.startsWith('+')) d = '+' + d.slice(1).replace(/\+/g, '')
+  else if (d.startsWith('00')) d = '+' + d.slice(2)
+  else if (d.startsWith('06')) d = '+36' + d.slice(2)
+  else if (/^(20|30|31|50|70)\d{7}$/.test(d)) d = '+36' + d
+  else if (/^36(20|30|31|50|70)\d{7}$/.test(d)) d = '+' + d
+  else return null
+  return /^\+[1-9]\d{7,14}$/.test(d) ? d : null
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  let payload: { action?: string; token?: string; password?: string; email?: string }
+  let payload: { action?: string; token?: string; password?: string; email?: string; phone?: string }
   try { payload = await req.json() } catch { return json({ error: 'Érvénytelen kérés' }, 400) }
   const token = (payload.token ?? '').trim()
   if (!UUID_RE.test(token)) return json({ error: 'Érvénytelen meghívó' }, 400)
@@ -44,6 +57,9 @@ Deno.serve(async (req: Request) => {
     if (password.length < 8) return json({ error: 'A jelszó legalább 8 karakter legyen' }, 400)
     const email = (inv.email ?? payload.email ?? '').trim().toLowerCase()
     if (!EMAIL_RE.test(email)) return json({ error: 'Adj meg egy érvényes email-címet' }, 400)
+    // Telefonszám nélkül nincs regisztráció — a vezetők ezen érik el a munkatársat
+    const phone = cleanPhone(payload.phone)
+    if (!phone) return json({ error: 'Add meg a telefonszámodat (pl. +36 30 123 4567). Ha nem látsz ilyen mezőt, töltsd újra az oldalt.' }, 400)
 
     // 1) foglalás: csak ha még szabad és érvényes (párhuzamos beváltás ellen)
     const { data: claimed, error: claimErr } = await admin.from('invites')
@@ -58,7 +74,7 @@ Deno.serve(async (req: Request) => {
     let createdNow = false
     if (inv.placeholder_id) {
       const { data: upd, error: uErr } = await admin.auth.admin.updateUserById(inv.placeholder_id, {
-        email, password, email_confirm: true, user_metadata: { full_name: inv.full_name ?? email, placeholder: false },
+        email, password, email_confirm: true, user_metadata: { full_name: inv.full_name ?? email, placeholder: false, phone },
       })
       if (uErr || !upd?.user) {
         await release()
@@ -70,7 +86,7 @@ Deno.serve(async (req: Request) => {
       userId = inv.placeholder_id
     } else {
       const { data: created, error: cErr } = await admin.auth.admin.createUser({
-        email, password, email_confirm: true, user_metadata: { full_name: inv.full_name ?? email },
+        email, password, email_confirm: true, user_metadata: { full_name: inv.full_name ?? email, phone },
       })
       if (cErr || !created?.user) {
         await release()
@@ -84,7 +100,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const activate = () => admin.from('profiles').update({
-      role: inv.role, workspace_id: inv.workspace_id, status: 'active', email,
+      role: inv.role, workspace_id: inv.workspace_id, status: 'active', email, phone,
       full_name: inv.full_name ?? email, approved_by: inv.created_by, approved_at: new Date().toISOString(),
     }).eq('id', userId).select('id')
     let { data: act, error: pErr } = await activate()

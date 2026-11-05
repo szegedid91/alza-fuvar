@@ -572,3 +572,24 @@ input[type='date'].input {
   .alarm-overlay, .alarm-bell { animation: none; }
 }
 @media print { .alarm-overlay { display: none !important; } }
+
+/* ---------- Ki/be kapcsoló ---------- */
+.switch {
+  position: relative; flex-shrink: 0; width: 54px; height: 32px; padding: 0; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg-elev-2); cursor: pointer; transition: background .15s ease, border-color .15s ease;
+}
+.switch .switch-knob {
+  position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); transition: transform .15s ease;
+}
+.switch.on { background: var(--success); border-color: var(--success); }
+.switch.on .switch-knob { transform: translateX(22px); }
+.switch:disabled { opacity: 0.6; cursor: default; }
+.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.switch-row { gap: 12px; align-items: center; }
+.switch-state { font-size: 12px; font-weight: 600; color: var(--text-dim, #94a3b8); }
+.switch-state.on { color: var(--success-text); }
+/* Riasztás-szabály doboza: a bekapcsolt zöld szegélyt kap, a kikapcsolt halványabb */
+.alert-rule { gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.alert-rule.on { border-color: var(--success); }
+.alert-rule.off { opacity: 0.75; }

@@ -13,6 +13,7 @@ const THEME_UI: Record<ThemePref, { icon: IconName; label: string }> = {
   light: { icon: 'sun', label: 'Világos' },
   dark: { icon: 'moon', label: 'Sötét' },
 }
+import { normalizePhone, formatPhone, PHONE_PLACEHOLDER, PHONE_ERROR } from '../lib/phone'
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import HelpRequestCard from '../components/HelpRequestCard'
@@ -22,7 +23,8 @@ import { forceUpdate } from '../lib/swUpdate'
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
-  const phone = profile?.phone ?? '' // a telefonszám itt nem szerkeszthető (vezetőknek a riasztás-kártyán), de mentéskor megmarad
+  // Telefonszám: regisztrációkor kötelező, itt módosítható (a vezetők ezen érik el a munkatársat)
+  const [phone, setPhone] = useState(() => formatPhone(profile?.phone))
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pwBusy, setPwBusy] = useState(false)
@@ -55,14 +57,16 @@ export default function ProfilePage() {
 
   async function save() {
     if (!profile) return
-    setBusy(true)
     setMsg(null)
+    const phoneE164 = normalizePhone(phone)
+    if (!phoneE164) { setMsg('Hiba: ' + PHONE_ERROR); return }
+    setBusy(true)
     const { error } = await supabase
       .from('profiles')
-      .update({ full_name: fullName.trim(), phone: phone.trim() || null })
+      .update({ full_name: fullName.trim(), phone: phoneE164 })
       .eq('id', profile.id)
     if (error) setMsg('Hiba: ' + error.message)
-    else { toast.success('Profil mentve.'); await refreshProfile() }
+    else { toast.success('Profil mentve.'); setPhone(formatPhone(phoneE164)); await refreshProfile() }
     setBusy(false)
   }
 
@@ -74,9 +78,14 @@ export default function ProfilePage() {
           <label>Teljes név</label>
           <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
         </div>
+        <div className="field">
+          <label htmlFor="pphone">Telefonszám</label>
+          <input id="pphone" className="input" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} />
+          {!profile?.phone && <div className="tiny muted">Még nincs megadva — a vezetők ezen érnek el, add meg.</div>}
+        </div>
         {msg && <div className={`alert ${msg.startsWith('Hiba') ? 'error' : 'success'}`}>{msg}</div>}
         {/* Üres név nem menthető — a név mindenhol megjelenik (beosztás, bér, napló) */}
-        <button className="btn" onClick={() => void save()} disabled={busy || !fullName.trim()}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
+        <button className="btn" onClick={() => void save()} disabled={busy || !fullName.trim() || !phone.trim()}><Icon name="save" />{busy ? 'Mentés…' : 'Mentés'}</button>
         {!fullName.trim() && <div className="tiny muted" style={{ textAlign: 'center' }}>Add meg a teljes neved — ez jelenik meg a beosztásban és a bérlapon.</div>}
       </div>
 

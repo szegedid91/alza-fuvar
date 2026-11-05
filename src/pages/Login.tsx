@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { normalizePhone, PHONE_PLACEHOLDER, PHONE_ERROR } from '../lib/phone'
 import { supabase } from '../lib/supabase'
 import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { RECOVERY_PATH } from '../lib/recovery'
@@ -21,6 +22,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -61,13 +63,16 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
         if (error) throw error
       } else {
+        // Telefonszám nélkül nincs regisztráció — a vezetők ezen érik el a munkatársat
+        const phoneE164 = normalizePhone(phone)
+        if (!phoneE164) throw new Error(PHONE_ERROR)
         if (password.length < 8) throw new Error('A jelszó legalább 8 karakter legyen.')
         const pw = await isPasswordPwned(password)
         if (pw.pwned) throw new Error(PWNED_MESSAGE)
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { full_name: fullName.trim() } },
+          options: { data: { full_name: fullName.trim(), phone: phoneE164 } },
         })
         if (error) throw error
         if (data.session) {
@@ -116,6 +121,13 @@ export default function Login() {
             <div className="field">
               <label htmlFor="name">Teljes név</label>
               <input id="name" className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Kovács János" autoComplete="name" required />
+            </div>
+          )}
+          {mode === 'register' && (
+            <div className="field">
+              <label htmlFor="phone">Telefonszám</label>
+              <input id="phone" className="input" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={PHONE_PLACEHOLDER} autoComplete="tel" required />
+              <div className="tiny muted">Kötelező — a vezetők ezen érnek el. Később a Profilodban módosíthatod.</div>
             </div>
           )}
           <div className="field">

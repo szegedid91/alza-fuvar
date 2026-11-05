@@ -5,17 +5,17 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { isPushSubscribed, pushSupported } from '../lib/push'
 import { ALERT_SCOPES, MAX_ALERT_RULES, normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, callProblem, type AlertScope, type SetOffAlertRule, type CallStatus } from '../lib/setoffAlerts'
-import { huMobileE164 } from '../../supabase/functions/alarm-call/helpers'
 import { errMsg } from '../lib/errors'
 import { toast } from '../lib/toast'
 import ConfirmButton from './ConfirmButton'
+import { SwitchRow } from './Switch'
 import Icon from './Icon'
 
 // Vezetői beállítás (manager / admin): riasztás, ha az aznapra beosztott munkatárs a megadott
 // határidőig nem nyomta meg az „Elindultam a munkába” gombot. Mindenki a SAJÁT riasztásait
 // állítja (ki/be, hangos/néma, határidő, kikre szóljon) — munkaterületenként.
 export default function SetOffAlertsCard() {
-  const { profile, refreshProfile } = useAuth()
+  const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
   const [error, setError] = useState<string | null>(null)
@@ -114,28 +114,6 @@ export default function SetOffAlertsCard() {
   })
   const problem = callProblem(callStatus)
 
-  // A hívott szám: a saját profilom telefonszáma — itt adható meg / írható át (csak magyar mobil)
-  const [phoneDraft, setPhoneDraft] = useState<string | null>(null)
-  const phoneValue = phoneDraft ?? profile?.phone ?? ''
-  const [phoneMsg, setPhoneMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const savePhone = useMutation({
-    mutationFn: async () => {
-      const raw = phoneValue.trim()
-      const e164 = raw ? huMobileE164(raw) : null
-      if (raw && !e164) throw new Error('Magyar mobilszámot adj meg, például: +36 30 123 4567')
-      const { error } = await supabase.from('profiles').update({ phone: e164 }).eq('id', profile!.id)
-      if (error) throw error
-      return e164
-    },
-    onSuccess: async (e164) => {
-      setPhoneDraft(null)
-      setPhoneMsg({ ok: true, text: e164 ? 'Telefonszám mentve — erre a számra megy a riasztás-hívás.' : 'Telefonszám törölve — hívás így nem indul.' })
-      await refreshProfile()
-      void qc.invalidateQueries({ queryKey: ['alarm-call-status'] })
-    },
-    onError: (e) => setPhoneMsg({ ok: false, text: errMsg(e, 'A telefonszám mentése nem sikerült') }),
-  })
-
   const busy = add.isPending || patch.isPending || remove.isPending
   const anyOn = list.some((r) => r.enabled)
 
@@ -155,7 +133,7 @@ export default function SetOffAlertsCard() {
 
       {rules && list.length === 0 && <div className="tiny muted">Még nincs beállított riasztás.</div>}
       {list.map((r) => (
-        <div key={r.id} className="stack" style={{ gap: 8, padding: 10, border: '1px solid var(--border)', borderRadius: 12, opacity: r.enabled ? 1 : 0.6 }}>
+        <div key={r.id} className={`stack alert-rule ${r.enabled ? 'on' : 'off'}`}>
           <div className="row" style={{ gap: 8, alignItems: 'flex-end' }}>
             <div className="field" style={{ margin: 0, width: 120, flexShrink: 0 }}>
               <label>Határidő</label>
@@ -169,25 +147,24 @@ export default function SetOffAlertsCard() {
               </select>
             </div>
           </div>
-          <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="tabs" style={{ margin: 0, flex: 1, minWidth: 180 }}>
+          <SwitchRow title="Riasztás" on={r.enabled} disabled={busy} onChange={(v) => patch.mutate({ id: r.id, values: { enabled: v } })}
+            hint={r.enabled ? `naponta ${normalizeDeadline(r.deadline) ?? ''}-kor ellenőriz` : 'ez a szabály most nem szól'} />
+          <div className="field" style={{ margin: 0 }}>
+            <label>Hogyan szóljon</label>
+            <div className="tabs" style={{ margin: 0 }}>
               <button type="button" className={r.loud ? 'active' : ''} aria-pressed={r.loud} disabled={busy} onClick={() => { if (!r.loud) patch.mutate({ id: r.id, values: { loud: true } }) }}><Icon name="bell" size={16} />Hangos riasztás</button>
               <button type="button" className={!r.loud ? 'active' : ''} aria-pressed={!r.loud} disabled={busy} onClick={() => { if (r.loud) patch.mutate({ id: r.id, values: { loud: false } }) }}><Icon name="moon" size={16} />Néma</button>
             </div>
-            <button type="button" className={`btn sm auto ${r.enabled ? 'secondary' : 'ghost'}`} aria-pressed={r.enabled} disabled={busy}
-              onClick={() => patch.mutate({ id: r.id, values: { enabled: !r.enabled } })}>
-              <Icon name={r.enabled ? 'check-circle' : 'pause'} />{r.enabled ? 'Bekapcsolva' : 'Kikapcsolva'}
-            </button>
-            <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" title="Riasztás törlése" disabled={busy} onConfirm={() => remove.mutate(r.id)}>
-              <Icon name="trash" size={16} />
+          </div>
+          {r.loud
+            ? <SwitchRow title="Telefonhívás is" on={r.call} disabled={busy} onChange={(v) => patch.mutate({ id: r.id, values: { call: v } })}
+                hint={r.call ? 'felhív, ha 1 percen belül nem nyitod meg' : 'csak értesítés jön, hívás nem'} />
+            : <div className="tiny muted">Telefonhívás csak hangos riasztáshoz kérhető.</div>}
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <ConfirmButton className="btn ghost sm auto" confirmLabel="Biztos? Törlés" title="Riasztás törlése" disabled={busy} onConfirm={() => remove.mutate(r.id)}>
+              <Icon name="trash" size={16} />Szabály törlése
             </ConfirmButton>
           </div>
-          {r.loud && (
-            <button type="button" className={`btn sm ${r.call ? 'secondary' : 'ghost'}`} aria-pressed={r.call} disabled={busy}
-              onClick={() => patch.mutate({ id: r.id, values: { call: !r.call } })}>
-              <Icon name="phone" />{r.call ? 'Telefonhívás is: bekapcsolva' : 'Telefonhívás is: kikapcsolva'}
-            </button>
-          )}
         </div>
       ))}
 
@@ -202,18 +179,9 @@ export default function SetOffAlertsCard() {
           a hívásból is leállíthatod. Ha nem veszed fel, 5 percenként még kétszer próbálkozik. Mindig ugyanarról a számról hív —
           mentsd el névjegyként, és engedélyezd neki a „Ne zavarjanak” módon való átjutást.
         </p>
-        <div className="field" style={{ margin: 0 }}>
-          <label>A te mobilszámod (ezt hívja a rendszer)</label>
-          <div className="row" style={{ gap: 8 }}>
-            <input className="input num" type="tel" inputMode="tel" autoComplete="tel" aria-label="Mobilszám" placeholder="+36 30 123 4567" style={{ flex: 1, minWidth: 0 }}
-              value={phoneValue} onChange={(e) => { setPhoneDraft(e.target.value); setPhoneMsg(null) }} />
-            <button type="button" className="btn secondary sm auto" disabled={savePhone.isPending || phoneDraft === null || phoneDraft.trim() === (profile?.phone ?? '')}
-              onClick={() => savePhone.mutate()}>
-              <Icon name="save" />{savePhone.isPending ? 'Mentés…' : 'Mentés'}
-            </button>
-          </div>
-          {phoneMsg && <div className={`alert ${phoneMsg.ok ? 'success' : 'error'}`} style={{ fontSize: 13 }}>{phoneMsg.text}</div>}
-        </div>
+        {callStatus?.phone
+          ? <div className="tiny muted">Hívott szám: <strong>{callStatus.phone}</strong> — fent, az „Adataim” résznél módosítható.</div>
+          : <div className="tiny muted">A hívott szám a saját telefonszámod — fent, az „Adataim” résznél add meg (magyar mobilszám kell).</div>}
         {problem && (anyCall || !callStatus?.configured) && <div className="alert info" style={{ fontSize: 13 }}>{problem}</div>}
         {callMsg && <div className={`alert ${callMsg.ok ? 'success' : 'error'}`} style={{ fontSize: 13 }}>{callMsg.text}</div>}
         <button type="button" className="btn ghost sm" disabled={testCall.isPending || !callStatus?.configured || !callStatus?.phone} onClick={() => { setCallMsg(null); testCall.mutate() }}>
