@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { subscribeWithRetry } from '../lib/realtimeRetry'
 import { resolveContacts, telHref } from '../lib/names'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -111,12 +112,17 @@ export default function MySchedule() {
       void qc.invalidateQueries({ queryKey: ['my-shifts'] })
       void qc.invalidateQueries({ queryKey: ['my-week'] })
     }
-    const ch = supabase
-      .channel(`my-swaps-${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `partner_id=eq.${profile.id}` }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `requested_by=eq.${profile.id}` }, invalidate)
-      .subscribe()
-    return () => { void supabase.removeChannel(ch) }
+    const uid = profile.id
+    // Megszakadás után új csatorna nyílik (egy példányra csak egyszer lehet feliratkozni); egyedi név,
+    // hogy a még lezáródó előző példányt ne kapjuk vissza
+    return subscribeWithRetry({
+      create: () => supabase
+        .channel(`my-swaps-${uid}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `partner_id=eq.${uid}` }, invalidate)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests', filter: `requested_by=eq.${uid}` }, invalidate),
+      remove: (ch) => { void supabase.removeChannel(ch) },
+      onSubscribed: invalidate,
+    })
   }, [profile?.id, qc])
 
   // Cserekérés-ablak: ma … ma+7 nap (helyi naptár szerint)
