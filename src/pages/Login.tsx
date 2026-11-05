@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { normalizePhone, PHONE_PLACEHOLDER, PHONE_ERROR } from '../lib/phone'
+import { authErrorMessage, translateAuthError, UserMessage } from '../lib/authErrors'
 import { supabase } from '../lib/supabase'
 import { DEV_LOGIN_ENABLED, DEV_LOGIN_SETUP_HINT, DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { RECOVERY_PATH } from '../lib/recovery'
@@ -65,10 +66,10 @@ export default function Login() {
       } else {
         // Telefonszám nélkül nincs regisztráció — a vezetők ezen érik el a munkatársat
         const phoneE164 = normalizePhone(phone)
-        if (!phoneE164) throw new Error(PHONE_ERROR)
-        if (password.length < 8) throw new Error('A jelszó legalább 8 karakter legyen.')
+        if (!phoneE164) throw new UserMessage(PHONE_ERROR)
+        if (password.length < 8) throw new UserMessage('A jelszó legalább 8 karakter legyen.')
         const pw = await isPasswordPwned(password)
-        if (pw.pwned) throw new Error(PWNED_MESSAGE)
+        if (pw.pwned) throw new UserMessage(PWNED_MESSAGE)
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -90,8 +91,7 @@ export default function Login() {
         }
       }
     } catch (err) {
-      const msg = errMsg(err, 'Ismeretlen hiba')
-      setError(translateAuthError(msg))
+      setError(authErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -226,17 +226,3 @@ export default function Login() {
   )
 }
 
-function translateAuthError(msg: string): string {
-  const m = msg.toLowerCase()
-  if (m.includes('invalid login credentials')) return 'Hibás email cím vagy jelszó.'
-  if (m.includes('email not confirmed')) return 'Az email cím még nincs megerősítve.'
-  if (m.includes('user already registered')) return 'Ezzel az email címmel már van fiók.'
-  if (m.includes('password should be at least')) return 'A jelszó túl rövid (min. 8 karakter).'
-  if (m.includes('unable to validate email')) return 'Érvénytelen email cím.'
-  if (m.includes('rate limit') || m.includes('too many requests')) return 'Túl sok próbálkozás — várj pár percet, és próbáld újra.'
-  if (m.includes('for security purposes')) return 'Biztonsági okból várni kell egy kicsit két kérés között — próbáld újra pár másodperc múlva.'
-  if (m.includes('failed to fetch') || m.includes('network')) return 'Nincs kapcsolat — ellenőrizd a hálózatot, és próbáld újra.'
-  // SEC-23: ismeretlen szerverhibát nem mutatunk nyersen (belső részletek); a konzolba kerül
-  console.error('Auth hiba:', msg)
-  return 'Nem sikerült — próbáld újra később.'
-}
