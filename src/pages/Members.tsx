@@ -490,7 +490,7 @@ export default function Members() {
                         {(roles.includes(role) ? roles : [...roles, role]).map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
                       </select>
                       {isSelf && <div className="tiny muted">A saját szerepedet nem módosíthatod.</div>}
-                      {leaderLocked && <div className="tiny muted">Vezető szerepét és hozzáférését csak admin módosíthatja.</div>}
+                      {leaderLocked && !isSelf && <div className="tiny muted">Vezető szerepét és hozzáférését csak admin módosíthatja.</div>}
                     </div>
                     <div className="field">
                       <label>Hozzáférés</label>
