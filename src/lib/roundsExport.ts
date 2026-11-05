@@ -2,6 +2,7 @@
 // naponként két oszlop — DPO db (éjszakai indulás, nálunk az 1. kör) és SD db
 // (same day, hajnali 5:30-as indulás, nálunk a 2. kör) —, a végén összesítés.
 // A km-blokk szándékosan kimarad.
+import { downloadStyledXlsx, type XCell, type XSheet, type XStyle } from './styledXlsx'
 
 export interface RoundShift {
   work_date: string
@@ -122,14 +123,81 @@ export function roundsSheetModel(t: RoundsTable): SheetModel {
   }
 }
 
-export async function exportRoundsXlsx(t: RoundsTable, filename: string): Promise<void> {
-  const XLSX = await import('xlsx')
+// ---- Megjelenés: színes fejléc, hétvégék árnyalva, összesítők kiemelve, rögzített panelek ----
+const C = {
+  head: '0F766E', headWeekend: '475569', headText: 'FFFFFF',
+  sub: 'CCFBF1', subWeekend: 'E2E8F0', subText: '134E4A',
+  label: 'F8FAFC', weekend: 'F1F5F9', zero: '94A3B8', text: '0F172A',
+  total: 'FEF3C7', sum: 'E2E8F0', muted: '64748B',
+}
+const isWeekend = (date: string): boolean => { const [y, m, d] = date.split('-').map(Number); const wd = new Date(y, m - 1, d).getDay(); return wd === 0 || wd === 6 }
+
+// A minta elrendezése (roundsSheetModel) formázva: cím, fejlécek, minden cella szegéllyel,
+// a 0 halványabb, a hétvégi napok árnyalva, az „Összesen” oszlop és sor kiemelve.
+export function roundsStyledSheet(t: RoundsTable, title: string): XSheet {
   const m = roundsSheetModel(t)
-  const ws: Record<string, unknown> = { ...m.cells }
-  ws['!ref'] = m.ref
-  ws['!merges'] = m.merges.map((r) => XLSX.utils.decode_range(r))
-  ws['!cols'] = m.cols.map((wch) => ({ wch }))
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws as import('xlsx').WorkSheet, 'Alapadat táblák')
-  XLSX.writeFile(wb, filename)
+  const cells: Record<string, XCell> = {}
+  const first = 4
+  const sumRow = first + t.rows.length
+  const dCol = (i: number, sd: boolean) => colName(2 + i * 2 + (sd ? 1 : 0))
+  const totD = colName(2 + t.days.length * 2); const totS = colName(3 + t.days.length * 2)
+  const put = (ref: string, style: XStyle) => {
+    const src = m.cells[ref]
+    cells[ref] = src ? { v: src.v, f: src.f, s: style } : { s: style }
+  }
+
+  cells.B1 = { v: title, s: { bold: true, size: 14, color: C.head } }
+  // fejléc: dátumok (két összevont oszlop) + DPO / SD
+  put('B2', { bold: true, color: C.headText, fill: C.head, border: true, h: 'left' })
+  put('B3', { bold: true, color: C.subText, fill: C.sub, border: true, h: 'left' })
+  t.days.forEach((day, i) => {
+    const we = isWeekend(day)
+    const dateStyle: XStyle = { bold: true, size: 10, color: C.headText, fill: we ? C.headWeekend : C.head, border: true, h: 'center', numFmt: 'yyyy\\-mm\\-dd' }
+    put(`${dCol(i, false)}2`, dateStyle); put(`${dCol(i, true)}2`, dateStyle)
+    const subStyle: XStyle = { bold: true, size: 9, color: C.subText, fill: we ? C.subWeekend : C.sub, border: true, h: 'center' }
+    put(`${dCol(i, false)}3`, subStyle); put(`${dCol(i, true)}3`, subStyle)
+  })
+  const totHead: XStyle = { bold: true, color: C.headText, fill: C.head, border: true, h: 'center' }
+  put(`${totD}2`, totHead); put(`${totS}2`, totHead)
+  const totSub: XStyle = { bold: true, size: 9, color: C.subText, fill: C.total, border: true, h: 'center' }
+  put(`${totD}3`, totSub); put(`${totS}3`, totSub)
+
+  // útvonal-sorok
+  t.rows.forEach((row, r) => {
+    const n = first + r
+    put(`B${n}`, { bold: true, color: C.text, fill: C.label, border: true, h: 'left' })
+    t.days.forEach((day, i) => {
+      const fill = isWeekend(day) ? C.weekend : undefined
+      for (const sd of [false, true]) {
+        const v = sd ? row.sd[i] : row.dpo[i]
+        put(`${dCol(i, sd)}${n}`, { color: v === 0 ? C.zero : C.text, bold: (v ?? 0) > 0, ...(fill ? { fill } : {}), border: true, h: 'center', numFmt: '0' })
+      }
+    })
+    const tot: XStyle = { bold: true, color: C.text, fill: C.total, border: true, h: 'center', numFmt: '0' }
+    put(`${totD}${n}`, tot); put(`${totS}${n}`, tot)
+  })
+
+  // összesítő sor
+  if (t.rows.length > 0) {
+    put(`B${sumRow}`, { bold: true, color: C.text, fill: C.sum, topBorder: true, h: 'left' })
+    const sum: XStyle = { bold: true, color: C.text, fill: C.sum, topBorder: true, h: 'center', numFmt: '0' }
+    t.days.forEach((_, i) => { put(`${dCol(i, false)}${sumRow}`, sum); put(`${dCol(i, true)}${sumRow}`, sum) })
+    const grand: XStyle = { ...sum, fill: 'FDE68A' }
+    put(`${totD}${sumRow}`, grand); put(`${totS}${sumRow}`, grand)
+  }
+  const legendRow = Math.max(sumRow, 3) + 2
+  cells[`B${legendRow}`] = { v: 'DPO = éjszakai indulás (1. kör) · SD = same day, hajnali 5:30-as indulás (2. kör) · a szürke oszlopok hétvégi napok', s: { italic: true, size: 9, color: C.muted } }
+
+  const rowHeights: Record<number, number> = { 1: 26, 2: 20, 3: 18 }
+  for (let n = first; n <= sumRow; n++) rowHeights[n] = 20
+  return {
+    name: 'Alapadat táblák',
+    cells, merges: m.merges,
+    cols: [2, 20, ...Array.from({ length: t.days.length * 2 }, () => 7), 9.5, 9.5],
+    rowHeights, freeze: { cols: 2, rows: 3 }, landscape: true, hideGrid: true,
+  }
+}
+
+export async function exportRoundsXlsx(t: RoundsTable, filename: string, title: string): Promise<void> {
+  await downloadStyledXlsx(roundsStyledSheet(t, title), filename)
 }

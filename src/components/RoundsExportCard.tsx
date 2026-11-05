@@ -16,7 +16,7 @@ const PREFIX_KEY = 'alza-rounds-prefix'
 // DPO db (éjszakai indulás = 1. kör) és SD db (same day, 5:30-as indulás = 2. kör).
 // Forrás: a beosztás járatos sorai (ki melyik járatot melyik körben vitte).
 export default function RoundsExportCard({ ym }: { ym: string }) {
-  const { currentWorkspaceId } = useWorkspace()
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const [prefix, setPrefix] = useState(() => { try { return localStorage.getItem(PREFIX_KEY) ?? 'Budapest' } catch { return 'Budapest' } })
   const [busy, setBusy] = useState(false)
   const range = useMemo(() => monthRange(ym), [ym])
@@ -52,7 +52,7 @@ export default function RoundsExportCard({ ym }: { ym: string }) {
   async function download() {
     if (!table) return
     setBusy(true)
-    try { await exportRoundsXlsx(table, `jaratszam_${ym}.xlsx`) }
+    try { await exportRoundsXlsx(table, `jaratszam_${ym}.xlsx`, `${currentWorkspace?.name ? `${currentWorkspace.name} — ` : ''}napi járatszám · ${monthTitle(ym)}`) }
     catch (e) { toast.error('Az export nem sikerült: ' + errMsg(e, 'ismeretlen hiba')) }
     finally { setBusy(false) }
   }
@@ -62,7 +62,7 @@ export default function RoundsExportCard({ ym }: { ym: string }) {
       <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Napi járatszám — {monthTitle(ym)}</div>
       <p className="tiny muted" style={{ margin: 0 }}>
         Útvonalanként és naponként hány kör ment: <strong>DPO</strong> = 1. kör (éjszakai indulás), <strong>SD</strong> = 2. kör (same day, 5:30-as indulás).
-        A beosztás járatos soraiból számol; a letöltött Excel a megbízó táblájának elrendezését követi (km nélkül).
+        A beosztás járatos soraiból számol; a letöltött Excel a megbízó táblájának elrendezését követi (km nélkül), formázva: színes fejléc, árnyalt hétvégék, kiemelt összesítők.
       </p>
       {isError && <div className="alert error">A járatszám nem tölthető be: {errMsg(error, 'ismeretlen hiba')}</div>}
       {!data && !isError && <div className="tiny muted">Betöltés…</div>}
