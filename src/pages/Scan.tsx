@@ -231,6 +231,7 @@ export default function Scan() {
           car_id: car.id,
           user_id: profile.id,
           work_date: date,
+          checked_in_at: new Date().toISOString(),
           gps_lat: gps.lat,
           gps_lng: gps.lng,
           outside_geofence: outside,
