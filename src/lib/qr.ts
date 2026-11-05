@@ -15,6 +15,6 @@ export function parseCarQr(text: string): string | null {
   return null
 }
 
-export async function qrDataUrl(text: string): Promise<string> {
-  return QRCode.toDataURL(text, { width: 512, margin: 1, errorCorrectionLevel: 'M' })
+export async function qrDataUrl(text: string, width = 512): Promise<string> {
+  return QRCode.toDataURL(text, { width, margin: 1, errorCorrectionLevel: 'M' })
 }

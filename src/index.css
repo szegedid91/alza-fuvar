@@ -496,6 +496,15 @@ input[type='date'].input {
 .qr-card img { width: 100%; max-width: 260px; }
 .qr-card .plate { font-size: 22px; font-weight: 800; margin-top: 8px; }
 
+/* QR-nyomtató lap: A4 arányú előnézet, a belső méretek a lap szélességéhez (cqw) kötve —
+   a képernyőn kicsinyítve, nyomtatásban 210 mm-en ugyanaz az elrendezés */
+.qr-sheet { display: flex; flex-direction: column; gap: 14px; }
+.qr-page { container-type: inline-size; width: 100%; aspect-ratio: 210 / 297; display: grid; background: #fff; color: #000; border-radius: 6px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25); }
+.qr-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-width: 0; min-height: 0; line-height: 1.3; overflow: hidden; }
+.qr-page.cut .qr-cell { outline: 1px dashed #b0b0b0; outline-offset: -0.5px; }
+.qr-cell img { display: block; image-rendering: pixelated; }
+.qr-cell .qr-plate { font-weight: 800; letter-spacing: 0.02em; margin-top: 1cqw; }
+
 @media print {
   .topbar, .bottom-nav, .no-print { display: none !important; }
   body { background: #fff; }

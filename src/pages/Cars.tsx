@@ -8,6 +8,7 @@ import { useCarCategories } from '../hooks/useCarCategories'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { carQrPayload, qrDataUrl } from '../lib/qr'
+import QrPrintSheet from '../components/QrPrintSheet'
 import { errMsg } from '../lib/errors'
 
 // Kategóriák kezelése: előbb a kategória, aztán rendeled hozzá az autókat
@@ -216,7 +217,8 @@ export default function Cars() {
   const [newFuel, setNewFuel] = useState<'diesel' | 'electric'>('diesel')
   const [error, setError] = useState<string | null>(null)
   const [qrCar, setQrCar] = useState<Car | null>(null)
-  const [printAll, setPrintAll] = useState(false)
+  // QR-nyomtató nézet: null = zárva; különben az előre kijelölt autók (undefined = mind)
+  const [printSel, setPrintSel] = useState<{ ids?: string[] } | null>(null)
   const [panel, setPanel] = useState<'none' | 'add' | 'categories'>('none')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<string>('all') // all | active | inactive | none | <categoryId>
@@ -333,8 +335,12 @@ export default function Cars() {
     onError: (e) => setError('A hajtás mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
-  if (qrCar) return <QrView car={qrCar} onBack={() => setQrCar(null)} />
-  if (printAll) return <QrSheet cars={(cars ?? []).filter((c) => c.active)} onBack={() => setPrintAll(false)} />
+  if (printSel) {
+    // Az aktív autók — plusz az, amelyiknek a kódjából ide jöttünk (akkor is, ha épp inaktív)
+    const printable = (cars ?? []).filter((c) => c.active || printSel.ids?.includes(c.id))
+    return <QrPrintSheet cars={printable} initialIds={printSel.ids} onBack={() => setPrintSel(null)} />
+  }
+  if (qrCar) return <QrView car={qrCar} onBack={() => setQrCar(null)} onPrintSized={() => { setPrintSel({ ids: [qrCar.id] }); setQrCar(null) }} />
 
   const all = cars ?? []
   const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -585,38 +591,13 @@ export default function Cars() {
       ))}
 
       {all.some((c) => c.active) && (
-        <button className="btn ghost sm" onClick={() => setPrintAll(true)}><Icon name="printer" />Összes aktív autó QR-kódja egy lapon</button>
+        <button className="btn secondary sm" onClick={() => setPrintSel({})}><Icon name="printer" />QR-kódok nyomtatása (választható méret)</button>
       )}
     </div>
   )
 }
 
-function QrCell({ car }: { car: Car }) {
-  const { data: dataUrl } = useQuery({ queryKey: ['qr', car.id], queryFn: () => qrDataUrl(carQrPayload(car.qr_token)) })
-  return (
-    <div className="qr-card" style={{ padding: 12, breakInside: 'avoid' }}>
-      {dataUrl ? <img src={dataUrl} alt="QR" style={{ maxWidth: 180 }} /> : <div className="spinner" />}
-      <div className="plate" style={{ fontSize: 18 }}>{car.plate}</div>
-      {car.label && <div style={{ color: '#555', fontSize: 13 }}>{car.label}</div>}
-    </div>
-  )
-}
-
-function QrSheet({ cars, onBack }: { cars: Car[]; onBack: () => void }) {
-  return (
-    <div className="stack">
-      <div className="btn-grid no-print">
-        <button className="btn ghost" onClick={onBack}><Icon name="arrow-left" />Vissza</button>
-        <button className="btn" onClick={() => window.print()}><Icon name="printer" />Nyomtatás</button>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {cars.map((c) => <QrCell key={c.id} car={c} />)}
-      </div>
-    </div>
-  )
-}
-
-function QrView({ car, onBack }: { car: Car; onBack: () => void }) {
+function QrView({ car, onBack, onPrintSized }: { car: Car; onBack: () => void; onPrintSized: () => void }) {
   const { data: dataUrl } = useQuery({
     queryKey: ['qr', car.id],
     queryFn: () => qrDataUrl(carQrPayload(car.qr_token)),
@@ -630,7 +611,8 @@ function QrView({ car, onBack }: { car: Car; onBack: () => void }) {
         {car.label && <div style={{ color: '#555' }}>{car.label}</div>}
         <div style={{ color: '#777', fontSize: 12, marginTop: 6 }}>Alza — becsekkoláshoz olvasd be</div>
       </div>
-      <button className="btn no-print" onClick={() => window.print()}><Icon name="printer" />Nyomtatás</button>
+      <button className="btn no-print" onClick={onPrintSized}><Icon name="printer" />Nyomtatás választható méretben (A4 / A5 / A6 / A7)</button>
+      <button className="btn ghost no-print" onClick={() => window.print()}><Icon name="printer" />Gyors nyomtatás (ez a nézet)</button>
       <p className="tiny muted no-print">Nyomtasd ki és ragaszd az autóra. A QR-kód fix, nem változik.</p>
     </div>
   )
