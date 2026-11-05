@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { monthRange, currentYm, sumAdvances } from './payroll'
+import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError } from './payroll'
 
 describe('monthRange', () => {
   it('hónap eleje és a következő hónap eleje (kizáró vég)', () => {
@@ -36,5 +36,80 @@ describe('sumAdvances — havi előleg-összeg (LOG-10)', () => {
     expect(sumAdvances(rows, '2026-11')).toBe(15000)
     expect(sumAdvances(rows, '2026-10')).toBe(7000)
     expect(sumAdvances([], '2026-11')).toBe(0)
+  })
+})
+
+const RATES = { driver: 25000, loader: 18000, trainee: 10000, box: 20000, boxTrainee: 8000, box2: 7000 }
+const box = { category: { box_sheet: true } }
+const xl = { category: { box_sheet: false } }
+
+describe('payForDay — egy nap díja a beosztott szerepekből', () => {
+  const comps = buildDayComps([
+    { driver_id: 'a', loader_id: 'b', trainee_id: 'c', work_date: '2026-11-02', round: 1, car: xl },
+    { driver_id: 'a', loader_id: null, trainee_id: null, work_date: '2026-11-03', round: 1, car: box },
+    { driver_id: 'a', loader_id: null, trainee_id: 'c', work_date: '2026-11-03', round: 2, car: box },
+    { driver_id: 'b', loader_id: null, trainee_id: null, work_date: '2026-11-04', round: 2, car: box },
+    { driver_id: 'a', loader_id: null, trainee_id: null, work_date: '2026-11-05', round: 1, car: xl },
+    { driver_id: 'a', loader_id: null, trainee_id: null, work_date: '2026-11-05', round: 1, car: box },
+  ])
+  it('XL sofőr / rakodó / betanuló', () => {
+    expect(payForDay(comps.get('a|2026-11-02'), RATES)).toMatchObject({ rate: 25000, role: 'driver', label: 'XL sofőr', driver: 25000, loader: null })
+    expect(payForDay(comps.get('b|2026-11-02'), RATES)).toMatchObject({ rate: 18000, role: 'loader', loader: 18000 })
+    expect(payForDay(comps.get('c|2026-11-02'), RATES)).toMatchObject({ rate: 10000, role: 'trainee', trainee: 10000 })
+  })
+  it('Box: mindkét kör = napidíj + 2. kör ráadás; csak a 2. kör = egy napidíj', () => {
+    expect(payForDay(comps.get('a|2026-11-03'), RATES)).toMatchObject({ rate: 27000, role: 'box', box: 20000, box2: 7000, rounds: 2, label: 'Box sofőr (2 kör)' })
+    expect(payForDay(comps.get('b|2026-11-04'), RATES)).toMatchObject({ rate: 20000, box2: null, label: 'Box sofőr (2. kör)' })
+    expect(payForDay(comps.get('c|2026-11-03'), RATES)).toMatchObject({ rate: 8000, role: 'box_trainee' })
+  })
+  it('XL sofőr + Box ugyanazon a napon: mindkét díj, a nap szerepe sofőr', () => {
+    expect(payForDay(comps.get('a|2026-11-05'), RATES)).toMatchObject({ rate: 45000, role: 'driver', label: 'XL sofőr + Box sofőr (1. kör)' })
+  })
+  it('beosztás nélküli becsekkolás rakodóként; hiányzó napidíj 0', () => {
+    expect(payForDay(undefined, RATES)).toMatchObject({ rate: 18000, role: 'loader', label: 'XL rakodó (beosztás nélkül)' })
+    expect(payForDay(undefined, undefined).rate).toBe(0)
+  })
+})
+
+describe('advanceCoverage — a ledolgozott napokból mennyi van kifizetve', () => {
+  const worked = [
+    { date: '2026-11-02', rate: 25000 }, { date: '2026-11-03', rate: 25000 },
+    { date: '2026-11-04', rate: 18000 }, { date: '2026-11-05', rate: 18000 },
+  ]
+  it('megjelölt napok + érték szerinti százalék', () => {
+    const c = advanceCoverage(worked, [
+      { type: 'advance', amount: 50000, covered_dates: ['2026-11-02', '2026-11-03'] },
+      { type: 'deduction', amount: 9000, covered_dates: null },
+    ])
+    expect([...c.paidDates]).toEqual(['2026-11-02', '2026-11-03'])
+    expect(c).toMatchObject({ workedCount: 4, workedValue: 86000, paidCount: 2, advanced: 50000, remaining: 36000, percent: 58 })
+  })
+  it('nap-megjelölés nélküli (régi) előleg is beleszámít az összegbe', () => {
+    const c = advanceCoverage(worked, [{ type: 'advance', amount: '43000' }])
+    expect(c).toMatchObject({ paidCount: 0, advanced: 43000, remaining: 43000, percent: 50 })
+  })
+  it('nem ledolgozott napra tett jelölés nem számít; a százalék 100-nál megáll', () => {
+    const c = advanceCoverage(worked, [{ type: 'advance', amount: 100000, covered_dates: ['2026-11-20'] }])
+    expect(c).toMatchObject({ paidCount: 0, remaining: 0, percent: 100 })
+  })
+  it('napidíj nélkül a napok aránya adja a százalékot', () => {
+    const c = advanceCoverage([{ date: '2026-11-02', rate: 0 }, { date: '2026-11-03', rate: 0 }], [{ type: 'advance', amount: 5000, covered_dates: ['2026-11-02'] }])
+    expect(c.percent).toBe(50)
+  })
+})
+
+describe('advanceLimitError — előleg legfeljebb a ledolgozott napok értékéig', () => {
+  const worked = [{ date: '2026-11-02', rate: 25000 }, { date: '2026-11-03', rate: 25000 }]
+  it('a még ki nem fizetett értékig mehet, afölött hiba', () => {
+    const c = advanceCoverage(worked, [{ type: 'advance', amount: 20000 }])
+    expect(advanceLimitError(30000, c)).toBeNull()
+    expect(advanceLimitError(30001, c)).toMatch(/Legfeljebb 30000/)
+  })
+  it('ledolgozott nap nélkül nem adható; teljesen kifizetett hónapra sem', () => {
+    expect(advanceLimitError(1000, advanceCoverage([], []))).toMatch(/nincs ledolgozott/)
+    expect(advanceLimitError(1, advanceCoverage(worked, [{ type: 'advance', amount: 50000 }]))).toMatch(/teljes egészében/)
+  })
+  it('napidíj nélkül nincs mihez mérni — átengedi', () => {
+    expect(advanceLimitError(99999, advanceCoverage([{ date: '2026-11-02', rate: 0 }], []))).toBeNull()
   })
 })

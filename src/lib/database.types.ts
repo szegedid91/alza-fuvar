@@ -17,6 +17,7 @@ export type Database = {
       adjustments: {
         Row: {
           amount: number
+          covered_dates: string[] | null
           created_at: string
           created_by: string | null
           evidence_id: string | null
@@ -29,6 +30,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          covered_dates?: string[] | null
           created_at?: string
           created_by?: string | null
           evidence_id?: string | null
@@ -41,6 +43,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          covered_dates?: string[] | null
           created_at?: string
           created_by?: string | null
           evidence_id?: string | null

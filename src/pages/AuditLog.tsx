@@ -35,7 +35,7 @@ const FIELD_LABEL: Record<string, string> = {
   fuel_type: 'Hajtás', depot_name: 'Raktár neve', depot_address: 'Raktár címe', depot_lat: 'Raktár szélesség', depot_lng: 'Raktár hosszúság',
   box_id: 'Box', moved_from_route_id: 'Eredeti járat', moved_from_order: 'Eredeti hely',
   driver_id: 'Sofőr', loader_id: 'Rakodó', trainee_id: 'Betanuló', route_id: 'Járat', round: 'Kör sorszáma', car_id: 'Autó', work_date: 'Dátum',
-  user_id: 'Munkatárs', amount: 'Összeg', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
+  user_id: 'Munkatárs', amount: 'Összeg', covered_dates: 'Fizetett napok', reason: 'Indok', type: 'Típus', status: 'Állapot', role: 'Szerep', full_name: 'Név', email: 'Email',
   phone: 'Telefon', plate: 'Rendszám', label: 'Megnevezés', category_id: 'Kategória', active: 'Aktív', crew_size: 'Létszám (fő)', box_sheet: 'Box-lap',
   sort_order: 'Sorrend', name: 'Név', code: 'Kód', text: 'Szöveg', driver_day_rate: 'XL sofőr napidíj', loader_day_rate: 'XL rakodó napidíj',
   box_day_rate: 'Box 1. kör díj', box_round2_day_rate: 'Box 2. kör díj', trainee_day_rate: 'XL betanuló díj', box_trainee_day_rate: 'Box betanuló díj',
