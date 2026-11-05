@@ -10,6 +10,7 @@ import { exportRowsToXlsx } from '../lib/export'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
+import RoundsExportCard from '../components/RoundsExportCard'
 import { errMsg } from '../lib/errors'
 
 // Havi riport: ki mennyit dolgozott (nap, szerep, óra) és mit csinált az
@@ -203,6 +204,8 @@ export default function Reports() {
           <button className="btn secondary sm" disabled={!hasData} onClick={() => void exportXlsx()}><Icon name="file-text" />Exportálás Excelbe</button>
         </div>
       </div>
+
+      <RoundsExportCard ym={ym} />
 
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
       {isError && (
