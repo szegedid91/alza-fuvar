@@ -50,7 +50,7 @@ describe('futó riasztás — mit mutat a riasztó-képernyő', () => {
 describe('telefonhívás állapota a beállító kártyán', () => {
   it('nincs bekötve → jelzi; nincs hívható szám → jelzi; minden rendben → nincs teendő', () => {
     expect(callProblem({ configured: false, phone: '+36 30 ••• 4567' })).toMatch(/nincs bekötve/)
-    expect(callProblem({ configured: true, phone: null })).toMatch(/nincs hívható magyar mobilszám/)
+    expect(callProblem({ configured: true, phone: null })).toMatch(/Nincs megadva hívható magyar mobilszámod/)
     expect(callProblem({ configured: true, phone: '+36 30 ••• 4567' })).toBeNull()
     expect(callProblem(null)).toBeNull()
   })

@@ -476,7 +476,7 @@ export default function Members() {
                         ? (telHref(m.phone)
                           ? <a className="small row" href={telHref(m.phone)!} style={{ gap: 6, textDecoration: 'none' }}><Icon name="phone" size={16} />{m.phone}</a>
                           : <div className="small">{m.phone}</div>)
-                        : <div className="tiny muted">Nincs megadva — a munkatárs a Profil oldalán adhatja meg.</div>}
+                        : <div className="tiny muted">Nincs megadva.</div>}
                     </div>
                     <div className="field">
                       <label>Szerep</label>

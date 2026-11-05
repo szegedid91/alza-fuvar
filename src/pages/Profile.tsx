@@ -22,7 +22,7 @@ import { forceUpdate } from '../lib/swUpdate'
 export default function ProfilePage() {
   const { profile, signOut, refreshProfile } = useAuth()
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
-  const phone = profile?.phone ?? '' // a telefonszám a Tagok oldalon kezelhető, itt nem szerkeszthető, de mentéskor megmarad
+  const phone = profile?.phone ?? '' // a telefonszám itt nem szerkeszthető (vezetőknek a riasztás-kártyán), de mentéskor megmarad
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [pwBusy, setPwBusy] = useState(false)

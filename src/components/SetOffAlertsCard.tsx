@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { isPushSubscribed, pushSupported } from '../lib/push'
 import { ALERT_SCOPES, MAX_ALERT_RULES, normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, callProblem, type AlertScope, type SetOffAlertRule, type CallStatus } from '../lib/setoffAlerts'
+import { huMobileE164 } from '../../supabase/functions/alarm-call/helpers'
 import { errMsg } from '../lib/errors'
 import { toast } from '../lib/toast'
 import ConfirmButton from './ConfirmButton'
@@ -14,7 +15,7 @@ import Icon from './Icon'
 // határidőig nem nyomta meg az „Elindultam a munkába” gombot. Mindenki a SAJÁT riasztásait
 // állítja (ki/be, hangos/néma, határidő, kikre szóljon) — munkaterületenként.
 export default function SetOffAlertsCard() {
-  const { profile } = useAuth()
+  const { profile, refreshProfile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +114,28 @@ export default function SetOffAlertsCard() {
   })
   const problem = callProblem(callStatus)
 
+  // A hívott szám: a saját profilom telefonszáma — itt adható meg / írható át (csak magyar mobil)
+  const [phoneDraft, setPhoneDraft] = useState<string | null>(null)
+  const phoneValue = phoneDraft ?? profile?.phone ?? ''
+  const [phoneMsg, setPhoneMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const savePhone = useMutation({
+    mutationFn: async () => {
+      const raw = phoneValue.trim()
+      const e164 = raw ? huMobileE164(raw) : null
+      if (raw && !e164) throw new Error('Magyar mobilszámot adj meg, például: +36 30 123 4567')
+      const { error } = await supabase.from('profiles').update({ phone: e164 }).eq('id', profile!.id)
+      if (error) throw error
+      return e164
+    },
+    onSuccess: async (e164) => {
+      setPhoneDraft(null)
+      setPhoneMsg({ ok: true, text: e164 ? 'Telefonszám mentve — erre a számra megy a riasztás-hívás.' : 'Telefonszám törölve — hívás így nem indul.' })
+      await refreshProfile()
+      void qc.invalidateQueries({ queryKey: ['alarm-call-status'] })
+    },
+    onError: (e) => setPhoneMsg({ ok: false, text: errMsg(e, 'A telefonszám mentése nem sikerült') }),
+  })
+
   const busy = add.isPending || patch.isPending || remove.isPending
   const anyOn = list.some((r) => r.enabled)
 
@@ -179,7 +202,18 @@ export default function SetOffAlertsCard() {
           a hívásból is leállíthatod. Ha nem veszed fel, 5 percenként még kétszer próbálkozik. Mindig ugyanarról a számról hív —
           mentsd el névjegyként, és engedélyezd neki a „Ne zavarjanak” módon való átjutást.
         </p>
-        {callStatus?.configured && callStatus.phone && <div className="tiny muted">Hívott szám: <strong>{callStatus.phone}</strong> (a Tagok oldalon módosítható)</div>}
+        <div className="field" style={{ margin: 0 }}>
+          <label>A te mobilszámod (ezt hívja a rendszer)</label>
+          <div className="row" style={{ gap: 8 }}>
+            <input className="input num" type="tel" inputMode="tel" autoComplete="tel" aria-label="Mobilszám" placeholder="+36 30 123 4567" style={{ flex: 1, minWidth: 0 }}
+              value={phoneValue} onChange={(e) => { setPhoneDraft(e.target.value); setPhoneMsg(null) }} />
+            <button type="button" className="btn secondary sm auto" disabled={savePhone.isPending || phoneDraft === null || phoneDraft.trim() === (profile?.phone ?? '')}
+              onClick={() => savePhone.mutate()}>
+              <Icon name="save" />{savePhone.isPending ? 'Mentés…' : 'Mentés'}
+            </button>
+          </div>
+          {phoneMsg && <div className={`alert ${phoneMsg.ok ? 'success' : 'error'}`} style={{ fontSize: 13 }}>{phoneMsg.text}</div>}
+        </div>
         {problem && (anyCall || !callStatus?.configured) && <div className="alert info" style={{ fontSize: 13 }}>{problem}</div>}
         {callMsg && <div className={`alert ${callMsg.ok ? 'success' : 'error'}`} style={{ fontSize: 13 }}>{callMsg.text}</div>}
         <button type="button" className="btn ghost sm" disabled={testCall.isPending || !callStatus?.configured || !callStatus?.phone} onClick={() => { setCallMsg(null); testCall.mutate() }}>
