@@ -16,6 +16,7 @@ const THEME_UI: Record<ThemePref, { icon: IconName; label: string }> = {
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import HelpRequestCard from '../components/HelpRequestCard'
+import SetOffAlertsCard from '../components/SetOffAlertsCard'
 import { forceUpdate } from '../lib/swUpdate'
 
 export default function ProfilePage() {
@@ -92,6 +93,8 @@ export default function ProfilePage() {
         <FeedbackCard />
 
       <PushCard />
+      {/* Vezetőknek: riasztás, ha a beosztott munkatárs határidőig nem jelezte az indulást */}
+      {(profile?.role === 'manager' || profile?.role === 'admin') && <SetOffAlertsCard />}
 
       <button className="btn danger-outline" onClick={() => void signOut()}><Icon name="log-out" />Kilépés</button>
 

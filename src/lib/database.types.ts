@@ -1868,6 +1868,57 @@ export type Database = {
           },
         ]
       }
+      setoff_alert_rules: {
+        Row: {
+          created_at: string
+          deadline: string
+          enabled: boolean
+          id: string
+          last_fired_on: string | null
+          loud: boolean
+          scope: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          deadline: string
+          enabled?: boolean
+          id?: string
+          last_fired_on?: string | null
+          loud?: boolean
+          scope?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string
+          enabled?: boolean
+          id?: string
+          last_fired_on?: string | null
+          loud?: boolean
+          scope?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setoff_alert_rules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setoff_alert_rules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           car_id: string

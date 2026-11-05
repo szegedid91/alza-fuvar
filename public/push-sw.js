@@ -2,16 +2,36 @@
 self.addEventListener('push', (event) => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch (e) { data = {} }
+  if (!data || typeof data !== 'object') data = {}
   const title = data.title || 'Alza'
+  event.waitUntil(self.registration.showNotification(title, notificationOptions(data)))
+})
+
+// Az értesítés megjelenése a küldő jelzői szerint:
+//  silent — hang és rezgés nélkül (a „néma” riasztás); a silent mellé rezgés NEM adható meg
+//  alarm  — hangos riasztás: hosszabb rezgés, és a képernyőn marad, amíg rá nem koppintanak
+//  tag    — az azonos címkéjű értesítés az előzőt váltja (hangosnál újra jelez)
+function notificationOptions(data) {
   const options = {
     body: data.body || '',
     icon: '/pwa-192.png',
     badge: '/pwa-192.png',
     data: { url: data.url || '/' },
-    vibrate: [80, 40, 80],
   }
-  event.waitUntil(self.registration.showNotification(title, options))
-})
+  if (data.silent === true) {
+    options.silent = true
+  } else if (data.alarm === true) {
+    options.vibrate = [300, 120, 300, 120, 300, 120, 600]
+    options.requireInteraction = true
+  } else {
+    options.vibrate = [80, 40, 80]
+  }
+  if (typeof data.tag === 'string' && data.tag) {
+    options.tag = data.tag
+    if (data.silent !== true) options.renotify = true
+  }
+  return options
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
