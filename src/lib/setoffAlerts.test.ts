@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, activeAlarms, alarmPeople, callProblem, type AlertScope } from './setoffAlerts'
+import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, activeAlarms, alarmPeople, callProblem, openedAfterAlarm, type AlertScope } from './setoffAlerts'
 
 describe('„nem indult el” riasztás — szabály-segédek', () => {
   it('határidő egységes alakja (az adatbázis másodperccel adja vissza)', () => {
@@ -53,5 +53,21 @@ describe('telefonhívás állapota a beállító kártyán', () => {
     expect(callProblem({ configured: true, phone: null })).toMatch(/Nincs megadva hívható magyar mobilszámod/)
     expect(callProblem({ configured: true, phone: '+36 30 ••• 4567' })).toBeNull()
     expect(callProblem(null)).toBeNull()
+  })
+})
+
+describe('openedAfterAlarm — mikor számít megnyitottnak a riasztás', () => {
+  const fired = '2026-11-05T19:02:00.000Z'
+  const t = new Date(fired).getTime()
+  it('a riasztás előtt már nyitva lévő app megjelenítése NEM megnyitás (ettől maradt el a hívás)', () => {
+    expect(openedAfterAlarm(t - 3_600_000, fired, true)).toBe(false)
+    expect(openedAfterAlarm(t + 1000, fired, true)).toBe(false) // óra-eltérésen belül: inkább szóljon tovább
+  })
+  it('a riasztás után elindított, látható app megnyitásnak számít', () => {
+    expect(openedAfterAlarm(t + 20_000, fired, true)).toBe(true)
+  })
+  it('háttérben betöltött lap nem számít; hibás időpont sem', () => {
+    expect(openedAfterAlarm(t + 20_000, fired, false)).toBe(false)
+    expect(openedAfterAlarm(t + 20_000, 'nem dátum', true)).toBe(false)
   })
 })

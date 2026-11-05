@@ -86,3 +86,13 @@ export function callProblem(st: CallStatus | null | undefined): string | null {
   if (!st.phone) return 'Nincs megadva hívható magyar mobilszámod — az „Adataim” résznél add meg (pl. +36 30 123 4567), különben a hívás nem indul el.'
   return null
 }
+
+// Mikor számít a riasztás „megnyitottnak” pusztán attól, hogy az app megjelenítette?
+// Csak akkor, ha az appot a riasztás UTÁN indították el (pl. az értesítésre koppintva), és látszik.
+// Ha az app már korábban nyitva volt (egy fülön, a háttérben vagy őrizetlen képernyőn), a megjelenítés
+// nem bizonyítja, hogy valaki látta — ott egy érintés, billentyű vagy az appra váltás kell hozzá.
+// (3 mp ráhagyás az eszköz és a szerver órája közti eltérésre.)
+export function openedAfterAlarm(pageStartedAtMs: number, firedAtIso: string, visible: boolean): boolean {
+  const fired = new Date(firedAtIso).getTime()
+  return visible && Number.isFinite(fired) && pageStartedAtMs > fired + 3000
+}

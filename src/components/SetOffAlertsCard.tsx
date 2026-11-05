@@ -190,7 +190,7 @@ export default function SetOffAlertsCard() {
       </div>
       <p className="tiny muted" style={{ margin: 0 }}>
         Több riasztás is felvehető (pl. 23:30 az éjszakai Box-körre, 05:00 a hajnalira). Az időpont budapesti idő; az adott naptári nap
-        beosztását nézi. „Hangos”: riasztás — 20 másodpercenként újra szól (hang és rezgés), amíg meg nem nyitod az appot,
+        beosztását nézi. „Hangos”: riasztás — 20 másodpercenként újra szól (hang és rezgés), amíg meg nem nyitod az appot (ha már nyitva volt valahol: amíg hozzá nem érsz),
         legfeljebb 30 percig; az appban villogó, csipogó riasztó-képernyő fogad a hiányzók nevével és hívás-gombbal. Ha közben
         mindenki elindul, magától leáll. „Néma”: egyetlen értesítés hang és rezgés nélkül. A telefon ne legyen lenémítva vagy
         „Ne zavarjanak” módban — azt a riasztás nem tudja felülírni.

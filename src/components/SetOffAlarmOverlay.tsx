@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { activeAlarms, alarmPeople, normalizeDeadline, type SetOffAlarm } from '../lib/setoffAlerts'
+import { activeAlarms, alarmPeople, normalizeDeadline, openedAfterAlarm, type SetOffAlarm } from '../lib/setoffAlerts'
 import { startAlarm } from '../lib/alarmSound'
 import { telHref } from '../lib/names'
 import Icon from './Icon'
@@ -43,14 +43,32 @@ export default function SetOffAlarmOverlay() {
     return () => { navigator.serviceWorker?.removeEventListener('message', onMsg); document.removeEventListener('visibilitychange', onVisible) }
   }, [qc])
 
-  // Megjelenéskor: a szerver ne küldje tovább az értesítést (látta), és indul a hang + rezgés
+  // Megjelenéskor indul a hang + rezgés. Az értesítések ismétlése és a telefonhívás viszont csak akkor
+  // áll le, ha valaki TÉNYLEG megnyitotta: az appot a riasztás után indította el, rá váltott, vagy
+  // hozzáért. Egy korábban nyitva hagyott (háttérben lévő vagy őrizetlen) app megjelenítése nem elég.
   const stopSound = useRef<(() => void) | null>(null)
+  const newestFiredAt = alarms.reduce((x, a) => (a.fired_at > x ? a.fired_at : x), '')
   useEffect(() => {
     if (!active) return
-    void supabase.rpc('setoff_alarms_seen').then(() => undefined, () => undefined)
     stopSound.current = startAlarm()
-    return () => { stopSound.current?.(); stopSound.current = null }
-  }, [active])
+    let done = false
+    // (a puszta ablak-fókusz nem elég: azt a rendszer magától is adhatja, senki nincs ott)
+    const events: [EventTarget, string][] = [[window, 'pointerdown'], [window, 'keydown'], [window, 'touchstart'], [document, 'visibilitychange']]
+    const cleanup = () => { for (const [target, name] of events) target.removeEventListener(name, onAct) }
+    const markSeen = () => {
+      if (done) return
+      done = true
+      cleanup()
+      void supabase.rpc('setoff_alarms_seen').then(() => undefined, () => undefined)
+    }
+    function onAct(e: Event) {
+      if (e.type === 'visibilitychange' && document.visibilityState !== 'visible') return
+      markSeen()
+    }
+    if (openedAfterAlarm(performance.timeOrigin, newestFiredAt, document.visibilityState === 'visible')) markSeen()
+    else for (const [target, name] of events) target.addEventListener(name, onAct, { passive: true })
+    return () => { cleanup(); stopSound.current?.(); stopSound.current = null }
+  }, [active, newestFiredAt])
 
   // Telefonszámok a hívás-gombhoz (a vezető látja a munkaterülete tagjait)
   const ids = people.map((p) => p.id)
