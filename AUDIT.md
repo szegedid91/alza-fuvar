@@ -210,6 +210,8 @@ Nincs. (A SEC-01 egyetlen iframe-attribútumra van a High-tól — lásd ott.)
 
 Manager és admin személyenként be-/kikapcsolhatja, hangos vagy néma módban, és beállíthatja a határidőt (óra:perc), ameddig az aznapra beosztott munkatársnak meg kell nyomnia az „Elindultam a munkába” gombot; ha addig nem nyomja meg, a vezető riasztást kap.
 
+**Megvalósítva 2026-11-05:** Profil → „Riasztás: nem indult el a munkába” kártya (csak manager / admin). Szabályonként: határidő (budapesti idő), kikre szóljon (mindenki / XL / Box 1. kör / Box 2. kör), hangos vagy néma, ki/be; munkaterületenként legfeljebb 8. A szerver percenként néz rá (`setoff_alert_rules`, `tick_setoff_alerts`), naponta szabályonként egy összesítő értesítést küld. Aki már becsekkolt, azt nem jelzi. Migráció: `supabase/migrations/20261105_setoff_alerts.sql`.
+
 ## 7. A 2. fázis eredménye (2026-11-05)
 
 **Javítva** — minden találat külön commitban (az azonosító a commit-üzenetben), a `tsc -b` és a teljes `vitest` minden commit után zöld:
