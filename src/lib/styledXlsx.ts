@@ -8,9 +8,11 @@ export interface XStyle {
   size?: number
   color?: string // 'RRGGBB'
   fill?: string // 'RRGGBB'
-  border?: boolean // vékony szegély körben
+  border?: boolean | 'medium' // szegély körben: vékony (true) vagy közepes fekete ('medium')
   topBorder?: boolean // vastagabb felső szegély (összesítő sor)
   h?: 'left' | 'center' | 'right'
+  v?: 'top' | 'center' | 'bottom' // függőleges igazítás (alap: középre)
+  wrap?: boolean // sortörés a cellán belül
   numFmt?: string // pl. '0' vagy 'yyyy\\-mm\\-dd'
 }
 export interface XCell { v?: string | number; f?: string; s?: XStyle }
@@ -58,13 +60,15 @@ class StyleBook {
     const font = this.idx(this.fonts, `<font>${s.bold ? '<b/>' : ''}${s.italic ? '<i/>' : ''}<sz val="${s.size ?? 11}"/><color rgb="FF${s.color ?? '1F2937'}"/><name val="Calibri"/><family val="2"/></font>`)
     const fill = s.fill ? this.idx(this.fills, `<fill><patternFill patternType="solid"><fgColor rgb="FF${s.fill}"/><bgColor indexed="64"/></patternFill></fill>`) : 0
     const line = '<color rgb="FFCBD5E1"/>'
-    const border = s.border || s.topBorder
+    const border = s.border === 'medium'
+      ? this.idx(this.borders, `<border>${['left', 'right', 'top', 'bottom'].map((side) => `<${side} style="medium"><color rgb="FF000000"/></${side}>`).join('')}<diagonal/></border>`)
+      : s.border || s.topBorder
       ? this.idx(this.borders, `<border><left style="thin">${line}</left><right style="thin">${line}</right><top style="${s.topBorder ? 'medium' : 'thin'}">${s.topBorder ? '<color rgb="FF475569"/>' : line}</top><bottom style="thin">${line}</bottom><diagonal/></border>`)
       : 0
     let numFmtId = 0
     if (s.numFmt === '0') numFmtId = 1
     else if (s.numFmt) numFmtId = 164 + this.idx(this.numFmts, s.numFmt)
-    const xf = `<xf numFmtId="${numFmtId}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"${numFmtId ? ' applyNumberFormat="1"' : ''} applyFont="1"${fill ? ' applyFill="1"' : ''}${border ? ' applyBorder="1"' : ''} applyAlignment="1"><alignment horizontal="${s.h ?? 'left'}" vertical="center"/></xf>`
+    const xf = `<xf numFmtId="${numFmtId}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"${numFmtId ? ' applyNumberFormat="1"' : ''} applyFont="1"${fill ? ' applyFill="1"' : ''}${border ? ' applyBorder="1"' : ''} applyAlignment="1"><alignment horizontal="${s.h ?? 'left'}" vertical="${s.v ?? 'center'}"${s.wrap ? ' wrapText="1"' : ''}/></xf>`
     const id = this.xfs.push(xf) - 1
     this.cache.set(key, id)
     return id

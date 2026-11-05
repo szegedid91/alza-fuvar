@@ -11,6 +11,7 @@ import { shiftMonth, monthTitle } from '../lib/calendar'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import RoundsExportCard from '../components/RoundsExportCard'
+import QualityReportCard from '../components/QualityReportCard'
 import { errMsg } from '../lib/errors'
 
 // Havi riport: ki mennyit dolgozott (nap, szerep, óra) és mit csinált az
@@ -205,6 +206,7 @@ export default function Reports() {
         </div>
       </div>
 
+      <QualityReportCard />
       <RoundsExportCard ym={ym} />
 
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
