@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { isPushSubscribed, pushSupported } from '../lib/push'
-import { ALERT_SCOPES, MAX_ALERT_RULES, normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, type AlertScope, type SetOffAlertRule } from '../lib/setoffAlerts'
+import { ALERT_SCOPES, MAX_ALERT_RULES, normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, callProblem, type AlertScope, type SetOffAlertRule, type CallStatus } from '../lib/setoffAlerts'
 import { errMsg } from '../lib/errors'
 import { toast } from '../lib/toast'
 import ConfirmButton from './ConfirmButton'
@@ -34,7 +34,7 @@ export default function SetOffAlertsCard() {
     queryKey: key,
     enabled: !!currentWorkspaceId && !!profile?.id,
     queryFn: async (): Promise<SetOffAlertRule[]> => {
-      const { data, error } = await supabase.from('setoff_alert_rules').select('id, deadline, scope, loud, enabled')
+      const { data, error } = await supabase.from('setoff_alert_rules').select('id, deadline, scope, loud, enabled, call')
         .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id)
       if (error) throw error
       return sortRules((data ?? []).map((r) => ({ ...r, scope: r.scope as AlertScope })))
@@ -54,7 +54,7 @@ export default function SetOffAlertsCard() {
     onError: fail,
   })
   const patch = useMutation({
-    mutationFn: async ({ id, values }: { id: string; values: Partial<Pick<SetOffAlertRule, 'deadline' | 'scope' | 'loud' | 'enabled'>> }) => {
+    mutationFn: async ({ id, values }: { id: string; values: Partial<Pick<SetOffAlertRule, 'deadline' | 'scope' | 'loud' | 'enabled' | 'call'>> }) => {
       const { error } = await supabase.from('setoff_alert_rules').update(values).eq('id', id)
       if (error) throw error
     },
@@ -84,6 +84,34 @@ export default function SetOffAlertsCard() {
     if (isDuplicateRule(list, r.id, r.deadline, scope)) { setError('Ilyen határidejű riasztás erre a körre már van.'); return }
     patch.mutate({ id: r.id, values: { scope } })
   }
+
+  // Telefonhívás: be van-e kötve a szolgáltató, és van-e hívható számom
+  const anyCall = list.some((r) => r.call && r.loud)
+  const { data: callStatus } = useQuery({
+    queryKey: ['alarm-call-status', profile?.id],
+    enabled: !!profile?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<CallStatus | null> => {
+      const { data, error } = await supabase.functions.invoke('alarm-call', { body: { action: 'status' } })
+      if (error) return null // a hívás állapota nem kritikus — a kártya enélkül is használható
+      return data as CallStatus
+    },
+  })
+  const [callMsg, setCallMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const testCall = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('alarm-call', { body: { action: 'test' } })
+      if (error) {
+        let msg = 'A próbahívás nem indult el.'
+        try { msg = ((await (error as { context?: Response }).context?.json()) as { error?: string } | undefined)?.error ?? msg } catch { /* nem JSON válasz */ }
+        throw new Error(msg)
+      }
+      return data as { phone?: string }
+    },
+    onSuccess: (d) => setCallMsg({ ok: true, text: `Próbahívás elindítva${d?.phone ? ` ide: ${d.phone}` : ''} — pár másodpercen belül csörög.` }),
+    onError: (e) => setCallMsg({ ok: false, text: errMsg(e, 'A próbahívás nem indult el.') }),
+  })
+  const problem = callProblem(callStatus)
 
   const busy = add.isPending || patch.isPending || remove.isPending
   const anyOn = list.some((r) => r.enabled)
@@ -131,12 +159,33 @@ export default function SetOffAlertsCard() {
               <Icon name="trash" size={16} />
             </ConfirmButton>
           </div>
+          {r.loud && (
+            <button type="button" className={`btn sm ${r.call ? 'secondary' : 'ghost'}`} aria-pressed={r.call} disabled={busy}
+              onClick={() => patch.mutate({ id: r.id, values: { call: !r.call } })}>
+              <Icon name="phone" />{r.call ? 'Telefonhívás is: bekapcsolva' : 'Telefonhívás is: kikapcsolva'}
+            </button>
+          )}
         </div>
       ))}
 
       <button className="btn secondary sm" disabled={busy || !rules || list.length >= MAX_ALERT_RULES} onClick={() => add.mutate()}>
         <Icon name="plus" />Új riasztás
       </button>
+
+      <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <div className="small" style={{ fontWeight: 700 }}><Icon name="phone" size={15} style={{ verticalAlign: -2, marginRight: 4 }} />Telefonhívás</div>
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Ha egy hangos riasztást 1 percen belül nem nyitsz meg, a rendszer fel is hív: felolvassa, kik hiányoznak, és az 1-es gombbal
+          a hívásból is leállíthatod. Ha nem veszed fel, 5 percenként még kétszer próbálkozik. Mindig ugyanarról a számról hív —
+          mentsd el névjegyként, és engedélyezd neki a „Ne zavarjanak” módon való átjutást.
+        </p>
+        {callStatus?.configured && callStatus.phone && <div className="tiny muted">Hívott szám: <strong>{callStatus.phone}</strong> (a Tagok oldalon módosítható)</div>}
+        {problem && (anyCall || !callStatus?.configured) && <div className="alert info" style={{ fontSize: 13 }}>{problem}</div>}
+        {callMsg && <div className={`alert ${callMsg.ok ? 'success' : 'error'}`} style={{ fontSize: 13 }}>{callMsg.text}</div>}
+        <button type="button" className="btn ghost sm" disabled={testCall.isPending || !callStatus?.configured || !callStatus?.phone} onClick={() => { setCallMsg(null); testCall.mutate() }}>
+          <Icon name="phone" />{testCall.isPending ? 'Hívás indítása…' : 'Próbahívás a saját számomra'}
+        </button>
+      </div>
       <p className="tiny muted" style={{ margin: 0 }}>
         Több riasztás is felvehető (pl. 23:30 az éjszakai Box-körre, 05:00 a hajnalira). Az időpont budapesti idő; az adott naptári nap
         beosztását nézi. „Hangos”: riasztás — 20 másodpercenként újra szól (hang és rezgés), amíg meg nem nyitod az appot,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, activeAlarms, alarmPeople, type AlertScope } from './setoffAlerts'
+import { normalizeDeadline, sortRules, nextNewRule, isDuplicateRule, activeAlarms, alarmPeople, callProblem, type AlertScope } from './setoffAlerts'
 
 describe('„nem indult el” riasztás — szabály-segédek', () => {
   it('határidő egységes alakja (az adatbázis másodperccel adja vissza)', () => {
@@ -44,5 +44,14 @@ describe('futó riasztás — mit mutat a riasztó-képernyő', () => {
     expect(people.map((p) => p.name)).toEqual(['Császár Dávid', 'Nagy Gábor'])
     expect(people[1]).toMatchObject({ plate: 'AUFS-312', route: 'G', round: 1 })
     expect(people[0]).toMatchObject({ route: null, round: null })
+  })
+})
+
+describe('telefonhívás állapota a beállító kártyán', () => {
+  it('nincs bekötve → jelzi; nincs hívható szám → jelzi; minden rendben → nincs teendő', () => {
+    expect(callProblem({ configured: false, phone: '+36 30 ••• 4567' })).toMatch(/nincs bekötve/)
+    expect(callProblem({ configured: true, phone: null })).toMatch(/nincs hívható magyar mobilszám/)
+    expect(callProblem({ configured: true, phone: '+36 30 ••• 4567' })).toBeNull()
+    expect(callProblem(null)).toBeNull()
   })
 })

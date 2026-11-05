@@ -11,6 +11,7 @@ export interface SetOffAlertRule {
   scope: AlertScope
   loud: boolean
   enabled: boolean
+  call: boolean // hangos szabálynál: telefonhívás is, ha a riasztást nem nyitják meg
 }
 
 export const ALERT_SCOPES: { key: AlertScope; label: string }[] = [
@@ -74,4 +75,14 @@ export function alarmPeople(alarms: SetOffAlarm[]): AlarmPerson[] {
     }
   }
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, 'hu'))
+}
+
+// ---- Telefonhívás a riasztáshoz: mit írjunk ki az állapotáról ----
+export interface CallStatus { configured: boolean; phone: string | null }
+// null = minden rendben (be van kötve, van hívható szám); különben a teendő szövege
+export function callProblem(st: CallStatus | null | undefined): string | null {
+  if (!st) return null
+  if (!st.configured) return 'A telefonhívás még nincs bekötve (a telefonos szolgáltató kulcsai hiányoznak) — addig csak az értesítés szól.'
+  if (!st.phone) return 'A profilodban nincs hívható magyar mobilszám — a Tagok oldalon add meg (pl. +36 30 123 4567), különben a hívás nem indul el.'
+  return null
 }

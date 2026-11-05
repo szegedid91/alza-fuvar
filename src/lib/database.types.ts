@@ -85,6 +85,42 @@ export type Database = {
           },
         ]
       }
+      alarm_calls: {
+        Row: {
+          alarm_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          sid: string | null
+          status: string
+          to_masked: string | null
+          user_id: string
+        }
+        Insert: {
+          alarm_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          sid?: string | null
+          status: string
+          to_masked?: string | null
+          user_id: string
+        }
+        Update: {
+          alarm_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          sid?: string | null
+          status?: string
+          to_masked?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       alza_boxes: {
         Row: {
           active: boolean
@@ -1909,11 +1945,14 @@ export type Database = {
       }
       setoff_alarms: {
         Row: {
+          call_count: number
+          call_token: string | null
           deadline: string
           dismissed_at: string | null
           ended_reason: string | null
           fired_at: string
           id: string
+          last_call_at: string | null
           last_push_at: string
           missing: Json
           push_count: number
@@ -1925,11 +1964,14 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          call_count?: number
+          call_token?: string | null
           deadline: string
           dismissed_at?: string | null
           ended_reason?: string | null
           fired_at?: string
           id?: string
+          last_call_at?: string | null
           last_push_at?: string
           missing?: Json
           push_count?: number
@@ -1941,11 +1983,14 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          call_count?: number
+          call_token?: string | null
           deadline?: string
           dismissed_at?: string | null
           ended_reason?: string | null
           fired_at?: string
           id?: string
+          last_call_at?: string | null
           last_push_at?: string
           missing?: Json
           push_count?: number
@@ -1960,6 +2005,7 @@ export type Database = {
       }
       setoff_alert_rules: {
         Row: {
+          call: boolean
           created_at: string
           deadline: string
           enabled: boolean
@@ -1971,6 +2017,7 @@ export type Database = {
           workspace_id: string
         }
         Insert: {
+          call?: boolean
           created_at?: string
           deadline: string
           enabled?: boolean
@@ -1982,6 +2029,7 @@ export type Database = {
           workspace_id: string
         }
         Update: {
+          call?: boolean
           created_at?: string
           deadline?: string
           enabled?: boolean
