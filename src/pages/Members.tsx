@@ -431,6 +431,8 @@ export default function Members() {
             const isSelf = m.id === profile?.id
             const open = openId === m.id
             const role = effRole(m)
+            // SEC-12: vezető (manager/admin) szerepét és hozzáférését csak admin módosíthatja
+            const leaderLocked = !isAdmin && (m.role === 'manager' || m.role === 'admin')
             const disabled = m.status !== 'active'
             return (
               <div key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -481,24 +483,26 @@ export default function Members() {
                       <select
                         className="select"
                         value={role}
-                        disabled={isSelf || setRole.isPending}
+                        disabled={isSelf || leaderLocked || setRole.isPending}
                         onChange={(e) => setRole.mutate({ id: m.id, role: e.target.value as Enums<'user_role'> })}
                       >
-                        {roles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
+                        {/* a zárolt (vezetői) sor a saját szerepét mutatja akkor is, ha a menedzser listájában nincs benne */}
+                        {(roles.includes(role) ? roles : [...roles, role]).map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
                       </select>
                       {isSelf && <div className="tiny muted">A saját szerepedet nem módosíthatod.</div>}
+                      {leaderLocked && <div className="tiny muted">Vezető szerepét és hozzáférését csak admin módosíthatja.</div>}
                     </div>
                     <div className="field">
                       <label>Hozzáférés</label>
                       {m.status === 'active' ? (
-                        <ConfirmButton className="btn secondary sm" confirmLabel="Igen, letiltom" disabled={isSelf || setStatus.isPending}
+                        <ConfirmButton className="btn secondary sm" confirmLabel="Igen, letiltom" disabled={isSelf || leaderLocked || setStatus.isPending}
                           onConfirm={() => setStatus.mutate({ id: m.id, status: 'disabled' })}>
                           <Icon name="ban" />Letiltás
                         </ConfirmButton>
                       ) : m.status === 'invited' ? (
                         <div className="tiny muted">Előre felvett munkatárs — a meghívó linkjén regisztrál, akkor lesz aktív. A meghívó a Meghívók kártyán törölhető.</div>
                       ) : (
-                        <button className="btn sm" disabled={setStatus.isPending}
+                        <button className="btn sm" disabled={leaderLocked || setStatus.isPending}
                           onClick={() => setStatus.mutate({ id: m.id, status: 'active' })}><Icon name="check" />Aktiválás</button>
                       )}
                     </div>
