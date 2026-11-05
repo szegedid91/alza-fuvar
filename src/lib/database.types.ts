@@ -1592,74 +1592,6 @@ export type Database = {
           },
         ]
       }
-      route_late_alerts: {
-        Row: {
-          box_id: string | null
-          car_id: string
-          deadline: string | null
-          id: string
-          notified_at: string
-          round: number
-          route_id: string
-          stop_index: number
-          work_date: string
-          workspace_id: string
-        }
-        Insert: {
-          box_id?: string | null
-          car_id: string
-          deadline?: string | null
-          id?: string
-          notified_at?: string
-          round?: number
-          route_id: string
-          stop_index: number
-          work_date: string
-          workspace_id: string
-        }
-        Update: {
-          box_id?: string | null
-          car_id?: string
-          deadline?: string | null
-          id?: string
-          notified_at?: string
-          round?: number
-          route_id?: string
-          stop_index?: number
-          work_date?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "route_late_alerts_box_id_fkey"
-            columns: ["box_id"]
-            isOneToOne: false
-            referencedRelation: "alza_boxes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_late_alerts_car_id_fkey"
-            columns: ["car_id"]
-            isOneToOne: false
-            referencedRelation: "cars"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_late_alerts_route_id_fkey"
-            columns: ["route_id"]
-            isOneToOne: false
-            referencedRelation: "route_names"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "route_late_alerts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       route_names: {
         Row: {
           active: boolean
@@ -2520,7 +2452,10 @@ export type Database = {
       storage_workspace_ok: { Args: { objname: string }; Returns: boolean }
       tick_inspection_reminders: { Args: never; Returns: undefined }
       tick_photo_missing_alerts: { Args: never; Returns: undefined }
-      tick_route_late_alerts: { Args: never; Returns: undefined }
+      trainee_scheduled: {
+        Args: { p_car_id: string; p_date: string }
+        Returns: boolean
+      }
       user_workspace_ids: { Args: never; Returns: string[] }
       workspace_leaders: { Args: { p_ws: string }; Returns: string[] }
     }

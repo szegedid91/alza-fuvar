@@ -53,13 +53,12 @@ export async function getCrewForDay(carId: string, date: string, openOnly = fals
 }
 
 // Van-e aznap betanuló beosztva az autóra (bármelyik körben) — a létszám ilyenkor +1.
-// (A munkatárs csak a saját beosztás-sorát látja; a betanulót tartalmazó sor
-// pont azé, aki vele ül, így a becsekkolási ellenőrzésnél látszik.)
+// LOG-18: a munkatárs csak a saját beosztás-sorát látja, a másik brigád sorára beosztott
+// betanulót nem — ezért szerver-oldali (SECURITY DEFINER) lekérdezés adja a választ.
 export async function traineeScheduled(carId: string, date: string): Promise<boolean> {
-  const { data, error } = await supabase.from('shifts').select('id')
-    .eq('car_id', carId).eq('work_date', date).not('trainee_id', 'is', null).limit(1)
+  const { data, error } = await supabase.rpc('trainee_scheduled', { p_car_id: carId, p_date: date })
   if (error) throw error // LOG-41
-  return (data ?? []).length > 0
+  return data === true
 }
 
 // Van-e MA ellenőrző fotósor az autón (bárkitől) — a becsekkolás ettől teljes

@@ -62,7 +62,7 @@ export default function RouteProgressCard() {
         const done = stops.length > 0 && idx >= stops.length
         const cur = stops[idx]
         const pct = stops.length ? Math.round((idx / stops.length) * 100) : 0
-        // Késésben: az aktuális box határideje lejárt, még nincs leadva (a vezetők 5 percenként pusht is kapnak)
+        // Késésben: az aktuális box határideje lejárt, még nincs leadva (csak itt jelezzük, push nem megy róla)
         const lateNow = cur && !done ? lateMinutes(cur.deadline, s.round) : null
         const lateLogs = s.logs.filter((l) => l.reason)
         return (
