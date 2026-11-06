@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -6,8 +6,8 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber, isCrewRole } from '../lib/labels'
 import { resolveNames } from '../lib/names'
-import { sumAdvances, monthRange, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError } from '../lib/payroll'
-import { monthTitle } from '../lib/calendar'
+import { sumAdvances, monthRange, currentYm, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, type AdvanceBasis } from '../lib/payroll'
+import { monthTitle, shiftMonth } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
 import type { Enums } from '../lib/database.types'
 import { toast } from '../lib/toast'
@@ -20,6 +20,7 @@ const QUICK_AMOUNTS = [5000, 10000, 20000, 50000]
 const RATE_COLS = 'driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate'
 const WEEKDAYS = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo']
 // '2026-11-03' → '11.03. K' (rövid nap-címke a kijelölő gombokra és a tétel-listába)
+const BASIS_KEY = 'alza-advance-basis'
 function shortDay(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   return `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}. ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}`
@@ -33,6 +34,10 @@ export default function Adjustments() {
 
   const [userId, setUserId] = useState('')
   const [date, setDate] = useState(todayISO())
+  // A hónap, amelyikre a tétel szól — léptethető; a tétel dátuma mindig ebbe a hónapba esik
+  const [ym, setYm] = useState(currentYm())
+  // Miből adható előleg: becsekkolt napokból (a bérszámítás alapja) vagy a beosztás napjaiból
+  const [basis, setBasis] = useState<AdvanceBasis>(() => { try { return localStorage.getItem(BASIS_KEY) === 'schedule' ? 'schedule' : 'checkin' } catch { return 'checkin' } })
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<Enums<'adjustment_type'>>('advance')
   const [reason, setReason] = useState('')
@@ -64,8 +69,19 @@ export default function Adjustments() {
 
   // LOG-10: a kiválasztott munkatárs HAVI tételei külön, korlát nélkül — a 60-as listából
   // kieshettek a korábbi e havi előlegei, és a vezető túl alacsony összeget látott.
-  // A hónap a tétel dátumának hónapja (alapból a mai nap → az aktuális hónap).
-  const ym = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : todayISO().slice(0, 7)
+  // A hónap a hónap-léptetőből jön; a dátum mező átírása a hónapot is átviszi.
+  function changeMonth(next: string) {
+    if (next > currentYm()) return
+    setYm(next); setDate(defaultDateForMonth(next, todayISO())); setError(null)
+  }
+  function changeDate(v: string) {
+    setDate(v)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v.slice(0, 7) <= currentYm()) setYm(v.slice(0, 7))
+  }
+  function changeBasis(b: AdvanceBasis) {
+    setBasis(b)
+    try { localStorage.setItem(BASIS_KEY, b) } catch { /* privát mód: csak erre a megnyitásra szól */ }
+  }
   const { data: monthRows } = useQuery({
     queryKey: ['adjustments', 'month', currentWorkspaceId, userId, ym],
     enabled: !!currentWorkspaceId && !!userId,
@@ -78,9 +94,9 @@ export default function Adjustments() {
     },
   })
 
-  // A kiválasztott munkatárs ledolgozott napjai a hónapban (becsekkolásból) a napi díjukkal —
-  // ugyanazzal a számítással, mint a Bérszámítás (szerep a beosztásból, a hónapra érvényes napidíj)
-  const { data: worked, isError: workedError } = useQuery({
+  // A kiválasztott munkatárs becsekkolásai és beosztásai a hónapban, a hónapra érvényes napidíjjal —
+  // a napi díj ugyanazzal a számítással készül, mint a Bérszámításban (szerep a beosztásból)
+  const { data: monthData, isError: workedError } = useQuery({
     queryKey: ['adjustments', 'worked', currentWorkspaceId, userId, ym],
     enabled: !!currentWorkspaceId && !!userId,
     queryFn: async () => {
@@ -89,6 +105,7 @@ export default function Adjustments() {
         supabase.from('check_ins').select('work_date')
           .eq('workspace_id', currentWorkspaceId!).eq('user_id', userId).gte('work_date', start).lt('work_date', endExclusive),
         supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, round, car:cars(category:car_categories(box_sheet))')
+          .eq('workspace_id', currentWorkspaceId!)
           .or(`driver_id.eq.${userId},loader_id.eq.${userId},trainee_id.eq.${userId}`).gte('work_date', start).lt('work_date', endExclusive),
         supabase.from('workspaces').select(RATE_COLS).eq('id', currentWorkspaceId!).maybeSingle(),
         supabase.from('workspace_rate_history').select(RATE_COLS)
@@ -96,15 +113,25 @@ export default function Adjustments() {
       ])
       for (const r of [ci, sh, ws, hist]) if (r.error) throw r.error
       const rate = hist.data?.[0] ? rateSetOf(hist.data[0]) : ws.data ? rateSetOf(ws.data) : undefined
-      const comps = buildDayComps(sh.data ?? [])
-      const dates = [...new Set((ci.data ?? []).map((c) => c.work_date))].sort()
-      return dates.map((d) => { const p = payForDay(comps.get(`${userId}|${d}`), rate); return { date: d, rate: p.rate, label: p.label } })
+      return { checkins: [...new Set((ci.data ?? []).map((c) => c.work_date))], shifts: sh.data ?? [], rate }
     },
   })
+  // A napok, amelyekből előleg adható — a választott alap szerint (becsekkolás / beosztás)
+  const worked = useMemo(() => {
+    if (!monthData) return null
+    const comps = buildDayComps(monthData.shifts)
+    const checked = new Set(monthData.checkins)
+    return advanceDays(basis, userId, monthData.checkins, monthData.shifts, todayISO()).map((d) => {
+      const p = payForDay(comps.get(`${userId}|${d}`), monthData.rate)
+      return { date: d, rate: p.rate, label: p.label, checkedIn: checked.has(d) }
+    })
+  }, [monthData, basis, userId])
   const coverage = worked ? advanceCoverage(worked, monthRows ?? []) : null
+  const dayWord = basis === 'schedule' ? 'beosztott' : 'ledolgozott'
+  const noCheckin = basis === 'schedule' ? (worked ?? []).filter((w) => !w.checkedIn).length : 0
 
-  // Másik munkatárs / hónap / típus → a nap-kijelölés nem vihető át
-  useEffect(() => { setSelDays([]) }, [userId, ym, type])
+  // Másik munkatárs / hónap / típus / alap → a nap-kijelölés nem vihető át
+  useEffect(() => { setSelDays([]) }, [userId, ym, type, basis])
 
   // Nap ki-/bejelölése: az összeg a kijelölt napok díja (de legfeljebb a még adható előleg —
   // így a korábbi, nap-megjelölés nélküli előleg is „ráilleszthető” a napokra)
@@ -134,10 +161,11 @@ export default function Adjustments() {
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Érvénytelen összeg — pozitív számot adj meg.')
       // LOG-24: üres vagy jövőbeli dátum nem mehet (jövő hónapba könyvelt előleg)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) throw new Error('Érvénytelen dátum — mai vagy korábbi napot adj meg.')
+      if (date.slice(0, 7) !== ym) throw new Error(`A dátum nem a kiválasztott hónapba (${monthTitle(ym)}) esik.`)
       // Előleg legfeljebb a már ledolgozott, még ki nem fizetett napok értékéig adható
       if (type === 'advance') {
-        if (!coverage) throw new Error('A ledolgozott napok még nem töltődtek be — próbáld újra.')
-        const limit = advanceLimitError(amt, coverage, formatHuf)
+        if (!coverage) throw new Error('A napok még nem töltődtek be — próbáld újra.')
+        const limit = advanceLimitError(amt, coverage, formatHuf, dayWord)
         if (limit) throw new Error(limit)
       }
       const { error } = await supabase.from('adjustments').insert({
@@ -165,6 +193,12 @@ export default function Adjustments() {
 
       <div className="card stack primary">
         <div className="card-title" style={{ margin: 0 }}><Icon name="wallet" />Új tétel</div>
+        {/* Hónap-léptető: melyik hónapra szól a tétel (a napok és az eddigi előlegek is erre a hónapra látszanak) */}
+        <div className="between">
+          <button type="button" className="icon-btn" aria-label="Előző hónap" onClick={() => changeMonth(shiftMonth(ym, -1))}><Icon name="chevron-left" /></button>
+          <div className="small" style={{ fontWeight: 700 }}><Icon name="calendar" size={16} style={{ verticalAlign: -3 }} /> {monthTitle(ym)}</div>
+          <button type="button" className="icon-btn" aria-label="Következő hónap" disabled={ym >= currentYm()} style={{ opacity: ym >= currentYm() ? 0.35 : 1 }} onClick={() => changeMonth(shiftMonth(ym, 1))}><Icon name="chevron-right" /></button>
+        </div>
         <div className="field">
           <label>Munkatárs</label>
           <select className="select" value={userId} onChange={(e) => setUserId(e.target.value)}>
@@ -187,10 +221,20 @@ export default function Adjustments() {
         </div>
         {userId && type === 'advance' && (
           <div className="field">
-            <label>Ledolgozott napok — {monthTitle(ym)}</label>
-            {workedError && <div className="alert error">A ledolgozott napok nem tölthetők be — előleg most nem rögzíthető.</div>}
+            <label>{basis === 'schedule' ? 'Beosztott napok' : 'Ledolgozott napok'} — {monthTitle(ym)}</label>
+            <div className="tabs" style={{ margin: 0 }}>
+              <button type="button" className={basis === 'checkin' ? 'active' : ''} onClick={() => changeBasis('checkin')}><Icon name="check-circle" size={18} />Becsekkolás szerint</button>
+              <button type="button" className={basis === 'schedule' ? 'active' : ''} onClick={() => changeBasis('schedule')}><Icon name="calendar" size={18} />Beosztás szerint</button>
+            </div>
+            <div className="tiny muted">
+              {basis === 'checkin'
+                ? 'Azok a napok, amikor becsekkolt — a bérszámítás is ezeket fizeti.'
+                : 'Azok a napok, amikre be volt osztva (a mai napig) — akkor is, ha nem csekkolt be.'}
+            </div>
+            {workedError && <div className="alert error">A napok nem tölthetők be — előleg most nem rögzíthető.</div>}
             {!workedError && !coverage && <div className="tiny muted">Betöltés…</div>}
-            {coverage && coverage.workedCount === 0 && <div className="tiny muted">Ebben a hónapban még nincs ledolgozott (becsekkolt) napja.</div>}
+            {coverage && coverage.workedCount === 0 && <div className="tiny muted">{basis === 'schedule' ? 'Ebben a hónapban a mai napig nincs beosztott napja.' : 'Ebben a hónapban még nincs ledolgozott (becsekkolt) napja.'}</div>}
+            {coverage && noCheckin > 0 && <div className="alert info">{noCheckin} beosztott napon nem csekkolt be (a gombon „nincs csekk”). A bérszámítás a becsekkolt napokat fizeti — ezekre a napokra adott előleg csak akkor térül meg, ha a nap a bérbe is bekerül.</div>}
             {coverage && coverage.workedCount > 0 && (
               <>
                 <div className="between small">
@@ -209,18 +253,18 @@ export default function Adjustments() {
                     return (
                       <button key={w.date} type="button" disabled={paid} aria-pressed={sel}
                         className={`chip day-chip ${sel ? 'active' : ''} ${paid ? 'paid' : ''}`}
-                        title={paid ? `${w.label} — már kifizetve` : w.label}
+                        title={`${w.label}${paid ? ' — már kifizetve' : ''}${w.checkedIn ? '' : ' — nem csekkolt be'}`}
                         onClick={() => toggleDay(w.date)}>
                         {paid && <Icon name="check" size={16} />}
                         <span>{shortDay(w.date)}</span>
-                        <span className="day-chip-sub">{paid ? 'fizetve' : w.rate > 0 ? formatHuf(w.rate) : w.label}</span>
+                        <span className="day-chip-sub">{paid ? 'fizetve' : w.rate > 0 ? formatHuf(w.rate) : w.label}{!paid && !w.checkedIn ? ' · nincs csekk' : ''}</span>
                       </button>
                     )
                   })}
                 </div>
                 {(() => {
                   const unpaid = (worked ?? []).filter((w) => !coverage.paidDates.has(w.date)).map((w) => w.date)
-                  if (unpaid.length === 0) return <div className="tiny muted">Minden ledolgozott napja meg van jelölve fizetettnek.</div>
+                  if (unpaid.length === 0) return <div className="tiny muted">Minden {dayWord} napja meg van jelölve fizetettnek.</div>
                   return (
                     <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                       <button type="button" className="link-btn" style={{ width: 'auto', fontSize: 13, padding: '6px 8px' }} onClick={() => applyDays(unpaid)}>
@@ -256,7 +300,8 @@ export default function Adjustments() {
         </div>
         <div className="field">
           <label>Dátum</label>
-          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input className="input" type="date" value={date} max={todayISO()} onChange={(e) => changeDate(e.target.value)} />
+          <div className="tiny muted">A tétel a(z) {monthTitle(ym)} havi bérben számolódik el.</div>
         </div>
         <div className="field">
           <label>Indok</label>
@@ -289,7 +334,7 @@ export default function Adjustments() {
             {selected && (
               <div className="tiny muted">
                 {selected.full_name || selected.email} · {monthTitle(ym)}: felvett előleg <strong>{formatHuf(monthAdv)}</strong>
-                {coverage && coverage.workedCount > 0 && <> · a ledolgozott napok <strong>{coverage.percent}%</strong>-a kifizetve</>}
+                {coverage && coverage.workedCount > 0 && <> · a {dayWord} napok <strong>{coverage.percent}%</strong>-a kifizetve</>}
               </div>
             )}
             {shown.length === 0 && <div className="tiny muted">Nincs rögzített tétel ennél a munkatársnál.</div>}

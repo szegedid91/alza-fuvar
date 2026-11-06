@@ -198,13 +198,35 @@ export function advanceCoverage(worked: { date: string; rate: number }[], adjust
 
 // Az új előleg ellenőrzése: legfeljebb a még ki nem fizetett ledolgozott napok értékéig mehet.
 // null = rendben; különben a hibaüzenet. Napidíj nélkül (0 Ft érték) nincs mihez mérni — átengedjük.
-export function advanceLimitError(amount: number, cov: AdvanceCoverage, fmt: (n: number) => string = String): string | null {
-  if (cov.workedCount === 0) return 'Ebben a hónapban még nincs ledolgozott napja — előleg csak ledolgozott napra adható.'
+// dayWord: milyen napokból számolunk ('ledolgozott' = becsekkolás szerint, 'beosztott' = beosztás szerint).
+export function advanceLimitError(amount: number, cov: AdvanceCoverage, fmt: (n: number) => string = String, dayWord = 'ledolgozott'): string | null {
+  if (cov.workedCount === 0) return `Ebben a hónapban még nincs ${dayWord} napja — előleg csak ${dayWord} napra adható.`
   if (cov.workedValue <= 0) return null
   if (amount > cov.remaining) {
     return cov.remaining <= 0
-      ? 'A ledolgozott napjai már teljes egészében ki vannak fizetve előlegként.'
-      : `Legfeljebb ${fmt(cov.remaining)} adható: a ledolgozott napok értéke ${fmt(cov.workedValue)}, ebből már felvett ${fmt(cov.advanced)}.`
+      ? `A ${dayWord} napjai már teljes egészében ki vannak fizetve előlegként.`
+      : `Legfeljebb ${fmt(cov.remaining)} adható: a ${dayWord} napok értéke ${fmt(cov.workedValue)}, ebből már felvett ${fmt(cov.advanced)}.`
   }
   return null
+}
+
+// ---- Előleg: miből adható — becsekkolás vagy beosztás szerint ----
+export type AdvanceBasis = 'checkin' | 'schedule'
+
+// A napok, amelyekből előleg adható a hónapban:
+//  - 'checkin': amikor a munkatárs becsekkolt (ez a bérszámítás alapja);
+//  - 'schedule': amikre be volt osztva (sofőr / rakodó / betanuló), legfeljebb a mai napig —
+//    jövőbeli beosztásra nem adható előleg.
+export function advanceDays(basis: AdvanceBasis, userId: string, checkinDates: string[], shifts: ShiftLike[], today: string): string[] {
+  const dates = basis === 'checkin'
+    ? checkinDates
+    : shifts.filter((s) => s.work_date <= today && (s.driver_id === userId || s.loader_id === userId || s.trainee_id === userId)).map((s) => s.work_date)
+  return [...new Set(dates)].sort()
+}
+
+// A tétel alap-dátuma a kiválasztott hónapban: az aktuális hónapban a mai nap, korábbiban a hónap utolsó napja
+export function defaultDateForMonth(ym: string, today: string): string {
+  if (ym === today.slice(0, 7)) return today
+  const [y, m] = ym.split('-').map(Number)
+  return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
 }

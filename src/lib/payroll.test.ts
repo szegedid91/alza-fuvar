@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError } from './payroll'
+import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth } from './payroll'
 
 describe('monthRange', () => {
   it('hónap eleje és a következő hónap eleje (kizáró vég)', () => {
@@ -111,5 +111,45 @@ describe('advanceLimitError — előleg legfeljebb a ledolgozott napok értéké
   })
   it('napidíj nélkül nincs mihez mérni — átengedi', () => {
     expect(advanceLimitError(99999, advanceCoverage([{ date: '2026-11-02', rate: 0 }], []))).toBeNull()
+  })
+})
+
+describe('advanceDays — miből adható előleg', () => {
+  const sh = (work_date: string, who: Partial<{ driver_id: string; loader_id: string; trainee_id: string }>) => ({ driver_id: null, loader_id: null, trainee_id: null, work_date, ...who })
+  const shifts = [
+    sh('2026-11-02', { driver_id: 'u1' }), sh('2026-11-02', { driver_id: 'u1' }), // két kör egy napon → egy nap
+    sh('2026-11-03', { loader_id: 'u1' }), sh('2026-11-04', { trainee_id: 'u1' }),
+    sh('2026-11-05', { driver_id: 'u2' }), // másé
+    sh('2026-11-20', { driver_id: 'u1' }), // jövőbeli
+  ]
+  it('becsekkolás szerint: a becsekkolt napok, rendezve, ismétlés nélkül', () => {
+    expect(advanceDays('checkin', 'u1', ['2026-11-03', '2026-11-01', '2026-11-03'], shifts, '2026-11-06')).toEqual(['2026-11-01', '2026-11-03'])
+  })
+  it('beosztás szerint: a saját beosztott napok a mai napig, bármelyik szerepben', () => {
+    expect(advanceDays('schedule', 'u1', ['2026-11-01'], shifts, '2026-11-06')).toEqual(['2026-11-02', '2026-11-03', '2026-11-04'])
+  })
+  it('beosztás szerint a mai nap még beleszámít, a holnapi nem', () => {
+    expect(advanceDays('schedule', 'u1', [], shifts, '2026-11-20')).toContain('2026-11-20')
+    expect(advanceDays('schedule', 'u1', [], shifts, '2026-11-19')).not.toContain('2026-11-20')
+  })
+})
+
+describe('defaultDateForMonth', () => {
+  it('az aktuális hónapban a mai nap, korábbi hónapban a hónap utolsó napja', () => {
+    expect(defaultDateForMonth('2026-11', '2026-11-06')).toBe('2026-11-06')
+    expect(defaultDateForMonth('2026-10', '2026-11-06')).toBe('2026-10-31')
+    expect(defaultDateForMonth('2026-02', '2026-11-06')).toBe('2026-02-28')
+    expect(defaultDateForMonth('2028-02', '2028-11-06')).toBe('2028-02-29')
+  })
+})
+
+describe('advanceLimitError — beosztás szerinti szöveg', () => {
+  it('a hibaüzenet a választott alap szavát használja', () => {
+    const empty = advanceCoverage([], [])
+    expect(advanceLimitError(1000, empty, String, 'beosztott')).toContain('nincs beosztott napja')
+    expect(advanceLimitError(1000, empty)).toContain('nincs ledolgozott napja')
+    const cov = advanceCoverage([{ date: '2026-11-02', rate: 20000 }], [])
+    expect(advanceLimitError(30000, cov, String, 'beosztott')).toContain('a beosztott napok értéke 20000')
+    expect(advanceLimitError(20000, cov, String, 'beosztott')).toBeNull()
   })
 })
