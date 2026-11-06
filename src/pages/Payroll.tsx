@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useAuth } from '../context/AuthContext'
-import { monthRange, currentYm, buildDayComps, payForDay, type PayrollRow, type PayRole } from '../lib/payroll'
-import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber } from '../lib/labels'
+import { monthRange, currentYm, buildDayComps, payForDay, payrollDays, type PayrollRow, type PayRole, type AdvanceBasis } from '../lib/payroll'
+import { readPayBasis, savePayBasis } from '../lib/payBasis'
+import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber, todayISO } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { openPayslip } from '../lib/payslip'
 import ConfirmButton from '../components/ConfirmButton'
@@ -79,14 +80,15 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
 
 export default function Payroll() {
   const [ym, setYm] = useState(currentYm())
-  // A napok alapja: a tényleges becsekkolások (alapértelmezés) vagy a tervezett beosztás
-  // (pl. a hónap előre modellezéséhez, amíg a munkatársak nem csekkolnak be)
-  const [basis, setBasis] = useState<'actual' | 'planned'>(() => (localStorage.getItem('alza-payroll-basis') === 'planned' ? 'planned' : 'actual'))
-  const changeBasis = (b: 'actual' | 'planned') => { setBasis(b); localStorage.setItem('alza-payroll-basis', b) }
+  // A napok alapja: a becsekkolások vagy a beosztás (a mai napig — a jövőbeli beosztott napok
+  // csak tervként látszanak). A választás közös az Előleg / levonás oldallal.
+  const [basis, setBasis] = useState<AdvanceBasis>(() => readPayBasis())
+  const changeBasis = (b: AdvanceBasis) => { setBasis(b); savePayBasis(b) }
+  const today = todayISO()
   const range = useMemo(() => monthRange(ym), [ym])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
-    queryKey: ['payroll', ym, basis, 'v5'],
+    queryKey: ['payroll', ym, basis, today, 'v6'],
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
@@ -104,7 +106,7 @@ export default function Payroll() {
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id, round, car:cars(category:car_categories(box_sheet))')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, reason')
+        fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, paid_on, reason')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
       ])
       if (profilesRes.error) throw profilesRes.error
@@ -128,19 +130,9 @@ export default function Payroll() {
       // Napi összetevők a beosztásból (kulcs `${userId}|${date}`) — közös segéd a lib/payroll-ban
       const compByUserDay = buildDayComps(shifts ?? [])
 
-      // Ledolgozott napok usereként (duplázás nélkül): a becsekkolásból, vagy
-      // „beosztás alapján” módban a beosztásból (sofőr/rakodó/betanuló napjai)
-      const daysByUser = new Map<string, Map<string, string>>() // userId -> (date -> workspaceId)
-      const addDay = (uid: string | null, date: string, wsId: string) => {
-        if (!uid) return
-        if (!daysByUser.has(uid)) daysByUser.set(uid, new Map())
-        daysByUser.get(uid)!.set(date, wsId)
-      }
-      if (basis === 'planned') {
-        for (const s of shifts ?? []) { addDay(s.driver_id, s.work_date, s.workspace_id); addDay(s.loader_id, s.work_date, s.workspace_id); addDay(s.trainee_id, s.work_date, s.workspace_id) }
-      } else {
-        for (const c of checkins ?? []) addDay(c.user_id, c.work_date, c.workspace_id)
-      }
+      // Fizetendő napok usereként (duplázás nélkül): a becsekkolásból, vagy „beosztás alapján”
+      // módban a beosztásból a mai napig; a hátralévő beosztott napok külön, tervként
+      const { paid: daysByUser, future: futureByUser } = payrollDays(basis, checkins ?? [], shifts ?? [], today)
       const plannedPeople = new Set((shifts ?? []).flatMap((s) => [s.driver_id, s.loader_id, s.trainee_id]).filter((x): x is string => !!x))
       const checkinCount = (checkins ?? []).length
 
@@ -154,10 +146,11 @@ export default function Payroll() {
         map.set(a.user_id, (map.get(a.user_id) ?? 0) + Number(a.amount))
         const items = a.type === 'advance' ? advItemsByUser : dedItemsByUser
         if (!items.has(a.user_id)) items.set(a.user_id, [])
-        items.get(a.user_id)!.push({ date: a.work_date, amount: Number(a.amount), reason: a.reason ?? null })
+        // az előlegnél a kifizetés napja látszik (ha külön meg van adva)
+        items.get(a.user_id)!.push({ date: a.type === 'advance' ? a.paid_on ?? a.work_date : a.work_date, amount: Number(a.amount), reason: a.reason ?? null })
       }
       const rows: PayrollRow[] = ((profiles ?? []) as unknown as (Tables<'profiles'> & { workspace: { name: string } | null })[])
-        .filter((p) => isCrewRole(p.role) && (p.status === 'active' || (daysByUser.get(p.id)?.size ?? 0) > 0))
+        .filter((p) => isCrewRole(p.role) && (p.status === 'active' || (daysByUser.get(p.id)?.size ?? 0) > 0 || (futureByUser.get(p.id)?.size ?? 0) > 0))
         .map((p) => {
           const dayMap = daysByUser.get(p.id) ?? new Map<string, string>()
           let driverDays = 0
@@ -187,6 +180,9 @@ export default function Payroll() {
             workedDays.push({ date, role: d.role, rate: d.rate, rounds: d.rounds, label: d.label })
           }
           workedDays.sort((a, b) => a.date.localeCompare(b.date))
+          let futurePay = 0
+          const futureMap = futureByUser.get(p.id)
+          for (const [date, wsId] of futureMap ?? []) futurePay += payForDay(compByUserDay.get(`${p.id}|${date}`), rates[wsId ?? p.workspace_id ?? '']).rate
           const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date)
           const wsRate = rates[p.workspace_id ?? '']
           const advances = advByUser.get(p.id) ?? 0
@@ -197,6 +193,7 @@ export default function Payroll() {
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0, traineeRate: wsRate?.trainee ?? 0, boxRate: wsRate?.box ?? 0, boxTraineeRate: wsRate?.boxTrainee ?? 0, boxRound2Rate: wsRate?.box2 ?? 0,
             driverPay, loaderPay, traineePay, boxPay, boxTraineePay, boxRound2Pay,
             advances, deductions, base,
+            futureDays: futureMap?.size ?? 0, futurePay,
             status: p.status as string,
             earned: base - deductions,
             total: base - advances - deductions,
@@ -215,8 +212,8 @@ export default function Payroll() {
   async function exportXlsx() {
     if (!data) return
     await exportRowsToXlsx(`ber_${ym}.xlsx`, `Bér ${ym}`, data.rows.map((r) => ({
-      'Munkatárs': r.name, 'Munkaterület': r.workspace, 'Alap': basis === 'planned' ? 'beosztás' : 'becsekkolás',
-      'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, 'Ledolgozott nap': r.days,
+      'Munkatárs': r.name, 'Munkaterület': r.workspace, 'Alap': basis === 'schedule' ? 'beosztás' : 'becsekkolás',
+      'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, [basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap']: r.days,
       'XL sofőr napidíj': r.driverRate, 'XL rakodó napidíj': r.loaderRate, 'Box 1. kör díj': r.boxRate, 'Box 2. kör díj': r.boxRound2Rate, 'XL betanuló napidíj': r.traineeRate, 'Box betanuló napidíj': r.boxTraineeRate, 'Alapbér': r.base,
       'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
     })))
@@ -225,12 +222,12 @@ export default function Payroll() {
   // Alapból csak azok, akiknél van mit elszámolni (nap, előleg vagy levonás) —
   // 20+ nullás sor elrejtené a lényeget. Az export mindig az összes sort viszi.
   const [onlyWorked, setOnlyWorked] = useState(true)
-  const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0
+  const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0 || (r.futureDays ?? 0) > 0
   const shownRows = (data?.rows ?? []).filter((r) => !onlyWorked || relevant(r))
   const workedCount = (data?.rows ?? []).filter(relevant).length
   const totals = (data?.rows ?? []).reduce(
-    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances }),
-    { pay: 0, days: 0, deductions: 0, advances: 0 },
+    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances, futureDays: a.futureDays + (r.futureDays ?? 0), futurePay: a.futurePay + (r.futurePay ?? 0) }),
+    { pay: 0, days: 0, deductions: 0, advances: 0, futureDays: 0, futurePay: 0 },
   )
 
   return (
@@ -243,24 +240,27 @@ export default function Payroll() {
           <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />{monthTitle(ym)}</div>
           <button className="icon-btn" aria-label="Következő hónap" onClick={() => setYm(shiftMonth(ym, 1))}><Icon name="chevron-right" /></button>
         </div>
-        {/* Napok alapja: tényleges (becsekkolás) vagy tervezett (beosztás) */}
+        {/* Napok alapja: becsekkolás vagy beosztás — mindkettő elszámolási alap */}
         <div className="tabs compact" style={{ marginBottom: 0 }}>
-          <button className={basis === 'actual' ? 'active' : ''} onClick={() => changeBasis('actual')}><Icon name="qr-code" size={16} />Becsekkolás alapján</button>
-          <button className={basis === 'planned' ? 'active' : ''} onClick={() => changeBasis('planned')}><Icon name="calendar" size={16} />Beosztás alapján</button>
+          <button className={basis === 'checkin' ? 'active' : ''} onClick={() => changeBasis('checkin')}><Icon name="qr-code" size={16} />Becsekkolás alapján</button>
+          <button className={basis === 'schedule' ? 'active' : ''} onClick={() => changeBasis('schedule')}><Icon name="calendar" size={16} />Beosztás alapján</button>
         </div>
-        {data && basis === 'actual' && data.checkinCount === 0 && data.plannedCount > 0 && (
+        {data && basis === 'checkin' && data.checkinCount === 0 && data.plannedCount > 0 && (
           <div className="alert info row" style={{ gap: 8, alignItems: 'flex-start' }}>
             <Icon name="info" style={{ flexShrink: 0, marginTop: 2 }} />
-            <span>Ebben a hónapban még nincs becsekkolás, de {data.plannedCount} munkatárs be van osztva — a tervezett bérhez válts „Beosztás alapján” nézetre.</span>
+            <span>Ebben a hónapban még nincs becsekkolás, de {data.plannedCount} munkatárs be van osztva — a beosztás szerinti bérhez válts „Beosztás alapján” nézetre.</span>
           </div>
         )}
-        {data && basis === 'planned' && (
-          <div className="tiny muted">Tervezett bér a beosztás szerint — a tényleges kifizetéshez a becsekkolások számítanak.</div>
+        {data && basis === 'schedule' && (
+          <div className="tiny muted">
+            A bér a beosztás napjaiból számol{ym === today.slice(0, 7) ? ', a mai napig' : ''} — becsekkolás nélkül is. A bérlap és az export is ezt mutatja; az Előleg / levonás oldal ugyanezt az alapot használja.
+            {totals.futureDays > 0 && <> A hónapból még <strong>{totals.futureDays}</strong> beosztott nap van hátra (<strong>{formatHuf(totals.futurePay)}</strong>) — ezzel együtt a tervezett havi bér <strong>{formatHuf(totals.pay + totals.futurePay)}</strong>.</>}
+          </div>
         )}
         {data && (
           <div className="grid-2">
-            <div><div className="tiny muted">{basis === 'planned' ? 'Tervezett összesen' : 'Kifizetendő összesen'}</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
-            <div><div className="tiny muted">{basis === 'planned' ? 'Beosztott napok' : 'Ledolgozott napok'}</div><div className="num num-lg">{totals.days}</div></div>
+            <div><div className="tiny muted">Kifizetendő összesen</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
+            <div><div className="tiny muted">{basis === 'schedule' ? 'Beosztott napok' : 'Ledolgozott napok'}</div><div className="num num-lg">{totals.days}</div></div>
             <div><div className="tiny muted">Levonás</div><div className="num" style={{ color: totals.deductions > 0 ? 'var(--danger)' : undefined }}>{formatHuf(totals.deductions)}</div></div>
             <div><div className="tiny muted">Felvett előleg</div><div className="num">{formatHuf(totals.advances)}</div></div>
           </div>
@@ -302,7 +302,7 @@ export default function Payroll() {
         <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Ebben a hónapban még nincs elszámolandó tétel.</div>
       )}
 
-      {shownRows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} />)}
+      {shownRows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} basis={basis} />)}
     </div>
   )
 }
@@ -558,7 +558,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   )
 }
 
-function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
+function PayrollCard({ row, ym, basis }: { row: PayrollRow; ym: string; basis: AdvanceBasis }) {
   return (
     <div className="card stack">
       <div className="between">
@@ -583,11 +583,15 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         {row.boxRound2Days > 0 && <div className="between"><span className="muted">Box 2. körök</span><span>{row.boxRound2Days} db · {formatHuf(row.boxRound2Pay)}</span></div>}
         {row.boxTraineeDays > 0 && <div className="between"><span className="muted">Box betanulóként</span><span>{row.boxTraineeDays} nap · {formatHuf(row.boxTraineePay)}</span></div>}
         {row.traineeDays > 0 && <div className="between"><span className="muted">XL betanulóként</span><span>{row.traineeDays} nap · {formatHuf(row.traineePay)}</span></div>}
-        <div className="between"><span className="muted">Ledolgozott nap</span><span>{row.days}</span></div>
+        <div className="between"><span className="muted">{basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap'}</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
         <div className="between"><span className="muted">Előleg</span><span style={{ color: row.advances > 0 ? 'var(--warning)' : undefined }}>{row.advances > 0 ? '−' : ''}{formatHuf(row.advances)}</span></div>
         <div className="between"><span className="muted">Levonás</span><span style={{ color: row.deductions > 0 ? 'var(--danger)' : undefined }}>{row.deductions > 0 ? '−' : ''}{formatHuf(row.deductions)}</span></div>
       </div>
+
+      {(row.futureDays ?? 0) > 0 && (
+        <div className="tiny muted">Még hátra van a hónapból: {row.futureDays} beosztott nap · {formatHuf(row.futurePay ?? 0)} (a fenti összegben nincs benne)</div>
+      )}
 
       {row.advanceItems.length > 0 && (
         <div className="stack" style={{ gap: 2 }}>
@@ -601,7 +605,7 @@ function PayrollCard({ row, ym }: { row: PayrollRow; ym: string }) {
         </div>
       )}
 
-      <button className="btn secondary sm" onClick={() => openPayslip(row, ym)}><Icon name="file-text" />Bérlap (nyomtatás / PDF)</button>
+      <button className="btn secondary sm" onClick={() => openPayslip(row, ym, basis)}><Icon name="file-text" />Bérlap (nyomtatás / PDF)</button>
     </div>
   )
 }

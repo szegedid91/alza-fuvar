@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth } from './payroll'
+import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, payrollDays } from './payroll'
 
 describe('monthRange', () => {
   it('hónap eleje és a következő hónap eleje (kizáró vég)', () => {
@@ -151,5 +151,49 @@ describe('advanceLimitError — beosztás szerinti szöveg', () => {
     const cov = advanceCoverage([{ date: '2026-11-02', rate: 20000 }], [])
     expect(advanceLimitError(30000, cov, String, 'beosztott')).toContain('a beosztott napok értéke 20000')
     expect(advanceLimitError(20000, cov, String, 'beosztott')).toBeNull()
+  })
+})
+
+describe('accountingDate — az előleg elszámolási napja a kifizetés napjából', () => {
+  it('a hónapon belül a kifizetés napja', () => {
+    expect(accountingDate('2026-11', '2026-11-06')).toBe('2026-11-06')
+  })
+  it('később kifizetett, korábbi hónapra szóló előleg a hónap utolsó napjára kerül', () => {
+    expect(accountingDate('2026-10', '2026-11-06')).toBe('2026-10-31')
+    expect(accountingDate('2026-02', '2026-03-02')).toBe('2026-02-28')
+  })
+  it('a hónap előtti kifizetés a hónap első napjára kerül', () => {
+    expect(accountingDate('2026-11', '2026-10-30')).toBe('2026-11-01')
+  })
+})
+
+describe('payrollDays — mely napok fizetendők', () => {
+  const sh = (work_date: string, who: Partial<{ driver_id: string; loader_id: string; trainee_id: string }>, workspace_id = 'w1') => ({ driver_id: null, loader_id: null, trainee_id: null, work_date, workspace_id, ...who })
+  const shifts = [
+    sh('2026-11-02', { driver_id: 'u1', loader_id: 'u2' }), sh('2026-11-02', { driver_id: 'u1' }), // két kör egy napon
+    sh('2026-11-06', { trainee_id: 'u1' }), sh('2026-11-07', { driver_id: 'u1' }), sh('2026-11-20', { loader_id: 'u2' }, 'w2'),
+  ]
+  const checkins = [{ user_id: 'u1', work_date: '2026-11-03', workspace_id: 'w1' }, { user_id: 'u1', work_date: '2026-11-03', workspace_id: 'w1' }]
+
+  it('becsekkolás szerint: csak a becsekkolt napok, jövőbeli terv nélkül', () => {
+    const r = payrollDays('checkin', checkins, shifts, '2026-11-06')
+    expect([...r.paid.get('u1')!.keys()]).toEqual(['2026-11-03'])
+    expect(r.paid.has('u2')).toBe(false)
+    expect(r.future.size).toBe(0)
+  })
+  it('beosztás szerint: a mai napig beosztott napok fizetendők, becsekkolás nélkül is', () => {
+    const r = payrollDays('schedule', checkins, shifts, '2026-11-06')
+    expect([...r.paid.get('u1')!.keys()]).toEqual(['2026-11-02', '2026-11-06']) // a mai nap még beleszámít
+    expect([...r.paid.get('u2')!.keys()]).toEqual(['2026-11-02'])
+  })
+  it('beosztás szerint a hátralévő napok külön, tervként, a saját munkaterületükkel', () => {
+    const r = payrollDays('schedule', checkins, shifts, '2026-11-06')
+    expect([...r.future.get('u1')!.keys()]).toEqual(['2026-11-07'])
+    expect(r.future.get('u2')!.get('2026-11-20')).toBe('w2')
+  })
+  it('lezárt (múlt) hónapban minden beosztott nap fizetendő', () => {
+    const r = payrollDays('schedule', [], shifts, '2026-12-05')
+    expect(r.paid.get('u1')!.size).toBe(3)
+    expect(r.future.size).toBe(0)
   })
 })

@@ -67,6 +67,9 @@ export interface PayrollRow {
   // A ténylegesen kifizetendő (a már felvett előleggel csökkentve) — csak adminnak
   total: number
   status: string
+  // Beosztás szerinti számításnál: a hónap még hátralévő (jövőbeli) beosztott napjai és azok díja
+  futureDays?: number
+  futurePay?: number
   workedDays: WorkedDay[]
   advanceItems: AdjustmentItem[]
   deductionItems: AdjustmentItem[]
@@ -229,4 +232,40 @@ export function defaultDateForMonth(ym: string, today: string): string {
   if (ym === today.slice(0, 7)) return today
   const [y, m] = ym.split('-').map(Number)
   return `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+}
+
+// Az előleg ELSZÁMOLÁSI dátuma (work_date) a kifizetés napjából: a kiválasztott hónapon belül
+// maga a kifizetés napja; ha a kifizetés a hónapon kívül esik (pl. novemberben fizetett októberi
+// előleg), a hónap legközelebbi napja. A kifizetés napja külön tárolódik (paid_on).
+export function accountingDate(ym: string, paidOn: string): string {
+  const { start } = monthRange(ym)
+  const [y, m] = ym.split('-').map(Number)
+  const end = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  return paidOn < start ? start : paidOn > end ? end : paidOn
+}
+
+// ---- Bérszámítás: mely napok fizetendők ----
+// userId → (dátum → munkaterület). 'checkin': a becsekkolt napok; 'schedule': a beosztott napok
+// a mai napig (paid), a hónap hátralévő beosztott napjai külön (future) — azok csak tervként látszanak.
+export type DayMap = Map<string, Map<string, string>>
+export interface CheckinLike { user_id: string; work_date: string; workspace_id: string }
+export interface PayShiftLike extends ShiftLike { workspace_id: string }
+
+export function payrollDays(basis: AdvanceBasis, checkins: CheckinLike[], shifts: PayShiftLike[], today: string): { paid: DayMap; future: DayMap } {
+  const paid: DayMap = new Map()
+  const future: DayMap = new Map()
+  const add = (map: DayMap, uid: string | null, date: string, wsId: string) => {
+    if (!uid) return
+    if (!map.has(uid)) map.set(uid, new Map())
+    map.get(uid)!.set(date, wsId)
+  }
+  if (basis === 'schedule') {
+    for (const s of shifts) {
+      const map = s.work_date <= today ? paid : future
+      add(map, s.driver_id, s.work_date, s.workspace_id); add(map, s.loader_id, s.work_date, s.workspace_id); add(map, s.trainee_id, s.work_date, s.workspace_id)
+    }
+  } else {
+    for (const c of checkins) add(paid, c.user_id, c.work_date, c.workspace_id)
+  }
+  return { paid, future }
 }

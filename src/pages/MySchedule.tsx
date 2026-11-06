@@ -209,7 +209,9 @@ export default function MySchedule() {
       // A munkatárs csak az előlegeit látja — a levonás a vezetőség/bérlap dolga
       const { data, error } = await supabase.from('adjustments').select('*')
         .eq('workspace_id', currentWorkspaceId!)
-        .eq('user_id', profile!.id).eq('work_date', today)
+        .eq('user_id', profile!.id)
+        // a MA kifizetett előleg: a kifizetés napja szerint (régi tételnél ez a tétel dátuma)
+        .or(`paid_on.eq.${today},and(paid_on.is.null,work_date.eq.${today})`)
         .eq('type', 'advance').order('created_at')
       if (error) throw error
       return data ?? []

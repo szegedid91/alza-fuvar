@@ -1,6 +1,7 @@
 import { payRoleLabel } from './payroll'
 import type { PayrollRow } from './payroll'
 import { formatHuf } from './labels'
+import { printHtml } from './printWindow'
 
 // Ezres tagolt összeg (1 234 567 Ft) — a képernyővel azonos formázás
 const HUF = (n: number) => formatHuf(n)
@@ -19,7 +20,9 @@ function fmtDay(iso: string): string {
 // HTML-escape a bérlaphoz (SEC-18: idézőjelek is, és a hónap-string is ezen megy át)
 export const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
-export function openPayslip(row: PayrollRow, ymRaw: string): void {
+// basis: a napok alapja — 'schedule' esetén a bérlap „Beosztott napok”-at ír
+export function openPayslip(row: PayrollRow, ymRaw: string, basis: 'checkin' | 'schedule' = 'checkin'): void {
+  const dayTitle = basis === 'schedule' ? 'Beosztott napok' : 'Ledolgozott napok'
   const esc = escHtml
   const ym = esc(ymRaw)
   const html = `<!doctype html>
@@ -60,8 +63,8 @@ export function openPayslip(row: PayrollRow, ymRaw: string): void {
   </table>
   <p class="none">A hónap közben már felvett előleg a kifizetéskor kerül elszámolásra.</p>
 
-  <h2>Ledolgozott napok (${row.workedDays.length})</h2>
-  ${row.workedDays.length === 0 ? '<p class="none">Nem volt ledolgozott nap ebben a hónapban.</p>' : `
+  <h2>${dayTitle} (${row.workedDays.length})</h2>
+  ${row.workedDays.length === 0 ? `<p class="none">Nem volt ${basis === 'schedule' ? 'beosztott' : 'ledolgozott'} nap ebben a hónapban.</p>` : `
   <div class="days">
     ${row.workedDays.map((w) => `<div class="dayrow"><span>${fmtDay(w.date)}</span><span>${esc(w.label ?? payRoleLabel[w.role])} · ${HUF(w.rate)}</span></div>`).join('')}
   </div>`}
@@ -77,27 +80,5 @@ export function openPayslip(row: PayrollRow, ymRaw: string): void {
   <div class="foot">Készült: ${new Date().toLocaleString('hu-HU')} · Alza Fuvarszervező</div>
   <script>window.print()</script>
 </body></html>`
-  const w = window.open('', '_blank')
-  if (w) {
-    w.document.write(html)
-    w.document.close()
-    return
-  }
-  // Fallback: ha a felugró ablak tiltott, rejtett iframe-ből nyomtatunk
-  const frame = document.createElement('iframe')
-  frame.style.position = 'fixed'
-  frame.style.right = '0'
-  frame.style.bottom = '0'
-  frame.style.width = '0'
-  frame.style.height = '0'
-  frame.style.border = '0'
-  document.body.appendChild(frame)
-  const doc = frame.contentWindow?.document
-  if (!doc) { frame.remove(); return }
-  doc.open()
-  doc.write(html.replace('<script>window.print()</script>', ''))
-  doc.close()
-  frame.contentWindow?.focus()
-  frame.contentWindow?.print()
-  setTimeout(() => frame.remove(), 60000)
+  printHtml(html)
 }

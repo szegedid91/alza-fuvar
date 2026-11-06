@@ -22,6 +22,7 @@ export type Database = {
           created_by: string | null
           evidence_id: string | null
           id: string
+          paid_on: string | null
           reason: string | null
           type: Database["public"]["Enums"]["adjustment_type"]
           user_id: string
@@ -35,6 +36,7 @@ export type Database = {
           created_by?: string | null
           evidence_id?: string | null
           id?: string
+          paid_on?: string | null
           reason?: string | null
           type: Database["public"]["Enums"]["adjustment_type"]
           user_id: string
@@ -48,6 +50,7 @@ export type Database = {
           created_by?: string | null
           evidence_id?: string | null
           id?: string
+          paid_on?: string | null
           reason?: string | null
           type?: Database["public"]["Enums"]["adjustment_type"]
           user_id?: string

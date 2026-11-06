@@ -6,7 +6,9 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
 import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber, isCrewRole } from '../lib/labels'
 import { resolveNames } from '../lib/names'
-import { sumAdvances, monthRange, currentYm, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, type AdvanceBasis } from '../lib/payroll'
+import { sumAdvances, monthRange, currentYm, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, type AdvanceBasis } from '../lib/payroll'
+import { readPayBasis, savePayBasis } from '../lib/payBasis'
+import { openReceipt } from '../lib/receipt'
 import { monthTitle, shiftMonth } from '../lib/calendar'
 import ConfirmButton from '../components/ConfirmButton'
 import type { Enums } from '../lib/database.types'
@@ -20,11 +22,14 @@ const QUICK_AMOUNTS = [5000, 10000, 20000, 50000]
 const RATE_COLS = 'driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate'
 const WEEKDAYS = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo']
 // '2026-11-03' → '11.03. K' (rövid nap-címke a kijelölő gombokra és a tétel-listába)
-const BASIS_KEY = 'alza-advance-basis'
+const COMPANY_KEY = 'alza-quality-company' // a kifizető cég neve — közös a napi minőségjelentéssel
 function shortDay(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   return `${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}. ${WEEKDAYS[new Date(y, m - 1, d).getDay()]}`
 }
+
+// Egy előleg-tétel a bizonylat nyomtatásához
+interface ReceiptRow { id: string; amount: number | string; work_date: string; paid_on: string | null; covered_dates: string[] | null; reason: string | null; name: string; by: string | null }
 
 export default function Adjustments() {
   const { profile } = useAuth()
@@ -37,7 +42,13 @@ export default function Adjustments() {
   // A hónap, amelyikre a tétel szól — léptethető; a tétel dátuma mindig ebbe a hónapba esik
   const [ym, setYm] = useState(currentYm())
   // Miből adható előleg: becsekkolt napokból (a bérszámítás alapja) vagy a beosztás napjaiból
-  const [basis, setBasis] = useState<AdvanceBasis>(() => { try { return localStorage.getItem(BASIS_KEY) === 'schedule' ? 'schedule' : 'checkin' } catch { return 'checkin' } })
+  // (közös beállítás a Bérszámítással)
+  const [basis, setBasis] = useState<AdvanceBasis>(() => readPayBasis())
+  // Előlegnél a dátum a KIFIZETÉS napja (ez áll a bizonylaton) — független attól, melyik hónap napjaira szól
+  const [paidOn, setPaidOn] = useState(todayISO())
+  const [company, setCompany] = useState(() => { try { return localStorage.getItem(COMPANY_KEY) ?? 'Utód zrt.' } catch { return 'Utód zrt.' } })
+  // A legutóbb rögzített előleg — innen egy koppintással nyomtatható a bizonylat
+  const [lastSaved, setLastSaved] = useState<ReceiptRow | null>(null)
   const [amount, setAmount] = useState('')
   const [type, setType] = useState<Enums<'adjustment_type'>>('advance')
   const [reason, setReason] = useState('')
@@ -78,9 +89,18 @@ export default function Adjustments() {
     setDate(v)
     if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v.slice(0, 7) <= currentYm()) setYm(v.slice(0, 7))
   }
-  function changeBasis(b: AdvanceBasis) {
-    setBasis(b)
-    try { localStorage.setItem(BASIS_KEY, b) } catch { /* privát mód: csak erre a megnyitásra szól */ }
+  function changeBasis(b: AdvanceBasis) { setBasis(b); savePayBasis(b) }
+  function changeCompany(v: string) {
+    setCompany(v)
+    try { localStorage.setItem(COMPANY_KEY, v) } catch { /* privát mód: csak erre a megnyitásra szól */ }
+  }
+  // Átvételi bizonylat nyomtatása egy előleg-tételről (két példány egy lapon)
+  function printReceipt(a: ReceiptRow) {
+    openReceipt({
+      id: a.id, company, recipient: a.name, amount: Number(a.amount),
+      paidOn: a.paid_on ?? a.work_date, ym: a.work_date.slice(0, 7),
+      coveredDates: a.covered_dates ?? [], reason: a.reason, paidBy: a.by,
+    })
   }
   const { data: monthRows } = useQuery({
     queryKey: ['adjustments', 'month', currentWorkspaceId, userId, ym],
@@ -132,6 +152,7 @@ export default function Adjustments() {
 
   // Másik munkatárs / hónap / típus / alap → a nap-kijelölés nem vihető át
   useEffect(() => { setSelDays([]) }, [userId, ym, type, basis])
+  useEffect(() => { setLastSaved(null) }, [userId, type])
 
   // Nap ki-/bejelölése: az összeg a kijelölt napok díja (de legfeljebb a még adható előleg —
   // így a korábbi, nap-megjelölés nélküli előleg is „ráilleszthető” a napokra)
@@ -160,25 +181,33 @@ export default function Adjustments() {
       // Negatív előleg/levonás fordítva hatna a bérre — csak pozitív összeg mehet
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Érvénytelen összeg — pozitív számot adj meg.')
       // LOG-24: üres vagy jövőbeli dátum nem mehet (jövő hónapba könyvelt előleg)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) throw new Error('Érvénytelen dátum — mai vagy korábbi napot adj meg.')
-      if (date.slice(0, 7) !== ym) throw new Error(`A dátum nem a kiválasztott hónapba (${monthTitle(ym)}) esik.`)
+      const isAdvance = type === 'advance'
+      const given = isAdvance ? paidOn : date
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(given) || given > todayISO()) throw new Error(isAdvance ? 'Érvénytelen kifizetési nap — mai vagy korábbi napot adj meg.' : 'Érvénytelen dátum — mai vagy korábbi napot adj meg.')
+      if (!isAdvance && date.slice(0, 7) !== ym) throw new Error(`A dátum nem a kiválasztott hónapba (${monthTitle(ym)}) esik.`)
+      // Előlegnél a kifizetés napja külön tárolódik; az elszámolás a kiválasztott hónapba megy
+      const workDate = isAdvance ? accountingDate(ym, paidOn) : date
       // Előleg legfeljebb a már ledolgozott, még ki nem fizetett napok értékéig adható
       if (type === 'advance') {
         if (!coverage) throw new Error('A napok még nem töltődtek be — próbáld újra.')
         const limit = advanceLimitError(amt, coverage, formatHuf, dayWord)
         if (limit) throw new Error(limit)
       }
-      const { error } = await supabase.from('adjustments').insert({
-        workspace_id: currentWorkspaceId!, user_id: userId, work_date: date,
+      const { data, error } = await supabase.from('adjustments').insert({
+        workspace_id: currentWorkspaceId!, user_id: userId, work_date: workDate,
+        paid_on: isAdvance ? paidOn : null,
         amount: amt,
         type, reason: reason.trim() || null, created_by: profile!.id,
-        covered_dates: type === 'advance' && selDays.length > 0 ? [...selDays].sort() : null,
-      })
+        covered_dates: isAdvance && selDays.length > 0 ? [...selDays].sort() : null,
+      }).select('id, type, amount, work_date, paid_on, covered_dates, reason').single()
       if (error) throw error
+      return data
     },
-    onSuccess: () => {
+    onSuccess: (row) => {
       const who = members?.find((m) => m.id === userId)
-      toast.success(`${type === 'advance' ? 'Előleg' : 'Levonás'} rögzítve${who ? ` — ${who.full_name || who.email}` : ''}`)
+      const name = who ? who.full_name || who.email || 'Munkatárs' : 'Munkatárs'
+      toast.success(`${type === 'advance' ? 'Előleg' : 'Levonás'} rögzítve — ${name}`)
+      setLastSaved(row.type === 'advance' ? { ...row, name, by: profile?.full_name || profile?.email || null } : null)
       setAmount(''); setReason(''); setError(null); setSelDays([])
       void qc.invalidateQueries({ queryKey: ['adjustments'] })
     },
@@ -298,16 +327,36 @@ export default function Adjustments() {
             ))}
           </div>
         </div>
-        <div className="field">
-          <label>Dátum</label>
-          <input className="input" type="date" value={date} max={todayISO()} onChange={(e) => changeDate(e.target.value)} />
-          <div className="tiny muted">A tétel a(z) {monthTitle(ym)} havi bérben számolódik el.</div>
-        </div>
+        {type === 'advance' ? (
+          <div className="field">
+            <label>Kifizetés napja</label>
+            <input className="input" type="date" value={paidOn} max={todayISO()} onChange={(e) => setPaidOn(e.target.value)} />
+            <div className="tiny muted">Az a nap, amikor a pénzt átadod — ez kerül a bizonylatra. A tétel a(z) {monthTitle(ym)} havi bérben számolódik el.</div>
+          </div>
+        ) : (
+          <div className="field">
+            <label>Dátum</label>
+            <input className="input" type="date" value={date} max={todayISO()} onChange={(e) => changeDate(e.target.value)} />
+            <div className="tiny muted">A tétel a(z) {monthTitle(ym)} havi bérben számolódik el.</div>
+          </div>
+        )}
         <div className="field">
           <label>Indok</label>
           <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="pl. előleg készpénzben" />
         </div>
+        {type === 'advance' && (
+          <div className="field">
+            <label>Kifizető (cég) neve a bizonylaton</label>
+            <input className="input" value={company} maxLength={60} onChange={(e) => changeCompany(e.target.value)} placeholder="pl. Utód zrt." />
+          </div>
+        )}
         {error && <div className="alert error">{error}</div>}
+        {lastSaved && (
+          <div className="alert success stack" style={{ gap: 8 }}>
+            <div>Előleg rögzítve: <strong>{lastSaved.name}</strong> · {formatHuf(Number(lastSaved.amount))} · kifizetve {formatDate(lastSaved.paid_on ?? lastSaved.work_date)}</div>
+            <button type="button" className="btn secondary sm" onClick={() => printReceipt(lastSaved)}><Icon name="printer" />Átvételi bizonylat nyomtatása</button>
+          </div>
+        )}
         {/* Bért érintő művelet — két koppintás, mint a többi véglegesítésnél */}
         <ConfirmButton className="btn" confirmLabel={`Biztos? ${type === 'advance' ? 'Előleg' : 'Levonás'} rögzítése`} disabled={!canSave} onConfirm={() => add.mutate()}>
           <Icon name="check" />{add.isPending ? 'Mentés…' : 'Rögzítés'}
@@ -343,7 +392,9 @@ export default function Adjustments() {
                 <div style={{ minWidth: 0 }}>
                   <div className="small" style={{ fontWeight: 600 }}>{(a.user as unknown as { full_name: string | null } | null)?.full_name ?? 'Ismeretlen'}</div>
                   <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {formatDate(a.work_date)}{a.reason ? ` · ${a.reason}` : ''}{a._by ? ` · ${a._by}` : ''}
+                    {a.type === 'advance' ? `Kifizetve: ${formatDate(a.paid_on ?? a.work_date)}` : formatDate(a.work_date)}
+                    {a.paid_on && a.paid_on.slice(0, 7) !== a.work_date.slice(0, 7) ? ` · ${monthTitle(a.work_date.slice(0, 7))} havi elszámolás` : ''}
+                    {a.reason ? ` · ${a.reason}` : ''}{a._by ? ` · ${a._by}` : ''}
                   </div>
                   {a.covered_dates && a.covered_dates.length > 0 && (
                     <div className="tiny muted">Fizetett napok ({a.covered_dates.length}): {a.covered_dates.map(shortDay).join(', ')}</div>
@@ -354,6 +405,13 @@ export default function Adjustments() {
                     {a.type === 'deduction' ? '−' : ''}{formatHuf(Number(a.amount))}
                     <span className="muted" style={{ fontWeight: 500 }}>{adjustmentTypeLabel[a.type].toLowerCase()}</span>
                   </span>
+                  {a.type === 'advance' && (
+                    <button type="button" className="btn ghost sm" title="Átvételi bizonylat nyomtatása" aria-label="Átvételi bizonylat nyomtatása"
+                      style={{ minHeight: 34, padding: '4px 8px' }}
+                      onClick={() => printReceipt({ ...a, name: (a.user as unknown as { full_name: string | null } | null)?.full_name ?? 'Ismeretlen', by: a._by })}>
+                      <Icon name="printer" size={16} />
+                    </button>
+                  )}
                   <ConfirmButton className="btn ghost sm" confirmLabel="Törlés?" title="Tétel törlése" disabled={remove.isPending}
                     style={{ minHeight: 34, padding: '4px 8px' }}
                     onConfirm={() => remove.mutate(a.id)}>
