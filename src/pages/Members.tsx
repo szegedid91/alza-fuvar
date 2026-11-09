@@ -12,14 +12,34 @@ import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
 import MemberDataSummary from '../components/MemberDataSummary'
+import { inviteMailto } from '../lib/inviteMail'
+import { toast } from '../lib/toast'
 
 type Profile = Tables<'profiles'>
 type Invite = Tables<'invites'>
 
 // Meghívó: a link/QR birtokosának csak jelszót kell beállítania — azonnal aktív tag lesz
+// A manage-invite hibaválasza (a kliens a not_configured jelzésből tudja, hogy a leveleződdel kell küldeni)
+interface InviteErrorBody { not_configured?: boolean; email?: string; expires_at?: string }
+type InviteError = Error & { needsConfirm?: { shifts: number; first: string; last: string } | null; body?: InviteErrorBody }
+
+// Email-cím + küldés gomb egy meghívóhoz (a cím a meghívóra is rámentődik)
+function InviteEmailRow({ inv, sending, onSend }: { inv: Invite; sending: boolean; onSend: (email: string) => void }) {
+  const [email, setEmail] = useState(inv.email ?? '')
+  const valid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+  return (
+    <div className="row" style={{ gap: 6 }}>
+      <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email-cím a meghívóhoz" style={{ flex: 1, minWidth: 0 }} />
+      <button className="btn secondary sm auto" disabled={!valid || sending} style={{ whiteSpace: 'nowrap' }} onClick={() => onSend(email.trim().toLowerCase())}>
+        <Icon name="send" size={14} />{sending ? 'Küldés…' : inv.email_sent_at ? 'Újraküldés' : 'Küldés emailben'}
+      </button>
+    </div>
+  )
+}
+
 function InviteCard() {
   const { profile } = useAuth()
-  const { currentWorkspaceId } = useWorkspace()
+  const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
   const isAdmin = profile?.role === 'admin'
   const [name, setName] = useState('')
@@ -31,13 +51,15 @@ function InviteCard() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showLinkFor, setShowLinkFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  // A felhasznált meghívók alapból összecsukva — a nyitott (aktív / lejárt) meghívók látszanak elöl
+  const [showUsed, setShowUsed] = useState(false)
 
   const { data: invites } = useQuery({
     queryKey: ['invites', currentWorkspaceId],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const { data, error } = await supabase.from('invites').select('*')
-        .eq('workspace_id', currentWorkspaceId!).order('created_at', { ascending: false }).limit(20)
+        .eq('workspace_id', currentWorkspaceId!).order('created_at', { ascending: false }).limit(100)
       if (error) throw error
       return data as Invite[]
     },
@@ -50,13 +72,16 @@ function InviteCard() {
     if (error) {
       let msg = 'A művelet nem sikerült'
       let needsConfirm: { shifts: number; first: string; last: string } | null = null
+      let body: InviteErrorBody = {}
       try {
         const b = await (error as { context?: Response }).context?.json()
         if (b?.error) msg = b.error
         if (b?.needs_confirm) needsConfirm = { shifts: b.shifts, first: b.first, last: b.last }
+        body = b ?? {}
       } catch { /* marad az általános */ }
-      const err = new Error(msg) as Error & { needsConfirm?: typeof needsConfirm }
+      const err = new Error(msg) as InviteError
       err.needsConfirm = needsConfirm
+      err.body = body
       throw err
     }
     if (data?.error) throw new Error(data.error)
@@ -100,6 +125,34 @@ function InviteCard() {
   })
 
   const linkOf = (id: string) => `${window.location.origin}/meghivo#${id}` // SEC-24: a token a hash-ben — nem kerül szerver/CDN naplóba
+
+  // Lejárt (vagy lejáró) meghívó megújítása: új, 30 napos érvényesség — a helyőrző és a beosztásai maradnak
+  const renew = useMutation({
+    mutationFn: async (id: string) => invokeInvite({ action: 'renew', invite_id: id }),
+    onSuccess: () => { toast.success('A meghívó megújítva — 30 napig érvényes.'); void qc.invalidateQueries({ queryKey: ['invites'] }) },
+    onError: (e) => setError(errMsg(e, 'A megújítás nem sikerült')),
+  })
+  // Meghívó emailben: a szerver küldi; ha az emailküldés nincs beállítva, a leveleződ nyílik meg a kész szöveggel
+  const sendMail = useMutation({
+    mutationFn: async ({ inv, email }: { inv: Invite; email: string }) => {
+      try { return await invokeInvite({ action: 'send_email', invite_id: inv.id, email }) }
+      catch (e) {
+        const err = e as InviteError
+        if (err.body?.not_configured) {
+          const to = err.body.email ?? email
+          window.location.href = inviteMailto(to, { name: inv.full_name, inviter: profile?.full_name ?? null, workspace: currentWorkspace?.name ?? null, link: linkOf(inv.id), expiresAt: err.body.expires_at ?? inv.expires_at })
+          return { viaMailClient: true }
+        }
+        throw e
+      }
+    },
+    onSuccess: (r) => {
+      if ((r as { viaMailClient?: boolean })?.viaMailClient) toast.info('Az app még nem tud magától emailt küldeni — a leveleződ nyílt meg a kész szöveggel, ott küldd el.')
+      else toast.success('A meghívó elküldve emailben.')
+      void qc.invalidateQueries({ queryKey: ['invites'] })
+    },
+    onError: (e) => setError(errMsg(e, 'Az email küldése nem sikerült')),
+  })
 
   async function copyLink(id: string) {
     try {
@@ -160,7 +213,7 @@ function InviteCard() {
       <p className="tiny muted" style={{ margin: 0 }}>
         A meghívott <strong>azonnal beosztható</strong> (a Beosztásban név szerint megjelenik), a linken csak jelszót kell beállítania —
         aktív tag lesz, a már beírt beosztásai megmaradnak. Email nélkül is felvehető: akkor a regisztrációkor adja meg.
-        A meghívó 7 napig érvényes és egyszer használható.
+        A meghívó 30 napig érvényes és egyszer használható; a linket emailben is kiküldheted.
       </p>
       <div className="grid-2">
         <div className="field">
@@ -186,7 +239,16 @@ function InviteCard() {
       </button>
 
       {(invites?.length ?? 0) > 0 && <div className="divider" />}
-      {invites?.map((inv) => {
+      {(() => {
+        const used = (invites ?? []).filter((i) => i.used_at).length
+        if (!used) return null
+        return (
+          <button type="button" className="link-btn" style={{ width: 'auto', fontSize: 13, padding: '6px 8px', alignSelf: 'flex-start' }} onClick={() => setShowUsed((v) => !v)}>
+            {showUsed ? 'Felhasznált meghívók elrejtése' : `Felhasznált meghívók mutatása (${used})`}
+          </button>
+        )
+      })()}
+      {invites?.filter((inv) => showUsed || !inv.used_at).map((inv) => {
         const st = stateOf(inv)
         return (
           <div key={inv.id} className="stack" style={{ gap: 6 }}>
@@ -194,6 +256,12 @@ function InviteCard() {
               <div>
                 <div className="small" style={{ fontWeight: 700 }}>{inv.full_name || inv.email}</div>
                 <div className="tiny muted">{inv.email ?? 'email nélkül'} · {roleLabel[inv.role]} · {formatDateTime(inv.created_at)}</div>
+                {!inv.used_at && (
+                  <div className="tiny muted">
+                    {st.label === 'Lejárt' ? `Lejárt: ${formatDate(inv.expires_at.slice(0, 10))}` : `Érvényes: ${formatDate(inv.expires_at.slice(0, 10))}-ig`}
+                    {inv.email_sent_at ? ` · emailben elküldve ${formatDateTime(inv.email_sent_at)}` : ''}
+                  </div>
+                )}
               </div>
               <span className="row" style={{ gap: 4, flexShrink: 0 }}>
                 {!inv.used_at && inv.placeholder_id && <span className="badge" title="Már beosztható a Beosztásban"><Icon name="calendar" />beosztható</span>}
@@ -211,6 +279,14 @@ function InviteCard() {
                 </button>
                 <button className="btn secondary sm" onClick={() => void shareLink(inv)}><Icon name="upload" />Megosztás</button>
               </div>
+            )}
+            {!inv.used_at && (
+              <InviteEmailRow inv={inv} sending={sendMail.isPending} onSend={(email) => sendMail.mutate({ inv, email })} />
+            )}
+            {!inv.used_at && st.label === 'Lejárt' && (
+              <button className="btn secondary sm" disabled={renew.isPending} onClick={() => renew.mutate(inv.id)}>
+                <Icon name="refresh" />{renew.isPending ? 'Megújítás…' : 'Meghívó megújítása (30 nap)'}
+              </button>
             )}
             {showLinkFor === inv.id && (
               <div className="tiny" style={{ wordBreak: 'break-all', userSelect: 'all', background: 'var(--bg)', borderRadius: 8, padding: 8 }}>

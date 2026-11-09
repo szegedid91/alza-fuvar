@@ -1405,6 +1405,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           email: string | null
+          email_sent_at: string | null
           expires_at: string
           full_name: string | null
           id: string
@@ -1418,6 +1419,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          email_sent_at?: string | null
           expires_at?: string
           full_name?: string | null
           id?: string
@@ -1431,6 +1433,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          email_sent_at?: string | null
           expires_at?: string
           full_name?: string | null
           id?: string
