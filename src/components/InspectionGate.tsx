@@ -30,7 +30,6 @@ export default function InspectionGate({ carId, date, children }: { carId: strin
         <div className="row"><Icon name="ban" size={26} style={{ color: 'var(--warning)' }} /><strong>A becsekkolás még nem teljes</strong></div>
         <p className="small muted" style={{ margin: 0 }}>
           Előbb fotózd körbe az autót (5 kép: elöl, jobb, hátul, bal, fülke), utána folytathatod.
-          {gate.reasons.includes('day9') && ' A hónap 9-e van.'}
           {gate.reasons.includes('driver_change') && (gate.lastDriverName ? ` Utoljára ${gate.lastDriverName} ült az autóban.` : ' Utoljára más ült az autóban.')}
           {' '}Fotó nélkül csak a vezető engedhet tovább a saját fiókjából.
         </p>

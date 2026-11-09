@@ -107,7 +107,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
           if (r.required) {
             setReason(r.reasons[0])
             setReasonText(
-              [r.reasons.includes('day9') ? 'A hónap 9-e' : '', r.reasons.includes('driver_change') ? (r.lastDriverName ? `Utoljára ${r.lastDriverName} ült az autóban` : 'Sofőrváltás') : '']
+              [r.reasons.includes('driver_change') ? (r.lastDriverName ? `Utoljára ${r.lastDriverName} ült az autóban` : 'Sofőrváltás') : '']
                 .filter(Boolean).join(' • '),
             )
           }

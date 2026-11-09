@@ -435,7 +435,6 @@ export default function Scan() {
         <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
           <div className="row"><Icon name="camera" size={24} style={{ color: 'var(--warning)' }} /><strong>Kötelező autó-ellenőrző fotó</strong></div>
           <p className="small muted">
-            {inspection.reasons.includes('day9') && 'A hónap 9-e van. '}
             {inspection.reasons.includes('driver_change') && (inspection.lastDriverName ? `Utoljára ${inspection.lastDriverName} ült az autóban. ` : 'Utoljára más ült az autóban. ')}
             Készíts ellenőrző fotókat (körbe az autón + fülke).
           </p>
