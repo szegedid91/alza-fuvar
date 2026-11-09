@@ -16,7 +16,9 @@ import { Link, useNavigate } from 'react-router'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
 import { errMsg } from '../lib/errors'
-import { recordStatusEvent } from '../lib/statusEvents'
+import { recordStatusEvent, useTodayStatusEvents } from '../lib/statusEvents'
+import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
+import { roundStates } from '../lib/rounds'
 import { groupTarget, statusText } from '../lib/groupMessage'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
@@ -40,24 +42,9 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const navigate = useNavigate()
   const [openList, setOpenList] = useState(false)
 
-  const { data: myShifts } = useQuery({
-    queryKey: ['my-routes-today', currentWorkspaceId, profile?.id, date],
-    enabled: !!currentWorkspaceId && !!profile?.id,
-    refetchInterval: 60000,
-    queryFn: async () => {
-      const uid = profile!.id
-      const [{ data: shifts, error }, { data: cars, error: carErr }] = await Promise.all([
-        supabase.from('shifts').select('id, car_id, round, route_id')
-          .eq('workspace_id', currentWorkspaceId!).eq('work_date', date).not('route_id', 'is', null)
-          .or(`driver_id.eq.${uid},loader_id.eq.${uid},trainee_id.eq.${uid}`).order('round'),
-        supabase.from('cars').select('id, plate').eq('workspace_id', currentWorkspaceId!),
-      ])
-      if (error) throw error
-      if (carErr) throw carErr
-      const plates = new Map((cars ?? []).map((c) => [c.id, c.plate]))
-      return (shifts ?? []).map((s) => ({ ...s, route_id: s.route_id!, round: s.round ?? 1, plate: plates.get(s.car_id) ?? '?' }))
-    },
-  })
+  const { data: myShifts } = useMyRoutesToday()
+  // a körök állapota a mai jelzésekből: a lezárt kör összecsukva, a következő előkészítve
+  const { data: todayStatus } = useTodayStatusEvents()
   const { data: runs } = useQuery({
     queryKey: ['route-runs', currentWorkspaceId, date],
     enabled: !!currentWorkspaceId && (myShifts?.length ?? 0) > 0,
@@ -106,11 +93,45 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 
   if (!myShifts || myShifts.length === 0) return null
   const codeOf = (id: string) => routes?.find((r) => r.id === id)?.code ?? '?'
+  const states = roundStates(myShifts.length, todayStatus ?? [])
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
 
   return (
     <>
-      {myShifts.map((sh) => {
+      {myShifts.map((sh, i) => {
         const stops = stopsByRoute?.[sh.route_id] ?? []
+        const state = states[i]
+        const roundLabel = `${codeOf(sh.route_id)} járat${myShifts.length > 1 ? ` · ${sh.round}. kör` : ''}`
+        // lezárt kör: egy sor, összecsukva — a részletek már nem kellenek
+        if (state.status === 'completed') {
+          return (
+            <div key={sh.id} className="card between" style={{ gap: 8, opacity: 0.8 }}>
+              <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                <Icon name="check-circle" size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 700 }}>{roundLabel} — kész</div>
+                  <div className="tiny muted">{state.doneAt ? `járat kész ${hhmm(state.doneAt)}` : ''}{state.settledAt ? ` · elszámolva ${hhmm(state.settledAt)}` : ' · elszámolás nélkül továbbindulva'}</div>
+                </div>
+              </div>
+              <span className="badge num">{sh.plate}</span>
+            </div>
+          )
+        }
+        // következő kör: amíg az előző tart, csak egy sor — a teljes kártya az előző lezárása után nyílik
+        if (state.status === 'upcoming') {
+          return (
+            <div key={sh.id} className="card between" style={{ gap: 8 }}>
+              <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                <Icon name="clock" size={18} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 700 }}>{roundLabel} — következik</div>
+                  <div className="tiny muted">{stops.length} cím · az előző kör elszámolása (vagy az újabb „Kiindultam”) után nyílik meg</div>
+                </div>
+              </div>
+              <span className="badge num">{sh.plate}</span>
+            </div>
+          )
+        }
         const run = runs?.find((r) => r.route_id === sh.route_id && r.round === sh.round && r.car_id === sh.car_id)
         const idx = resolveRunIndex(run, stops)
         const go = (index: number, late?: { minutes: number; reason: string }, afterSaved?: () => void) => {
@@ -138,7 +159,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
           }
         }
         return (
-          <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active}
+          <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active} hasNextRound={i < myShifts.length - 1}
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
@@ -153,8 +174,10 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
+  // van még kör ma: a „kész” kártya a következő körre irányít, nem a nap végére
+  hasNextRound?: boolean
   // az utolsó box leadásakor: „Járat kész” — a WhatsApp azonnal nyílik, a visszaadott
   // függvény a sikeres mentés után rögzíti a jelzést
   onRouteDone?: () => (() => void) | undefined
@@ -209,7 +232,9 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
               <div className="stack" style={{ gap: 6 }}>
                 <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--primary-ghost)', border: '1px solid var(--success)' }}>
                   <div style={{ fontWeight: 800, fontSize: 17 }}><Icon name="truck" /> Kész — irány a raktár!</div>
-                  <div className="tiny muted">Mind a {stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része, végül „Autó lerakva”.</div>
+                  <div className="tiny muted">{hasNextRound
+                    ? `Mind a ${stops.length} cím leadva. A raktárban: „Megérkeztem”, aztán „Elszámoltam” (ha most adod le a visszárut), majd „Kiindultam” a ${round + 1}. körre — ez a kör akkor összecsukódik.`
+                    : `Mind a ${stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része, végül „Autó lerakva”.`}</div>
                 </div>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}><Icon name="warehouse" size={18} /> {depot.name}</div>

@@ -8,6 +8,8 @@ import ParkCarButton from '../components/ParkCarButton'
 import StatusCard from '../components/StatusCard'
 import SetOffCard from '../components/SetOffCard'
 import { useTodayStatusEvents } from '../lib/statusEvents'
+import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
+import { dayComplete } from '../lib/rounds'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -39,7 +41,9 @@ export default function Home() {
   const lastPhase = [...(todayStatus ?? [])].reverse().find((s) => s.kind === 'arrived' || s.kind === 'departed' || s.kind === 'done')?.kind ?? null
   const arrived = lastPhase === 'arrived' || lastPhase === 'departed'
   const departed = lastPhase === 'departed'
-  const settled = !!todayStatus?.some((s) => s.kind === 'settled')
+  // A nap vége: minden mai kör kész, és az utolsó után megvolt az elszámolás (két körnél az első elszámolás még nem zárja a napot)
+  const { data: myRoutes } = useMyRoutesToday()
+  const settled = !!todayStatus && dayComplete(myRoutes?.length ?? 0, todayStatus)
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
 
