@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
+import { cleanUnmapped, mergeStopNote, unmappedKey } from '../lib/boxUnmapped'
 import { uploadPhoto, signedUrl } from '../lib/photos'
 import { sharePhotos, canShareFiles } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
@@ -14,7 +16,7 @@ import Icon from './Icon'
 import { errMsg } from '../lib/errors'
 
 type Shot = CapturedPhoto & { path?: string }
-type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[]; screen?: string | null; confidence?: number | null; note?: string | null }
+type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[]; screen?: string | null; confidence?: number | null; note?: string | null; unmapped?: string[] }
 
 // A box kijelzőjének fotói az appban: a kép az adatbázisba kerül, az AI kiolvassa a
 // számokat (előtölti a mezőket — a futár ellenőrzi), és ugyanaz a kép egy koppintással
@@ -23,6 +25,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
   stop: BoxStop; boxLabel: string; boxAddress?: string | null; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
 }) {
   const { currentWorkspaceId } = useWorkspace()
+  const { profile } = useAuth()
   const qc = useQueryClient()
   // a most készített fotók; új fotónál a kamera EGY koppintásra nyílik (nincs üres hely, amire újra rá kell nyomni)
   const [photos, setPhotos] = useState<Shot[]>([])
@@ -93,6 +96,17 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
         // előtöltés: csak ami kiolvasható volt
         const patch: Partial<BoxStop> = {}
         for (const f of STOP_FIELDS) { const v = result[f.key]; if (typeof v === 'number') (patch as Record<string, number>)[f.key] = v }
+        // a kijelző egyik mezőhöz sem tartozó üzenetei: a megálló megjegyzésébe, és az admin naplójába
+        const unmapped = cleanUnmapped(result.unmapped)
+        result.unmapped = unmapped
+        if (unmapped.length) {
+          const merged = mergeStopNote(stop.note, unmapped)
+          if (merged !== (stop.note ?? '').trim()) patch.note = merged
+          const { error: logErr } = await supabase.from('box_unmapped_messages').insert(unmapped.map((t) => ({
+            workspace_id: currentWorkspaceId, stop_id: stop.id, box_code: stop.box_code ?? null, text: t, text_key: unmappedKey(t), created_by: profile?.id ?? null,
+          })))
+          if (logErr) console.warn('unmapped log', logErr.message) // a napló hiánya ne akassza meg a kiolvasást
+        }
         if (Object.keys(patch).length) onPatch(patch)
       }
       return result
@@ -164,6 +178,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
           <strong>AI olvasat</strong>{typeof ai.confidence === 'number' ? ` · biztonság ${Math.round(ai.confidence * 100)}%` : ''}{ai.screen ? ` · „${ai.screen}”` : ''}
           {ai.codes?.length ? <div className="muted">Kódok: {ai.codes.slice(0, 12).join(', ')}{ai.codes.length > 12 ? '…' : ''}</div> : null}
           {ai.note && <div className="muted">{ai.note}</div>}
+          {ai.unmapped && ai.unmapped.length > 0 && <div className="muted">Kijelző-üzenet a megjegyzésbe írva: {ai.unmapped.join(' · ')}</div>}
           <div className="muted">A mezőket a kiolvasás előtöltötte — nézd át, és javítsd, ha a kép alapján mást látsz.</div>
         </div>
       )}

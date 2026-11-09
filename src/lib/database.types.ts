@@ -292,6 +292,45 @@ export type Database = {
           },
         ]
       }
+      box_unmapped_messages: {
+        Row: {
+          box_code: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          stop_id: string | null
+          text: string
+          text_key: string
+          workspace_id: string
+        }
+        Insert: {
+          box_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stop_id?: string | null
+          text: string
+          text_key: string
+          workspace_id: string
+        }
+        Update: {
+          box_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stop_id?: string | null
+          text?: string
+          text_key?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       box_sheet_stops: {
         Row: {
           box_code: string | null

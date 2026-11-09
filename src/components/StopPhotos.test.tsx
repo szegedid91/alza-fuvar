@@ -7,6 +7,7 @@ import type { BoxStop } from '../lib/boxSheet'
 
 const invoke = vi.fn()
 const inserted: string[] = []
+const logged: { text: string; text_key: string }[] = []
 
 vi.mock('../lib/supabase', () => {
   const chain = (result: unknown) => {
@@ -17,9 +18,13 @@ vi.mock('../lib/supabase', () => {
   }
   return {
     supabase: {
-      from: () => ({
+      from: (table: string) => ({
         select: () => chain({ data: [], error: null }),
-        insert: (row: { storage_path: string }) => { inserted.push(row.storage_path); return Promise.resolve({ error: null }) },
+        insert: (row: { storage_path: string } | { text: string; text_key: string }[]) => {
+          if (table === 'box_unmapped_messages') logged.push(...(row as { text: string; text_key: string }[]))
+          else inserted.push((row as { storage_path: string }).storage_path)
+          return Promise.resolve({ error: null })
+        },
         update: () => chain({ error: null }),
       }),
       functions: { invoke: (...a: unknown[]) => invoke(...a) },
@@ -27,6 +32,7 @@ vi.mock('../lib/supabase', () => {
   }
 })
 vi.mock('../context/WorkspaceContext', () => ({ useWorkspace: () => ({ currentWorkspaceId: 'ws-1' }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u-1' } }) }))
 vi.mock('../lib/photos', () => ({
   uploadPhoto: (_ws: string, folder: string, id: string) => Promise.resolve(`ws-1/${folder}/${id}.jpg`),
   signedUrl: () => Promise.resolve(null),
@@ -56,7 +62,7 @@ const click = (el: Element | null) => act(async () => { el!.dispatchEvent(new Mo
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 20)) })
 
 beforeEach(async () => {
-  invoke.mockReset(); onPatch.mockReset(); inserted.length = 0
+  invoke.mockReset(); onPatch.mockReset(); inserted.length = 0; logged.length = 0
   host = document.createElement('div'); document.body.appendChild(host)
   root = createRoot(host)
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -117,5 +123,16 @@ describe('StopPhotos', () => {
     await click(readBtn!)
     await settle()
     expect(inserted).toHaveLength(6)
+  })
+
+  it('a mezőhöz nem sorolható kijelző-üzenet a megjegyzésbe és az admin naplójába kerül', async () => {
+    invoke.mockResolvedValue({ data: { result: { placed: 12, codes: [], unmapped: ['A fiók nem nyílik', 'a fiók nem nyílik', ''] } }, error: null })
+    await takePhoto()
+    const readBtn = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('Kiolvasás'))
+    await click(readBtn!)
+    await settle()
+    expect(onPatch).toHaveBeenCalledWith({ placed: 12, note: 'Kijelző: A fiók nem nyílik' })
+    expect(logged).toEqual([{ text: 'A fiók nem nyílik', text_key: 'a fiok nem nyilik', workspace_id: 'ws-1', stop_id: 'stop-1', box_code: 'AB1234', created_by: 'u-1' }])
+    expect(host.textContent).toContain('Kijelző-üzenet a megjegyzésbe írva: A fiók nem nyílik')
   })
 })

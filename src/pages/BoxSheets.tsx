@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { signedUrl } from '../lib/photos'
 import { fetchAll } from '../lib/fetchAll'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useAuth } from '../context/AuthContext'
+import UnmappedMessagesCard from '../components/UnmappedMessagesCard'
 import { monthRange, currentYm } from '../lib/payroll'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import { resolveNames } from '../lib/names'
@@ -25,6 +27,7 @@ const cell: React.CSSProperties = { padding: '4px 6px', borderBottom: '1px solid
 const numCell: React.CSSProperties = { ...cell, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
 
 export default function BoxSheets() {
+  const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const [ym, setYm] = useState(currentYm())
   const range = useMemo(() => monthRange(ym), [ym])
@@ -97,6 +100,8 @@ export default function BoxSheets() {
         </div>
         <button className="icon-btn" onClick={() => setYm(shiftMonth(ym, 1))} aria-label="Következő hónap"><Icon name="chevron-right" /></button>
       </div>
+
+      {profile?.role === 'admin' && <UnmappedMessagesCard />}
 
       {isLoading && <Skeleton rows={4} />}
       {isError && <div className="alert error">Nem sikerült betölteni: {errMsg(error, '')}</div>}

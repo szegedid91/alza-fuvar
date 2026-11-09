@@ -22,8 +22,9 @@ const SCHEMA = {
     placed: { type: ['integer', 'null'] }, shortage: { type: ['integer', 'null'] }, nf: { type: ['integer', 'null'] }, oversize: { type: ['integer', 'null'] },
     missorted: { type: ['integer', 'null'] }, returned: { type: ['integer', 'null'] }, invalid_code: { type: ['integer', 'null'] }, do_not_place: { type: ['integer', 'null'] }, cancelled: { type: ['integer', 'null'] }, left_on_car: { type: ['integer', 'null'] },
     codes: { type: 'array', items: { type: 'string' } }, screen: { type: ['string', 'null'] }, confidence: { type: ['number', 'null'] }, note: { type: ['string', 'null'] },
+    unmapped: { type: 'array', items: { type: 'string' } },
   },
-  required: ['placed', 'shortage', 'nf', 'oversize', 'missorted', 'returned', 'invalid_code', 'do_not_place', 'cancelled', 'left_on_car', 'codes', 'screen', 'confidence', 'note'],
+  required: ['placed', 'shortage', 'nf', 'oversize', 'missorted', 'returned', 'invalid_code', 'do_not_place', 'cancelled', 'left_on_car', 'codes', 'screen', 'confidence', 'note', 'unmapped'],
 }
 
 // Csonka JSON-ból a már kiírt mezők kinyerése: "placed":35, "shortage":null, "codes":["1610608725", …
@@ -92,7 +93,8 @@ Deno.serve(async (req: Request) => {
 
   const system = `Egy AlzaBox csomagautomata kijelzőjéről és csomagcímkékről készült telefonos fotókat olvasol ki egy magyar futár napi Box-lapjához.
 A kijelzőn tipikus feliratok: "Behelyezve: N" (behelyezett csomagok száma → placed), "Még ennyit kell behelyezni: N" (még be nem helyezett → shortage), csomagkód-listák (pl. 1608687656, ETIK/XL jelöléssel → codes), "Ezt a csomagot ne helyezd be" (NHB → do_not_place +1), "Érvénytelen kód" (ÉK → invalid_code +1), "Törölt" / "A csomag törölve" (→ cancelled +1), "Nincs szabad fiók" (NF → nf +1).
-Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 közötti szám. A screen a kijelző fő felirata röviden. A note rövid magyar megjegyzés, ha valami nem egyértelmű.`
+Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 közötti szám. A screen a kijelző fő felirata röviden. A note rövid magyar megjegyzés, ha valami nem egyértelmű.
+Az unmapped lista: a kijelzőn látható olyan hibaüzenet vagy felirat, amely egyik fenti mezőhöz sem tartozik egyértelműen (pl. "A fiók nem nyílik", "Kommunikációs hiba", "Nem olvasható vonalkód", karbantartás) — szó szerint, röviden, legfeljebb 8 tétel; ha nincs ilyen, üres lista.`
   const boxLabel = typeof payload.box === 'string' ? payload.box.slice(0, 80) : 'ismeretlen'
   const userText = `Box: ${boxLabel}. Olvasd ki a számokat a képekről. Ha egy számot több kép is mutat, a legfrissebb/legnagyobb "Behelyezve" értéket vedd.`
 
@@ -124,7 +126,7 @@ Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 
     parsed = salvage(cleaned)
     console.error('no json in response', out.stop_reason, Object.keys(parsed).length ? 'salvaged ' + Object.keys(parsed).join(',') : '', text.slice(0, 300))
   }
-  const result: Record<string, unknown> = { codes: Array.isArray(parsed.codes) ? parsed.codes.map(String).slice(0, 60) : [], screen: parsed.screen ?? null, confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null, note: parsed.note ?? null }
+  const result: Record<string, unknown> = { codes: Array.isArray(parsed.codes) ? parsed.codes.map(String).slice(0, 60) : [], screen: parsed.screen ?? null, confidence: typeof parsed.confidence === 'number' ? parsed.confidence : null, note: parsed.note ?? null, unmapped: Array.isArray(parsed.unmapped) ? parsed.unmapped.filter((x: unknown) => typeof x === 'string').map((x: string) => x.slice(0, 160)).slice(0, 8) : [] }
   for (const f of FIELDS) { const v = parsed[f]; result[f] = typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.round(v)) : null }
   console.log('read-box-photo ok', MODEL, Date.now() - started, 'ms', JSON.stringify(out.usage ?? {}))
   return json({ result, model: MODEL, usage: out.usage ?? null, ms: Date.now() - started, raw: payload.debug === true ? text.slice(0, 800) : undefined, stop_reason: out.stop_reason })
