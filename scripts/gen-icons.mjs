@@ -1,5 +1,6 @@
-// Generál egyszerű PWA ikonokat (teal háttér + fehér "A") külső függőség nélkül.
-// Raw PNG (RGBA) kódolás Node zlib-bel.
+// Generál egyszerű PWA ikonokat (teal háttér + fehér "U" — Utód) külső függőség nélkül.
+// Raw PNG (RGBA) kódolás Node zlib-bel; a betű élsimított (4×4 mintavétel pixelenként).
+// Ugyanaz a forma, mint a public/favicon.svg-ben.
 import { deflateSync } from 'node:zlib'
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -8,33 +9,35 @@ import { dirname, join } from 'node:path'
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
 mkdirSync(OUT, { recursive: true })
 
-// 7x7 "A" bitmap
-const A = [
-  '0011100',
-  '0100010',
-  '1000001',
-  '1000001',
-  '1111111',
-  '1000001',
-  '1000001',
-]
-const BG = [15, 118, 110, 255] // #0f766e
-const FG = [255, 255, 255, 255]
+const BG = [15, 118, 110] // #0f766e
+const FG = [255, 255, 255]
+
+// "U" az 512-es koordinátarendszerben: külső sáv 128..384 (sugár 128), belső 200..312 (sugár 56),
+// a felső szél 96-nál, az ív közepe (256, 288) — az alja 416-ig ér
+function inU(x, y) {
+  const cx = 256; const cy = 288
+  const inside = (half, r) => {
+    if (y < 96) return false
+    if (y <= cy) return Math.abs(x - cx) <= half
+    const dx = x - cx; const dy = y - cy
+    return dx * dx + dy * dy <= r * r
+  }
+  return inside(128, 128) && !inside(56, 56)
+}
 
 function makePng(size) {
   const buf = Buffer.alloc(size * size * 4)
-  const glyph = Math.floor(size * 0.6)
-  const cell = glyph / 7
-  const offX = (size - glyph) / 2
-  const offY = (size - glyph) / 2
+  const SS = 4; const k = 512 / size
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      let c = BG
-      const gx = Math.floor((x - offX) / cell)
-      const gy = Math.floor((y - offY) / cell)
-      if (gx >= 0 && gx < 7 && gy >= 0 && gy < 7 && A[gy][gx] === '1') c = FG
+      let hit = 0
+      for (let sy = 0; sy < SS; sy++) for (let sx = 0; sx < SS; sx++) {
+        if (inU((x + (sx + 0.5) / SS) * k, (y + (sy + 0.5) / SS) * k)) hit++
+      }
+      const a = hit / (SS * SS)
       const i = (y * size + x) * 4
-      buf[i] = c[0]; buf[i + 1] = c[1]; buf[i + 2] = c[2]; buf[i + 3] = c[3]
+      for (let c = 0; c < 3; c++) buf[i + c] = Math.round(BG[c] * (1 - a) + FG[c] * a)
+      buf[i + 3] = 255
     }
   }
   // add filter byte (0) per scanline
