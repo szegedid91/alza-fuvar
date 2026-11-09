@@ -18,7 +18,7 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const INVITE_DAYS = 30 // a meghívó érvényessége (a tábla 7 napos alapértelmezése helyett)
-const APP_URL = (Deno.env.get('APP_URL') ?? 'https://alza.szakify.hu').replace(/\/+$/, '')
+const APP_URL = (Deno.env.get('APP_URL') ?? 'https://utod.szakify.hu').replace(/\/+$/, '')
 const expiry = () => new Date(Date.now() + INVITE_DAYS * 86_400_000).toISOString()
 const randomPassword = () => {
   const a = new Uint8Array(24); crypto.getRandomValues(a)
