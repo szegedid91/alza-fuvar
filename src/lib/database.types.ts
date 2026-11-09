@@ -297,8 +297,11 @@ export type Database = {
           box_code: string | null
           box_id: string | null
           box_name: string | null
+          cancelled: number
           created_at: string
           damaged: number
+          do_not_place: number
+          invalid_code: number
           done_at: string | null
           id: string
           left_on_car: number
@@ -317,8 +320,11 @@ export type Database = {
           box_code?: string | null
           box_id?: string | null
           box_name?: string | null
+          cancelled?: number
           created_at?: string
           damaged?: number
+          do_not_place?: number
+          invalid_code?: number
           done_at?: string | null
           id?: string
           left_on_car?: number
@@ -337,8 +343,11 @@ export type Database = {
           box_code?: string | null
           box_id?: string | null
           box_name?: string | null
+          cancelled?: number
           created_at?: string
           damaged?: number
+          do_not_place?: number
+          invalid_code?: number
           done_at?: string | null
           id?: string
           left_on_car?: number

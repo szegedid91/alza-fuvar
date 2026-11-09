@@ -374,7 +374,7 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
   useEffect(() => { if (!isLast && !focus) setOpen(false) }, [isLast, focus])
   useEffect(() => { if (focus) setOpen(true) }, [focus])
   const extras = STOP_FIELDS.filter((f) => f.key !== 'placed' && stop[f.key] > 0)
-  const flagged = stop.shortage > 0 || stop.damaged > 0 || stop.left_on_car > 0
+  const flagged = stop.shortage > 0 || stop.invalid_code > 0 || stop.do_not_place > 0 || stop.cancelled > 0 || stop.damaged > 0 || stop.left_on_car > 0
   return (
     <div className="stack" style={{ gap: 8, padding: 10, border: focus ? '2px solid var(--primary)' : `1px solid ${flagged ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: focus ? 'var(--primary-ghost)' : undefined }}>
       <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }} onClick={() => setOpen((o) => !o)}>

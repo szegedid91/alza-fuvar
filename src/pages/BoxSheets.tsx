@@ -160,7 +160,7 @@ export default function BoxSheets() {
               {list.map((s) => {
                 const t = stopTotals(s.stops)
                 const open = openId === s.id
-                const issues = t.shortage + t.damaged + t.left_on_car + t.returned
+                const issues = t.shortage + t.invalid_code + t.do_not_place + t.cancelled + t.left_on_car + t.returned + s.stops.reduce((x, st) => x + Number(st.damaged ?? 0), 0)
                 return (
                   <div key={s.id} className="card stack" style={{ gap: 8, borderColor: open ? 'var(--primary)' : undefined }}>
                     <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }}

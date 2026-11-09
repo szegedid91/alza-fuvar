@@ -15,7 +15,9 @@ export interface QSheet {
 }
 export interface QStop {
   sheet_id: string; done_at: string | null; created_at: string; box_code: string | null; box_name: string | null; note: string | null
-  missorted: number; nf: number; oversize: number; shortage: number; returned: number; damaged: number; left_on_car: number
+  missorted: number; nf: number; oversize: number; shortage: number; returned: number; left_on_car: number
+  // nem behelyezett csomagok okai: ÉK (érvénytelen kód), NHB (ne helyezd be), törölt; damaged = a régi összevont mező
+  invalid_code?: number; do_not_place?: number; cancelled?: number; damaged?: number
 }
 
 export type QBlockKind = 'night' | 'day'
@@ -145,7 +147,9 @@ export function buildQualityReport(day: string, routes: QRoute[], shifts: QShift
       const sum = (f: (s: QStop) => number) => myStops.reduce((x, s) => x + (Number(f(s)) || 0), 0)
       const sumSheet = (f: (s: QSheet) => number) => mySheets.reduce((x, s) => x + (Number(f(s)) || 0), 0)
       const nf = sum((s) => s.nf); const oversize = sum((s) => s.oversize)
-      const leftOnCar = sum((s) => s.left_on_car); const damaged = sum((s) => s.damaged)
+      const leftOnCar = sum((s) => s.left_on_car)
+      const invalidCode = sum((s) => s.invalid_code ?? 0); const doNotPlace = sum((s) => s.do_not_place ?? 0); const cancelled = sum((s) => s.cancelled ?? 0); const legacy = sum((s) => s.damaged ?? 0)
+      const damaged = invalidCode + doNotPlace + cancelled + legacy
 
       const sheetEnd = mySheets.map((s) => s.end_time).filter((x): x is string => !!x).map((t) => t.slice(0, 5)).sort().pop() ?? null
       const comp = (n: number, text: string) => (n > 0 ? `${text}: ${n}` : null)
@@ -161,7 +165,7 @@ export function buildQualityReport(day: string, routes: QRoute[], shifts: QShift
       const note = plural([
         settled !== null ? `Elszámolás: ${hmOf(settled)}` : null,
         nf > 0 && oversize > 0 ? `Nem fért be: nincs szabad fiók ${nf}, túlméretes ${oversize}` : null,
-        leftOnCar > 0 && damaged > 0 ? `Nem szállított: autón maradt ${leftOnCar}, érvénytelen kód / ne helyezd be / törölt ${damaged}` : null,
+        damaged > 0 ? `Nem szállított: ${plural([leftOnCar > 0 ? `autón maradt ${leftOnCar}` : null, invalidCode > 0 ? `érvénytelen kód ${invalidCode}` : null, doNotPlace > 0 ? `ne helyezd be ${doNotPlace}` : null, cancelled > 0 ? `törölt ${cancelled}` : null, legacy > 0 ? `ÉK/NHB/törölt (régi) ${legacy}` : null], ', ')}` : null,
         crates > 0 ? `Láda címke nélkül: ${crates}${pkgs > 0 ? ` (benne ${pkgs} csomag)` : ''}` : null,
         comp(sumSheet((s) => s.wh_pallet_items), 'Raklapos, nem behelyezhető'),
         ...mySheets.map((s) => s.wh_note?.trim()),

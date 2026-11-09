@@ -103,7 +103,7 @@ describe('StopPhotos', () => {
   })
 
   it('a kiolvasás minden (legfeljebb 8) képet elküld, és beírja a számokat', async () => {
-    invoke.mockResolvedValue({ data: { result: { placed: 35, shortage: 3, damaged: 3, nf: null, codes: [] } }, error: null })
+    invoke.mockResolvedValue({ data: { result: { placed: 35, shortage: 3, do_not_place: 3, nf: null, codes: [] } }, error: null })
     for (let i = 0; i < 6; i++) await takePhoto()
     const readBtn = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('Kiolvasás'))
     await click(readBtn!)
@@ -112,7 +112,7 @@ describe('StopPhotos', () => {
     const [name, opts] = invoke.mock.calls[0] as [string, { body: { paths: string[] } }]
     expect(name).toBe('read-box-photo')
     expect(opts.body.paths).toEqual(inserted)
-    expect(onPatch).toHaveBeenCalledWith({ placed: 35, shortage: 3, damaged: 3 })
+    expect(onPatch).toHaveBeenCalledWith({ placed: 35, shortage: 3, do_not_place: 3 })
     // újbóli kiolvasásnál nem töltődnek fel még egyszer a képek
     await click(readBtn!)
     await settle()

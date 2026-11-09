@@ -76,10 +76,10 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
     refetchInterval: 30000,
     queryFn: async () => {
       const { data, error } = await supabase.from('box_sheet_stops')
-        .select('box_id, placed, missorted, nf, oversize, shortage, returned, damaged, left_on_car, note, sheet:box_sheets!inner(user_id, work_date)')
+        .select('box_id, placed, missorted, nf, oversize, shortage, returned, damaged, invalid_code, do_not_place, cancelled, left_on_car, note, sheet:box_sheets!inner(user_id, work_date)')
         .eq('workspace_id', currentWorkspaceId!).eq('sheet.user_id', profile!.id).eq('sheet.work_date', date)
       if (error) throw error
-      const filled = (data ?? []).filter((r) => (r.placed ?? 0) + (r.missorted ?? 0) + (r.nf ?? 0) + (r.oversize ?? 0) + (r.shortage ?? 0) + (r.returned ?? 0) + (r.damaged ?? 0) + (r.left_on_car ?? 0) > 0 || !!r.note?.trim())
+      const filled = (data ?? []).filter((r) => (r.placed ?? 0) + (r.missorted ?? 0) + (r.nf ?? 0) + (r.oversize ?? 0) + (r.shortage ?? 0) + (r.returned ?? 0) + (r.damaged ?? 0) + (r.invalid_code ?? 0) + (r.do_not_place ?? 0) + (r.cancelled ?? 0) + (r.left_on_car ?? 0) > 0 || !!r.note?.trim())
       return filled.map((r) => r.box_id).filter((x): x is string => !!x)
     },
   })

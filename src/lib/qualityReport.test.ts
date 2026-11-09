@@ -16,7 +16,7 @@ const sheet = (id: string, user_id: string, d: string, hm: string, extra: Partia
 })
 const stop = (sheet_id: string, d: string, hm: string, extra: Partial<QStop> = {}): QStop => ({
   sheet_id, done_at: at(d, hm), created_at: at(d, hm), box_code: 'AB1', box_name: null, note: null,
-  missorted: 0, nf: 0, oversize: 0, shortage: 0, returned: 0, damaged: 0, left_on_car: 0, ...extra,
+  missorted: 0, nf: 0, oversize: 0, shortage: 0, returned: 0, invalid_code: 0, do_not_place: 0, cancelled: 0, left_on_car: 0, ...extra,
 })
 const shift = (work_date: string, round: number, route_id: string | null, driver_id: string | null, loader_id: string | null = null): QShift => ({ work_date, round, route_id, driver_id, loader_id })
 
@@ -75,16 +75,16 @@ describe('buildQualityReport', () => {
     ]
     const sheets = [sheet('s1', 'u1', DAY, '00:30', { comp_bu: 2, comp_note: 'lassú kijelző' })]
     const stops = [
-      stop('s1', DAY, '01:00', { missorted: 1, nf: 2, oversize: 1, shortage: 3, returned: 4, damaged: 1, left_on_car: 2, note: 'tele volt' }),
+      stop('s1', DAY, '01:00', { missorted: 1, nf: 2, oversize: 1, shortage: 3, returned: 4, invalid_code: 1, do_not_place: 2, left_on_car: 2, note: 'tele volt' }),
       stop('s1', DAY, '03:00', { missorted: 2, returned: 1 }),
     ]
     const g = buildQualityReport(DAY, routes, shifts, events, sheets, stops, 'Budapest').night.rows[0]
     expect(g).toMatchObject({ staffed: true, departed: '00:07', ended: '04:50', endedFromSheet: false, settled: '05:20', hasSheet: true })
-    expect(g).toMatchObject({ missorted: 3, noFit: 3, shortage: 3, returned: 5, undelivered: 3 })
+    expect(g).toMatchObject({ missorted: 3, noFit: 3, shortage: 3, returned: 5, undelivered: 5 })
     expect(g.complications).toBe('02:15 AB1234 nem működik\nBox újraindítás: 2\nlassú kijelző')
     expect(g.note).toContain('Elszámolás: 05:20')
     expect(g.note).toContain('nincs szabad fiók 2, túlméretes 1')
-    expect(g.note).toContain('autón maradt 2')
+    expect(g.note).toContain('Nem szállított: autón maradt 2, érvénytelen kód 1, ne helyezd be 2')
     expect(g.note).toContain('AB1: tele volt')
     // a nappali blokkba semmi nem kerül át
     const d = buildQualityReport(DAY, routes, shifts, events, sheets, stops).dayBlock.rows[0]

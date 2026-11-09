@@ -5,7 +5,9 @@ export type BoxSheet = Tables<'box_sheets'>
 export type BoxStop = Tables<'box_sheet_stops'>
 export type AlzaBox = Tables<'alza_boxes'>
 
-export type StopNumKey = 'placed' | 'missorted' | 'nf' | 'oversize' | 'shortage' | 'returned' | 'damaged' | 'left_on_car'
+export type StopNumKey = 'placed' | 'missorted' | 'nf' | 'oversize' | 'shortage' | 'returned' | 'invalid_code' | 'do_not_place' | 'cancelled' | 'left_on_car'
+// A régi összevont ÉK/NHB/törölt mező (damaged) 2026-11-09-ig: az összesítőkben még beszámít
+export const LEGACY_DAMAGED_KEY = 'damaged' as const
 
 // A papírlap megálló-oszlopai: rövid (jelvény / táblázat-fejléc) és hosszú (űrlap) címke
 export const STOP_FIELDS: { key: StopNumKey; short: string; label: string }[] = [
@@ -15,7 +17,9 @@ export const STOP_FIELDS: { key: StopNumKey; short: string; label: string }[] = 
   { key: 'oversize', short: 'Túlméretes', label: 'Túlméretes (db)' },
   { key: 'shortage', short: 'Hiány', label: 'Hiány – box képernyő (db)' },
   { key: 'returned', short: 'Visszáru', label: 'Visszáru a boxból (db)' },
-  { key: 'damaged', short: 'ÉK/NHB/törölt', label: 'ÉK (Érvénytelen kód a kijelzőn) / NHB (Ne helyezd be – kijelző) / törölt (db)' },
+  { key: 'invalid_code', short: 'ÉK', label: 'ÉK – Érvénytelen kód a kijelzőn (db)' },
+  { key: 'do_not_place', short: 'NHB', label: 'NHB – Ne helyezd be (kijelző) (db)' },
+  { key: 'cancelled', short: 'Törölt', label: 'Törölt csomag (db)' },
   { key: 'left_on_car', short: 'Autón maradt', label: 'Autón maradt (db)' },
 ]
 

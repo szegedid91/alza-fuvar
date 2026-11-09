@@ -15,15 +15,15 @@ const PATH_RE = /^[0-9a-f-]{36}\/boxsheet\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.jpg$/
 // SEC-25: a napi keret a BUDAPESTI nap szerint számol (a takarító cron is ezt nézi), nem UTC szerint
 const budapestDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' }).format(new Date())
 
-const FIELDS = ['placed', 'missorted', 'nf', 'oversize', 'shortage', 'returned', 'damaged', 'left_on_car'] as const
+const FIELDS = ['placed', 'missorted', 'nf', 'oversize', 'shortage', 'returned', 'invalid_code', 'do_not_place', 'cancelled', 'left_on_car'] as const
 const SCHEMA = {
   type: 'object', additionalProperties: false,
   properties: {
     placed: { type: ['integer', 'null'] }, shortage: { type: ['integer', 'null'] }, nf: { type: ['integer', 'null'] }, oversize: { type: ['integer', 'null'] },
-    missorted: { type: ['integer', 'null'] }, returned: { type: ['integer', 'null'] }, damaged: { type: ['integer', 'null'] }, left_on_car: { type: ['integer', 'null'] },
+    missorted: { type: ['integer', 'null'] }, returned: { type: ['integer', 'null'] }, invalid_code: { type: ['integer', 'null'] }, do_not_place: { type: ['integer', 'null'] }, cancelled: { type: ['integer', 'null'] }, left_on_car: { type: ['integer', 'null'] },
     codes: { type: 'array', items: { type: 'string' } }, screen: { type: ['string', 'null'] }, confidence: { type: ['number', 'null'] }, note: { type: ['string', 'null'] },
   },
-  required: ['placed', 'shortage', 'nf', 'oversize', 'missorted', 'returned', 'damaged', 'left_on_car', 'codes', 'screen', 'confidence', 'note'],
+  required: ['placed', 'shortage', 'nf', 'oversize', 'missorted', 'returned', 'invalid_code', 'do_not_place', 'cancelled', 'left_on_car', 'codes', 'screen', 'confidence', 'note'],
 }
 
 // Csonka JSON-ból a már kiírt mezők kinyerése: "placed":35, "shortage":null, "codes":["1610608725", …
@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
   if (images.length === 0) return json({ error: 'A képeket nem sikerült beolvasni' }, 500)
 
   const system = `Egy AlzaBox csomagautomata kijelzőjéről és csomagcímkékről készült telefonos fotókat olvasol ki egy magyar futár napi Box-lapjához.
-A kijelzőn tipikus feliratok: "Behelyezve: N" (behelyezett csomagok száma → placed), "Még ennyit kell behelyezni: N" (még be nem helyezett → shortage), csomagkód-listák (pl. 1608687656, ETIK/XL jelöléssel → codes), "Ezt a csomagot ne helyezd be" (NHB → damaged +1), "Érvénytelen kód" (ÉK → damaged +1), "Nincs szabad fiók" (NF → nf +1).
+A kijelzőn tipikus feliratok: "Behelyezve: N" (behelyezett csomagok száma → placed), "Még ennyit kell behelyezni: N" (még be nem helyezett → shortage), csomagkód-listák (pl. 1608687656, ETIK/XL jelöléssel → codes), "Ezt a csomagot ne helyezd be" (NHB → do_not_place +1), "Érvénytelen kód" (ÉK → invalid_code +1), "Törölt" / "A csomag törölve" (→ cancelled +1), "Nincs szabad fiók" (NF → nf +1).
 Minden mező egész szám; ha a képen nem látszik, null. A confidence 0 és 1 közötti szám. A screen a kijelző fő felirata röviden. A note rövid magyar megjegyzés, ha valami nem egyértelmű.`
   const boxLabel = typeof payload.box === 'string' ? payload.box.slice(0, 80) : 'ismeretlen'
   const userText = `Box: ${boxLabel}. Olvasd ki a számokat a képekről. Ha egy számot több kép is mutat, a legfrissebb/legnagyobb "Behelyezve" értéket vedd.`
