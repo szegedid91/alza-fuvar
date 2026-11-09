@@ -117,7 +117,7 @@ function DepotCard() {
     const pLat = parseHuNumber(lat), pLng = parseHuNumber(lng)
     if (!Number.isFinite(pLat) || !Number.isFinite(pLng) || pLat < -90 || pLat > 90 || pLng < -180 || pLng > 180) { setMsg('Érvénytelen koordináta — pl. 47.384 és 19.0297'); return }
     setBusy(true); setMsg(null)
-    const { error } = await supabase.from('workspaces').update({ depot_name: name.trim() || 'Alza raktár', depot_address: address.trim() || null, depot_lat: pLat, depot_lng: pLng }).eq('id', currentWorkspaceId)
+    const { error } = await supabase.from('workspaces').update({ depot_name: name.trim() || 'Raktár', depot_address: address.trim() || null, depot_lat: pLat, depot_lng: pLng }).eq('id', currentWorkspaceId)
     setBusy(false)
     if (error) { setMsg('Hiba: ' + error.message); return }
     setOpen(false)
@@ -139,7 +139,7 @@ function DepotCard() {
       )}
       {open && (
         <div className="stack">
-          <div className="field"><label>Név</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alza raktár" /></div>
+          <div className="field"><label>Név</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Raktár" /></div>
           <div className="field"><label>Cím</label><input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="irányítószám, város, utca, házszám" /></div>
           <button type="button" className="btn ghost sm" disabled={busy} onClick={() => void lookup()}><Icon name="search" size={14} />Koordináta keresése a címhez</button>
           <div className="grid-2">

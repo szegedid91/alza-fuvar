@@ -7,6 +7,7 @@ import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
 import { errMsg } from '../lib/errors'
 import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
+import { APP_NAME } from '../lib/brand'
 
 // Fejlesztői fiókok ikonja a címke/leírás alapján — az .env-beli emoji helyett
 function devIcon(acc: DevAccount): IconName {
@@ -100,8 +101,8 @@ export default function Login() {
   return (
     <div className="auth-wrap">
       <div className="auth-logo">
-        <img src="/pwa-192.png" alt="Alza" />
-        <h1>Alza Fuvarszervező</h1>
+        <img src="/pwa-192.png" alt="" />
+        <h1>{APP_NAME}</h1>
         <p className="muted small">Sofőr &amp; rakodó napi munkafolyamat</p>
       </div>
 

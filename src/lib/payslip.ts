@@ -2,6 +2,7 @@ import { payRoleLabel } from './payroll'
 import type { PayrollRow } from './payroll'
 import { formatHuf } from './labels'
 import { printHtml } from './printWindow'
+import { APP_NAME } from './brand'
 
 // Ezres tagolt összeg (1 234 567 Ft) — a képernyővel azonos formázás
 const HUF = (n: number) => formatHuf(n)
@@ -77,7 +78,7 @@ export function openPayslip(row: PayrollRow, ymRaw: string, basis: 'checkin' | '
   </table>`}
 
   <div class="sig"><div>Munkáltató</div><div>Munkavállaló</div></div>
-  <div class="foot">Készült: ${new Date().toLocaleString('hu-HU')} · Alza Fuvarszervező</div>
+  <div class="foot">Készült: ${new Date().toLocaleString('hu-HU')} · ${APP_NAME}</div>
   <script>window.print()</script>
 </body></html>`
   printHtml(html)

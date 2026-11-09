@@ -11,6 +11,7 @@ import Skeleton from '../components/Skeleton'
 import ConfirmButton from '../components/ConfirmButton'
 import { telHref } from '../lib/names'
 import { errMsg } from '../lib/errors'
+import { APP_NAME } from '../lib/brand'
 
 type Profile = Tables<'profiles'>
 type AssignRole = Enums<'user_role'>
@@ -89,7 +90,7 @@ function PendingCard({
         p_workspace_id: workspaceId,
       })
       if (error) throw error
-      void sendPush([user.id], 'Fiók jóváhagyva', 'A fiókodat jóváhagyták, beléphetsz az Alza appba.', '/').catch(() => undefined)
+      void sendPush([user.id], 'Fiók jóváhagyva', `A fiókodat jóváhagyták, beléphetsz az ${APP_NAME} appba.`, '/').catch(() => undefined)
     },
     onSuccess: onDone,
     onError: (e) => setError(errMsg(e, 'Hiba')),

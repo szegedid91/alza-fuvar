@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => ({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Alza Fuvarszervező',
-        short_name: 'Alza',
+        name: 'Utód Fuvarszervező',
+        short_name: 'Utód',
         description: 'Fuvarszervezés sofőröknek és rakodóknak',
         lang: 'hu',
         theme_color: '#0f766e',

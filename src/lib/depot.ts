@@ -7,7 +7,7 @@ export type Depot = { name: string; address: string | null; lat: number; lng: nu
 
 export function depotOf(ws: Pick<Workspace, 'depot_name' | 'depot_address' | 'depot_lat' | 'depot_lng'> | null | undefined): Depot {
   return {
-    name: ws?.depot_name?.trim() || 'Alza raktár',
+    name: ws?.depot_name?.trim() || 'Raktár',
     address: ws?.depot_address?.trim() || null,
     lat: ws?.depot_lat ?? DEPOT.lat,
     lng: ws?.depot_lng ?? DEPOT.lng,

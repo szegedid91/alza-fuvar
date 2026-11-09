@@ -10,6 +10,7 @@ import Icon from '../components/Icon'
 import { carQrPayload, qrDataUrl } from '../lib/qr'
 import QrPrintSheet from '../components/QrPrintSheet'
 import { errMsg } from '../lib/errors'
+import { APP_SHORT } from '../lib/brand'
 
 // Kategóriák kezelése: előbb a kategória, aztán rendeled hozzá az autókat
 // (több autó van, mint kategória). Sorrend = a heti beosztás-táblázat sorrendje.
@@ -609,7 +610,7 @@ function QrView({ car, onBack, onPrintSized }: { car: Car; onBack: () => void; o
         {dataUrl ? <img src={dataUrl} alt="QR" /> : <div className="spinner" />}
         <div className="plate">{car.plate}</div>
         {car.label && <div style={{ color: '#555' }}>{car.label}</div>}
-        <div style={{ color: '#777', fontSize: 12, marginTop: 6 }}>Alza — becsekkoláshoz olvasd be</div>
+        <div style={{ color: '#777', fontSize: 12, marginTop: 6 }}>{APP_SHORT} — becsekkoláshoz olvasd be</div>
       </div>
       <button className="btn no-print" onClick={onPrintSized}><Icon name="printer" />Nyomtatás választható méretben (A4 / A5 / A6 / A7)</button>
       <button className="btn ghost no-print" onClick={() => window.print()}><Icon name="printer" />Gyors nyomtatás (ez a nézet)</button>

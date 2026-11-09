@@ -4,6 +4,7 @@ import type { Car } from '../hooks/useCars'
 import { carQrPayload, qrDataUrl } from '../lib/qr'
 import { QR_SIZES, qrSizeOf, qrCellLayout, paginate, cqw, type QrSizeKey } from '../lib/qrPrint'
 import Icon from './Icon'
+import { APP_SHORT } from '../lib/brand'
 
 const SIZE_KEY = 'alza-qr-print-size'
 
@@ -102,7 +103,7 @@ export default function QrPrintSheet({ cars, initialIds, onBack }: { cars: Car[]
                   : <div style={{ width: cqw(layout.qr), height: cqw(layout.qr) }} />}
                 <div className="qr-plate" style={{ fontSize: cqw(layout.plateFont) }}>{c.plate}</div>
                 {c.label && <div style={{ fontSize: cqw(layout.textFont), color: '#444' }}>{c.label}</div>}
-                <div style={{ fontSize: cqw(layout.textFont), color: '#666' }}>Alza — becsekkoláshoz olvasd be</div>
+                <div style={{ fontSize: cqw(layout.textFont), color: '#666' }}>{APP_SHORT} — becsekkoláshoz olvasd be</div>
               </div>
             ))}
           </div>

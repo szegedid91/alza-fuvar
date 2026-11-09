@@ -34,8 +34,8 @@ export function alarmTwiml(names: string[], actionUrl: string): string {
   const n = spoken.length
   const list = spoken.slice(0, 6).join(', ') + (n > 6 ? `, és még ${n - 6} fő` : '')
   const msg = n > 0
-    ? `Alza riasztás. ${n} munkatárs nem jelezte, hogy elindult a munkába: ${list}.`
-    : 'Alza riasztás. Van munkatárs, aki nem jelezte, hogy elindult a munkába.'
+    ? `Utód riasztás. ${n} munkatárs nem jelezte, hogy elindult a munkába: ${list}.`
+    : 'Utód riasztás. Van munkatárs, aki nem jelezte, hogy elindult a munkába.'
   const stop = 'A riasztás leállításához nyomd meg az egyes gombot.'
   return '<?xml version="1.0" encoding="UTF-8"?><Response>'
     + `<Gather numDigits="1" timeout="6" method="POST" action="${xmlEsc(actionUrl)}">`
@@ -47,7 +47,7 @@ export function alarmTwiml(names: string[], actionUrl: string): string {
 
 export function testTwiml(): string {
   return '<?xml version="1.0" encoding="UTF-8"?><Response>'
-    + SAY('Ez az Alza fuvarszervező próbahívása. Ha ezt hallod, a riasztás-hívás működik. Viszonthallásra.')
+    + SAY('Ez az Utód fuvarszervező próbahívása. Ha ezt hallod, a riasztás-hívás működik. Viszonthallásra.')
     + '</Response>'
 }
 

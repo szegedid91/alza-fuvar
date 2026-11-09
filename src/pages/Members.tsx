@@ -12,8 +12,10 @@ import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
 import MemberDataSummary from '../components/MemberDataSummary'
+import WorkspacesCard from '../components/WorkspacesCard'
 import { inviteMailto } from '../lib/inviteMail'
 import { toast } from '../lib/toast'
+import { APP_NAME, APP_SHORT } from '../lib/brand'
 
 type Profile = Tables<'profiles'>
 type Invite = Tables<'invites'>
@@ -175,7 +177,7 @@ function InviteCard() {
     const url = linkOf(inv.id)
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Alza meghívó', text: `Meghívó az Alza appba (${inv.full_name || inv.email})`, url })
+        await navigator.share({ title: `${APP_SHORT} meghívó`, text: `Meghívó az ${APP_NAME} appba (${inv.full_name || inv.email})`, url })
       } catch { /* a megosztás megszakítva */ }
     } else {
       void copyLink(inv.id)
@@ -462,6 +464,7 @@ export default function Members() {
         </Link>
       )}
 
+      {isAdmin && <WorkspacesCard />}
       <InviteCard />
 
       <div className="card stack" style={{ gap: 10 }}>

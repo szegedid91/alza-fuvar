@@ -35,7 +35,7 @@ export default function Pending() {
   return (
     <div className="auth-wrap">
       <div className="auth-logo">
-        <img src="/pwa-192.png" alt="Alza" />
+        <img src="/pwa-192.png" alt="" />
         <h1>{disabled ? 'Fiók letiltva' : 'Várj a jóváhagyásra'}</h1>
       </div>
 

@@ -42,7 +42,7 @@ describe('push-sw — az értesítés megjelenése', () => {
     expect(options).toMatchObject({ tag: 'setoff-1', renotify: true })
   })
   it('hibás csomag sem akad el: alapértelmezett cím', () => {
-    expect(showFor(null).title).toBe('Alza')
+    expect(showFor(null).title).toBe('Utód')
   })
 })
 

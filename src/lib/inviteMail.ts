@@ -1,3 +1,4 @@
+import { APP_NAME } from './brand'
 // A meghívó email szövege (tárgy + törzs) — ugyanez megy ki a szerverről (manage-invite) és
 // a leveleződ-fallbackból (mailto), hogy a munkatárs mindkét esetben ugyanazt kapja.
 export interface InviteMailInput {
@@ -8,14 +9,14 @@ export interface InviteMailInput {
   expiresAt: string | null // ISO
 }
 
-export const INVITE_MAIL_SUBJECT = 'Meghívó az Alza Fuvarszervező appba'
+export const INVITE_MAIL_SUBJECT = `Meghívó az ${APP_NAME} appba`
 
 export function inviteMailText(i: InviteMailInput): string {
   const until = i.expiresAt ? new Date(i.expiresAt).toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' }) : null
   return [
     `Szia${i.name?.trim() ? ` ${i.name.trim()}` : ''}!`,
     '',
-    `${i.inviter?.trim() || 'A vezetőd'} meghívott az Alza Fuvarszervező appba${i.workspace?.trim() ? ` (${i.workspace.trim()})` : ''}.`,
+    `${i.inviter?.trim() || 'A vezetőd'} meghívott az ${APP_NAME} appba${i.workspace?.trim() ? ` (${i.workspace.trim()})` : ''}.`,
     'A regisztrációhoz nyisd meg ezt a linket a telefonodon:',
     i.link,
     '',

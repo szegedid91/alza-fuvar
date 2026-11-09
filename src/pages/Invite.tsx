@@ -8,6 +8,7 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
 import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
+import { APP_NAME } from '../lib/brand'
 
 interface InviteInfo {
   email: string | null
@@ -100,7 +101,7 @@ export default function InvitePage({ token }: { token: string }) {
     <div className="auth-wrap">
       <div className="auth-logo">
         <img src="/pwa-192.png" alt="" />
-        <h1>Alza Fuvarszervező</h1>
+        <h1>{APP_NAME}</h1>
       </div>
       <div className="card auth-card stack primary">
         {loadError && (
@@ -129,7 +130,7 @@ export default function InvitePage({ token }: { token: string }) {
 
         {info && !session && (
           <>
-            <div className="card-title"><Icon name="sparkles" />Meghívtak az Alza appba</div>
+            <div className="card-title"><Icon name="sparkles" />Meghívtak az appba</div>
             <p className="small" style={{ margin: 0 }}>
               <strong>{info.full_name || info.email}</strong>, csatlakozol a(z){' '}
               <strong>{info.workspace}</strong> munkaterülethez mint{' '}

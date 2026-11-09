@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
     userIds = userIds.filter((id) => allowed.has(id))
     if (userIds.length === 0) return json({ sent: 0 })
   }
-  const title = (typeof payload.title === 'string' ? payload.title : 'Alza').slice(0, 100)
+  const title = (typeof payload.title === 'string' ? payload.title : 'Utód').slice(0, 100)
   const body = (typeof payload.body === 'string' ? payload.body : '').slice(0, 400)
   const url = safeUrl(payload.url)
   // Megjelenítési jelzők — a service worker (push-sw.js) értelmezi:

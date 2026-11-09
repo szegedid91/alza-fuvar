@@ -17,6 +17,7 @@ import PhotoHelpBanner from './PhotoHelpBanner'
 import { errMsg } from '../lib/errors'
 import { useToday } from '../hooks/useToday'
 import { useTodayStatusEvents } from '../lib/statusEvents'
+import { APP_SHORT } from '../lib/brand'
 
 interface NavItem { to: string; icon: IconName; label: string; end?: boolean }
 
@@ -296,7 +297,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <div className="brand">
             <img src="/pwa-192.png" alt="" />
             {/* Becsekkolva a márkanév helyett a mai állapot ikonjai kapnak helyet, hogy a név kiférjen */}
-            {!showStatus && <span>Alza</span>}
+            {!showStatus && <span>{APP_SHORT}</span>}
           </div>
         )}
         <div className="spacer" />

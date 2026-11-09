@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
 import { isPasswordPwned, PWNED_MESSAGE } from '../lib/pwned'
+import { APP_NAME } from '../lib/brand'
 
 // Új jelszó beállítása az emailben kapott link után.
 // Ilyenkor a Supabase már beléptetett minket egy "recovery" munkamenettel,
@@ -56,8 +57,8 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
     return (
       <div className="auth-wrap">
         <div className="auth-logo">
-          <img src="/pwa-192.png" alt="Alza" />
-          <h1>Alza Fuvarszervező</h1>
+          <img src="/pwa-192.png" alt="" />
+          <h1>{APP_NAME}</h1>
           <p className="muted small">Új jelszó beállítása</p>
         </div>
         <div className="card auth-card stack primary">
@@ -75,8 +76,8 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
     return (
       <div className="auth-wrap">
         <div className="auth-logo">
-          <img src="/pwa-192.png" alt="Alza" />
-          <h1>Alza Fuvarszervező</h1>
+          <img src="/pwa-192.png" alt="" />
+          <h1>{APP_NAME}</h1>
         </div>
         <div className="card auth-card stack primary">
           <div className="alert success row" style={{ gap: 8 }}><Icon name="check-circle" />A jelszavad frissítve. Mostantól az új jelszóval tudsz belépni.</div>
@@ -89,8 +90,8 @@ export default function ResetPassword({ onDone }: { onDone: () => void }) {
   return (
     <div className="auth-wrap">
       <div className="auth-logo">
-        <img src="/pwa-192.png" alt="Alza" />
-        <h1>Alza Fuvarszervező</h1>
+        <img src="/pwa-192.png" alt="" />
+        <h1>{APP_NAME}</h1>
         <p className="muted small">Új jelszó beállítása</p>
       </div>
 

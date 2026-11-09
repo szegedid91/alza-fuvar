@@ -53,7 +53,7 @@ export type StatusKind = 'set_off' | 'arrived' | 'departed' | 'done' | 'settled'
 export const STATUS_META: Record<StatusKind, { label: string; title: string; icon: 'map-pin' | 'navigation' | 'flag' | 'check-circle' | 'alert-triangle'; color: string }> = {
   // Otthonról elindult a munkába — becsekkolás előtt, a vezetők pusht kapnak (nem WhatsApp-jelzés)
   set_off: { label: 'Elindultam', title: 'Elindultam a munkába', icon: 'navigation', color: 'var(--primary)' },
-  arrived: { label: 'Megérkeztem', title: 'Megérkeztem az Alzába', icon: 'map-pin', color: 'var(--success)' },
+  arrived: { label: 'Megérkeztem', title: 'Megérkeztem a raktárba', icon: 'map-pin', color: 'var(--success)' },
   departed: { label: 'Kiindultam', title: 'Kiindultam', icon: 'navigation', color: 'var(--primary)' },
   done: { label: 'Járat kész', title: 'Járat kész', icon: 'flag', color: 'var(--success)' },
   settled: { label: 'Elszámoltam', title: 'Elszámoltam (visszáruk leadva)', icon: 'check-circle', color: 'var(--success)' },

@@ -7,7 +7,7 @@ describe('inviteMailText', () => {
   it('megszólítás, meghívó, link, érvényesség', () => {
     const t = inviteMailText(base)
     expect(t).toContain('Szia Preisinger Bendegúz!')
-    expect(t).toContain('Szegedi Dániel meghívott az Alza Fuvarszervező appba (Alza).')
+    expect(t).toContain('Szegedi Dániel meghívott az Utód Fuvarszervező appba (Alza).')
     expect(t).toContain('https://alza.szakify.hu/meghivo#123')
     expect(t).toContain('2026. 12. 09.-ig érvényes')
     expect(t).toContain('telefonszámodat és egy jelszót')
@@ -15,7 +15,7 @@ describe('inviteMailText', () => {
   it('hiányzó adatok nélkül is értelmes', () => {
     const t = inviteMailText({ name: null, inviter: null, workspace: null, link: 'L', expiresAt: null })
     expect(t.startsWith('Szia!')).toBe(true)
-    expect(t).toContain('A vezetőd meghívott az Alza Fuvarszervező appba.')
+    expect(t).toContain('A vezetőd meghívott az Utód Fuvarszervező appba.')
     expect(t).not.toContain('érvényes')
     expect(t).not.toContain('\n\n\n')
   })

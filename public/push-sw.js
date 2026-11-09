@@ -3,7 +3,7 @@ self.addEventListener('push', (event) => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch (e) { data = {} }
   if (!data || typeof data !== 'object') data = {}
-  const title = data.title || 'Alza'
+  const title = data.title || 'Utód'
   const shown = self.registration.showNotification(title, notificationOptions(data))
   // Riasztásnál a nyitva lévő app is azonnal megtudja (nem a következő lekérdezéskor): ott villogó,
   // csipogó riasztó-képernyő jelenik meg

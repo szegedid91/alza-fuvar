@@ -32,7 +32,7 @@ function mailText(i: { name: string | null; inviter: string | null; workspace: s
   return [
     `Szia${i.name?.trim() ? ` ${i.name.trim()}` : ''}!`,
     '',
-    `${i.inviter?.trim() || 'A vezetőd'} meghívott az Alza Fuvarszervező appba${i.workspace?.trim() ? ` (${i.workspace.trim()})` : ''}.`,
+    `${i.inviter?.trim() || 'A vezetőd'} meghívott az Utód Fuvarszervező appba${i.workspace?.trim() ? ` (${i.workspace.trim()})` : ''}.`,
     'A regisztrációhoz nyisd meg ezt a linket a telefonodon:',
     i.link,
     '',
@@ -158,14 +158,14 @@ Deno.serve(async (req: Request) => {
     const link = `${APP_URL}/meghivo#${inv.id}`
     const text = mailText({ name: inv.full_name, inviter: caller.full_name ?? caller.email ?? null, workspace: ws?.name ?? null, link, expiresAt })
     if (!apiKey || !from) {
-      return json({ error: 'Az automatikus emailküldés nincs beállítva (RESEND_API_KEY és INVITE_MAIL_FROM titok a Supabase Edge Functions beállításaiban).', not_configured: true, email, expires_at: expiresAt, subject: 'Meghívó az Alza Fuvarszervező appba', text }, 503)
+      return json({ error: 'Az automatikus emailküldés nincs beállítva (RESEND_API_KEY és INVITE_MAIL_FROM titok a Supabase Edge Functions beállításaiban).', not_configured: true, email, expires_at: expiresAt, subject: 'Meghívó az Utód Fuvarszervező appba', text }, 503)
     }
     const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.5;color:#111">${
       text.split('\n').map((l) => (l === link ? `<p><a href="${escHtml(link)}" style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:700">Regisztráció megnyitása</a><br><span style="font-size:12px;color:#555">${escHtml(link)}</span></p>` : l ? `<p style="margin:0 0 6px">${escHtml(l)}</p>` : '<br>')).join('')
     }</div>`
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [email], subject: 'Meghívó az Alza Fuvarszervező appba', text, html }),
+      body: JSON.stringify({ from, to: [email], subject: 'Meghívó az Utód Fuvarszervező appba', text, html }),
     })
     if (!res.ok) {
       console.error('resend error', res.status, (await res.text()).slice(0, 500))
