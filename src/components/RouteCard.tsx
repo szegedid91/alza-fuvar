@@ -19,7 +19,7 @@ import { errMsg } from '../lib/errors'
 import { recordStatusEvent, useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { roundStates } from '../lib/rounds'
-import { groupTarget, statusText } from '../lib/groupMessage'
+import { statusText, openWhatsApp } from '../lib/groupMessage'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -151,7 +151,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
           const at = new Date()
           const name = profile.full_name || profile.email || 'Munkatárs'
           const text = statusText('done', at, name, codeOf(sh.route_id))
-          window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+          openWhatsApp(text) // ugyanazon a lapon: visszaváltáskor az app van elöl, nem egy üres fül
           return () => {
             void recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: sh.car_id, kind: 'done', at, geofence: currentWorkspace })
               .then(() => qc.invalidateQueries({ queryKey: ['status-events'] }))

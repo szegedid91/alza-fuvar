@@ -6,7 +6,7 @@ import { useToday } from '../hooks/useToday'
 import { recordStatusEvent } from '../lib/statusEvents'
 import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
-import { groupTarget, copyText, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind } from '../lib/groupMessage'
+import { groupTarget, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
 import MultiShotCamera from './MultiShotCamera'
 import { useState } from 'react'
@@ -73,7 +73,7 @@ export default function StatusCard() {
     setSettleCamera(false)
     let sharing: Promise<'shared' | 'cancelled' | 'unsupported'> | null = null
     if (shareOk) sharing = sharePhotos(blobs, text, 'elszamolas')
-    else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+    else openWhatsApp(text)
     void (async () => {
       try {
         const eventId = await record('settled', at)
@@ -94,7 +94,7 @@ export default function StatusCard() {
     void sharing?.then((res) => {
       if (res === 'shared') toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el. A képek az appban is megvannak.')
       else if (res === 'cancelled') toast.info('A megosztás megszakadt — a jelzés és a képek az appban megvannak, a listából újraküldheted.')
-      else window.open(groupTarget(currentWorkspace, text).url, '_blank', 'noopener')
+      else openWhatsApp(text)
     })
   }
 
@@ -135,11 +135,11 @@ export default function StatusCard() {
               onClick={(e) => {
                 // LOG-37: amíg az előző koppintás rögzítése fut, a második nem rögzít újra
                 if (sending) { e.preventDefault(); return }
+                // a WhatsApp a koppintáson belül nyílik, de nem új fülön: visszaváltáskor az app legyen elöl
+                e.preventDefault()
                 const at = new Date()
                 const t = statusText(kind, at, name, route)
-                const tg = groupTarget(currentWorkspace, t)
-                e.currentTarget.href = tg.url
-                if (tg.viaClipboard) void copyText(t)
+                openWhatsApp(t)
                 setSending(kind)
                 void record(kind, at).finally(() => setSending(null))
               }}>
