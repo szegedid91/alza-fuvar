@@ -16,7 +16,8 @@ export interface TodayState {
   // Van-e ma betanuló beosztva a mai autóra (a Box 1 fős létszáma ilyenkor +1)
   traineeOnCar: boolean
   // A mai beosztás szerinti autó és járat — becsekkolás ELŐTT is tudjuk, mire van beosztva
-  planned: { plate: string; label: string | null; routeCode: string | null; round: number | null } | null
+  // isBox: a beosztott autó Box-kategóriás-e (null = nem tudni) — a beolvasásnál csak ilyen kategóriájú autó választható
+  planned: { plate: string; label: string | null; routeCode: string | null; round: number | null; isBox: boolean | null } | null
   // A becsekkolás teljessége: van-e MA ellenőrző fotósor az autón (bárkitől).
   // Fotó nélkül csak vezetői továbbengedéssel (checkin.inspection_waived_at) mehet tovább a nap.
   inspectionDone: boolean
@@ -50,7 +51,7 @@ export function useToday() {
           .maybeSingle(),
         supabase
           .from('shifts')
-          .select('driver_id, loader_id, trainee_id, round, car:cars(plate, label), route:route_names(code)')
+          .select('driver_id, loader_id, trainee_id, round, car:cars(plate, label, category:car_categories(box_sheet)), route:route_names(code)')
           .eq('workspace_id', currentWorkspaceId!)
           .eq('work_date', date)
           .or(`driver_id.eq.${profile!.id},loader_id.eq.${profile!.id},trainee_id.eq.${profile!.id}`)
@@ -74,9 +75,9 @@ export function useToday() {
       const assignedRole: 'driver' | 'loader' | 'trainee' | null =
         shift?.driver_id === profile!.id ? 'driver' : shift?.loader_id === profile!.id ? 'loader' : shift?.trainee_id === profile!.id ? 'trainee' : null
 
-      const plannedCar = (shift?.car as unknown as { plate: string; label: string | null } | null) ?? null
+      const plannedCar = (shift?.car as unknown as { plate: string; label: string | null; category: { box_sheet: boolean } | null } | null) ?? null
       const plannedRoute = (shift?.route as unknown as { code: string } | null) ?? null
-      const planned = plannedCar ? { plate: plannedCar.plate, label: plannedCar.label, routeCode: plannedRoute?.code ?? null, round: shift?.round ?? null } : null
+      const planned = plannedCar ? { plate: plannedCar.plate, label: plannedCar.label, routeCode: plannedRoute?.code ?? null, round: shift?.round ?? null, isBox: plannedCar.category?.box_sheet ?? null } : null
 
       return { date, checkin, car, crew, assignedRole, inspectionDone: inspCount > 0, traineeOnCar, planned }
     },

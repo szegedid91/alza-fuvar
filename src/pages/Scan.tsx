@@ -13,7 +13,7 @@ import ParkCarButton from '../components/ParkCarButton'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { parseCarQr } from '../lib/qr'
-import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, traineeScheduled, type Car, type CrewMember, type InspectionRequirement } from '../lib/checkin'
+import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, traineeScheduled, type Car, type CrewMember, type InspectionRequirement, carFitsPlan, filterCarsByPlan, planCategoryError } from '../lib/checkin'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
@@ -85,6 +85,11 @@ export default function Scan() {
   // 2) Ma már egy MÁSIK autóra vagy becsekkolva és nem jelentkeztél ki → az
   //    autócsere okát kérjük. Egyébként azonnal becsekkolunk.
   async function startCheckIn(car: Car, manual: boolean, ignoreMismatch = false) {
+    // -1) Box-ra beosztva csak Box-autó, XL-re csak XL — ez nem felülírható, a beosztást a vezető írja át
+    if (today?.planned?.isBox != null && !carFitsPlan(car.category_id, categories, today.planned.isBox)) {
+      setError(planCategoryError(car.plate, today.planned.isBox))
+      return
+    }
     // 0) Nem erre az autóra van ma beosztva → figyelmeztetés (a cserét a beosztás nem tiltja, de ne véletlenül legyen)
     if (!ignoreMismatch && today?.planned && today.planned.plate !== car.plate) {
       setPendingMismatch({ car, manual })
@@ -334,12 +339,13 @@ export default function Scan() {
         {checkedIn
           ? 'Sérült matrica vagy tiltott kamera esetén válaszd ki az új autót — a csere okát a következő lépésben kérjük. A kézi választást a vezetők jelzésként látják.'
           : 'Sérült matrica vagy tiltott kamera esetén válaszd ki az autót. A kézi becsekkolást a vezetők jelzésként látják.'}
+        {today?.planned?.isBox != null && <> A lista csak a beosztásod szerinti {today.planned.isBox ? 'Box' : 'XL'} kategóriás autókat mutatja.</>}
       </div>
       <div className="field">
         <label>Autó</label>
         <select className="select" value={manualCarId} onChange={(e) => setManualCarId(e.target.value)}>
           <option value="">— válassz —</option>
-          {groupByCategory((cars ?? []).filter((c) => !checkedIn || c.id !== today?.car?.id), categories).map((g) => (
+          {groupByCategory(filterCarsByPlan((cars ?? []).filter((c) => !checkedIn || c.id !== today?.car?.id), categories, today?.planned?.isBox), categories).map((g) => (
             <optgroup key={g.name} label={g.name}>
               {g.cars.map((c) => <option key={c.id} value={c.id}>{c.plate}{c.label ? ` · ${c.label}` : ''}</option>)}
             </optgroup>

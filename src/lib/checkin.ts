@@ -123,3 +123,23 @@ export async function checkInspectionRequirement(
 
   return { required: reasons.length > 0, reasons, lastDriverName }
 }
+
+// ---- Beolvasás: csak a beosztás kategóriájába (Box / XL) tartozó autó választható ----
+export interface CategoryLike { id: string; box_sheet: boolean }
+// Illik-e az autó a mai beosztáshoz: Box-ra beosztva csak Box-autó, XL-re csak XL.
+// null (nincs beosztás / ismeretlen kategória) = nincs korlát.
+export function carFitsPlan(carCategoryId: string | null, categories: CategoryLike[] | undefined, plannedIsBox: boolean | null | undefined): boolean {
+  if (plannedIsBox == null) return true
+  const cat = (categories ?? []).find((k) => k.id === carCategoryId)
+  if (!cat) return true
+  return cat.box_sheet === plannedIsBox
+}
+export function filterCarsByPlan<T extends { category_id: string | null }>(cars: T[], categories: CategoryLike[] | undefined, plannedIsBox: boolean | null | undefined): T[] {
+  return cars.filter((c) => carFitsPlan(c.category_id, categories, plannedIsBox))
+}
+// Az elutasítás szövege a beolvasásnál
+export function planCategoryError(plate: string, plannedIsBox: boolean): string {
+  return plannedIsBox
+    ? `Ma Box-autóra vagy beosztva — a(z) ${plate} nem Box-kategóriás. Csak a Box-autók közül választhatsz; ha mégis másik kell, szólj a vezetőnek, hogy írja át a beosztást.`
+    : `Ma XL-autóra vagy beosztva — a(z) ${plate} Box-kategóriás. Csak az XL-autók közül választhatsz; ha mégis másik kell, szólj a vezetőnek, hogy írja át a beosztást.`
+}

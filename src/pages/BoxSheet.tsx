@@ -20,6 +20,7 @@ import {
   type BoxSheet, type BoxStop, type AlzaBox,
 } from '../lib/boxSheet'
 import type { Car } from '../lib/checkin'
+import { useTodayStatusEvents } from '../lib/statusEvents'
 import { errMsg } from '../lib/errors'
 
 // Napi Box-lap: a papír "AlzaBox szállítási lap" digitális mása. Csak a
@@ -55,7 +56,23 @@ export default function BoxSheetPage() {
   return (
     <div className="stack">
       <h2>Box-lap</h2>
-      <RequireCheckin>{({ car, date }) => <InspectionGate carId={car.id} date={date}><CrewSheet car={car} date={date} /></InspectionGate>}</RequireCheckin>
+      <RequireCheckin>{({ car, date }) => <InspectionGate carId={car.id} date={date}><DepartedGate><CrewSheet car={car} date={date} /></DepartedGate></InspectionGate>}</RequireCheckin>
+    </div>
+  )
+}
+
+// A Box-lap csak a „Kiindultam” jelzés után tölthető: a lap a járat közbeni munkát rögzíti,
+// kiindulás előtt nincs mit beírni (és a lap sem jön létre idő előtt)
+function DepartedGate({ children }: { children: React.ReactNode }) {
+  const { data: events, isLoading } = useTodayStatusEvents()
+  if (isLoading && !events) return <Skeleton rows={3} />
+  const departed = (events ?? []).some((e) => e.kind === 'departed')
+  if (departed) return <>{children}</>
+  return (
+    <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
+      <div className="row"><Icon name="lock" size={24} style={{ color: 'var(--warning)' }} /><strong>A Box-lap a „Kiindultam” után tölthető</strong></div>
+      <p className="small muted" style={{ margin: 0 }}>Előbb a kezdőlapon jelezd a kiindulást („Kiindultam”), utána a járat-kártyáról minden boxnál kitöltheted a lapot.</p>
+      <Link to="/" className="btn" style={{ textDecoration: 'none' }}><Icon name="home" />Kezdőlap</Link>
     </div>
   )
 }
