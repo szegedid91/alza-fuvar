@@ -27,6 +27,43 @@ export function useReviewBoxNote() {
   })
 }
 
+// A vezető átírhatja a megjegyzés szövegét (elírás, pontosítás) — jóváhagyás előtt és után is;
+// approve: egyben jóvá is hagyja
+export function useEditBoxNote() {
+  const { profile } = useAuth()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, text, approve = false }: { id: string; text: string; approve?: boolean }) => {
+      const t = cleanBoxNote(text)
+      if (!t) throw new Error('A megjegyzés túl rövid.')
+      const patch: { text: string; status?: string; reviewed_by?: string | null; reviewed_at?: string } = { text: t }
+      if (approve) { patch.status = 'approved'; patch.reviewed_by = profile?.id ?? null; patch.reviewed_at = new Date().toISOString() }
+      const { error } = await supabase.from('box_notes').update(patch).eq('id', id)
+      if (error) throw error
+      return approve
+    },
+    onSuccess: (approve) => { toast.success(approve ? 'Átírva és jóváhagyva.' : 'A megjegyzés átírva.'); void qc.invalidateQueries({ queryKey: ['box-notes'] }) },
+    onError: (e) => toast.error('Nem sikerült: ' + errMsg(e, 'ismeretlen hiba')),
+  })
+}
+
+// Vezetői szerkesztő egy megjegyzéshez: szövegmező + Mentés (függőnél: Mentés és jóváhagyás is)
+function NoteEditor({ note, pending, onDone }: { note: BoxNote; pending: boolean; onDone: () => void }) {
+  const [text, setText] = useState(note.text)
+  const edit = useEditBoxNote()
+  const save = (approve: boolean) => edit.mutate({ id: note.id, text, approve }, { onSuccess: onDone })
+  return (
+    <div className="stack" style={{ gap: 6, marginTop: 4 }}>
+      <textarea className="textarea" rows={2} maxLength={BOX_NOTE_MAX} value={text} autoFocus onChange={(e) => setText(e.target.value)} />
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <button type="button" className="btn sm auto" disabled={edit.isPending || !cleanBoxNote(text)} onClick={() => save(false)}><Icon name="save" size={14} />Mentés</button>
+        {pending && <button type="button" className="btn sm auto" disabled={edit.isPending || !cleanBoxNote(text)} onClick={() => save(true)}><Icon name="check" size={14} />Mentés és jóváhagyás</button>}
+        <button type="button" className="btn ghost sm auto" onClick={onDone}>Mégse</button>
+      </div>
+    </div>
+  )
+}
+
 // Munkatársi megjegyzések egy boxhoz a Box-kártyán: a jóváhagyottak mindenkinek, a függők a beküldőnek
 // és a vezetőnek; új megjegyzés egy koppintásra, a vezető itt helyben jóváhagyhatja.
 export default function BoxNotes({ boxId }: { boxId: string }) {
@@ -36,6 +73,7 @@ export default function BoxNotes({ boxId }: { boxId: string }) {
   const isManager = profile?.role === 'manager' || profile?.role === 'admin'
   const [text, setText] = useState('')
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const review = useReviewBoxNote()
 
   const { data: notes } = useQuery({
@@ -71,13 +109,20 @@ export default function BoxNotes({ boxId }: { boxId: string }) {
     <div className="small row" style={{ gap: 8, alignItems: 'flex-start' }}>
       <Icon name={pending ? 'clock' : 'users'} size={16} style={{ flexShrink: 0, marginTop: 2, color: pending ? 'var(--warning)' : 'var(--primary)' }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div>{n.text}</div>
-        <div className="tiny muted">{n._name ?? 'munkatárs'} · {formatDate(n.created_at.slice(0, 10))}{pending ? ' · jóváhagyásra vár' : ''}</div>
-        {pending && isManager && (
-          <div className="row" style={{ gap: 6, marginTop: 4 }}>
-            <button type="button" className="btn sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: true })}><Icon name="check" size={14} />Jóváhagyás</button>
-            <button type="button" className="btn ghost sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: false })}><Icon name="x" size={14} />Elutasítás</button>
-          </div>
+        {editingId === n.id ? (
+          <NoteEditor note={n} pending={!!pending} onDone={() => setEditingId(null)} />
+        ) : (
+          <>
+            <div>{n.text}</div>
+            <div className="tiny muted">{n._name ?? 'munkatárs'} · {formatDate(n.created_at.slice(0, 10))}{pending ? ' · jóváhagyásra vár' : ''}</div>
+            {isManager && (
+              <div className="row" style={{ gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                {pending && <button type="button" className="btn sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: true })}><Icon name="check" size={14} />Jóváhagyás</button>}
+                <button type="button" className="btn ghost sm auto" onClick={() => setEditingId(n.id)}><Icon name="pencil" size={14} />Átírás</button>
+                {pending && <button type="button" className="btn ghost sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: false })}><Icon name="x" size={14} />Elutasítás</button>}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -112,6 +157,7 @@ export default function BoxNotes({ boxId }: { boxId: string }) {
 export function PendingBoxNotesCard() {
   const { currentWorkspaceId } = useWorkspace()
   const review = useReviewBoxNote()
+  const [editingId, setEditingId] = useState<string | null>(null)
   const { data } = useQuery({
     queryKey: ['box-notes', 'pending', currentWorkspaceId],
     enabled: !!currentWorkspaceId,
@@ -129,18 +175,25 @@ export function PendingBoxNotesCard() {
   return (
     <div className="card stack" style={{ gap: 8, borderColor: 'var(--warning)' }}>
       <div className="card-title" style={{ margin: 0 }}><Icon name="users" />Box-megjegyzések jóváhagyásra ({data.length})</div>
-      <div className="tiny muted">A munkatársak írták a boxok kártyájára. Jóváhagyás után mindenki látja, elutasítva csak a beküldő tudja meg.</div>
+      <div className="tiny muted">A munkatársak írták a boxok kártyájára. Átírhatod, mielőtt jóváhagyod; jóváhagyás után mindenki látja, elutasítva csak a beküldő tudja meg.</div>
       {data.map((n) => (
         <div key={n.id} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
           <div className="small" style={{ fontWeight: 700 }}>{n.box?.code ? `${n.box.code} · ` : ''}{n.box?.name ?? 'box'}</div>
-          <div className="small">{n.text}</div>
-          <div className="between">
-            <span className="tiny muted">{n._name ?? 'munkatárs'} · {formatDate(n.created_at.slice(0, 10))}</span>
-            <span className="row" style={{ gap: 6 }}>
-              <button type="button" className="btn sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: true })}><Icon name="check" size={14} />Jóváhagyás</button>
-              <button type="button" className="btn ghost sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: false })}><Icon name="x" size={14} />Elutasítás</button>
-            </span>
-          </div>
+          {editingId === n.id ? (
+            <NoteEditor note={n} pending onDone={() => setEditingId(null)} />
+          ) : (
+            <>
+              <div className="small">{n.text}</div>
+              <div className="between" style={{ flexWrap: 'wrap', gap: 6 }}>
+                <span className="tiny muted">{n._name ?? 'munkatárs'} · {formatDate(n.created_at.slice(0, 10))}</span>
+                <span className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: true })}><Icon name="check" size={14} />Jóváhagyás</button>
+                  <button type="button" className="btn ghost sm auto" onClick={() => setEditingId(n.id)}><Icon name="pencil" size={14} />Átírás</button>
+                  <button type="button" className="btn ghost sm auto" disabled={review.isPending} onClick={() => review.mutate({ id: n.id, approve: false })}><Icon name="x" size={14} />Elutasítás</button>
+                </span>
+              </div>
+            </>
+          )}
         </div>
       ))}
     </div>
