@@ -269,3 +269,8 @@ export function payrollDays(basis: AdvanceBasis, checkins: CheckinLike[], shifts
   }
   return { paid, future }
 }
+
+// ---- Bér bontása: XL (sofőr, rakodó, betanuló) és AlzaBox (1. kör, 2. kör, Box-betanuló) ----
+type PayParts = Pick<PayrollRow, 'driverPay' | 'loaderPay' | 'traineePay' | 'boxPay' | 'boxRound2Pay' | 'boxTraineePay'>
+export const xlPayOf = (r: PayParts): number => r.driverPay + r.loaderPay + r.traineePay
+export const boxPayOf = (r: PayParts): number => r.boxPay + r.boxRound2Pay + r.boxTraineePay

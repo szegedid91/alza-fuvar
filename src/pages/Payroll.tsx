@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { fetchAll } from '../lib/fetchAll'
 import { useAuth } from '../context/AuthContext'
-import { monthRange, currentYm, buildDayComps, payForDay, payrollDays, type PayrollRow, type PayRole, type AdvanceBasis } from '../lib/payroll'
+import { monthRange, currentYm, buildDayComps, payForDay, payrollDays, xlPayOf, boxPayOf, type PayrollRow, type PayRole, type AdvanceBasis } from '../lib/payroll'
 import { readPayBasis, savePayBasis } from '../lib/payBasis'
 import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber, todayISO } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
@@ -215,6 +215,7 @@ export default function Payroll() {
       'Munkatárs': r.name, 'Munkaterület': r.workspace, 'Alap': basis === 'schedule' ? 'beosztás' : 'becsekkolás',
       'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, [basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap']: r.days,
       'XL sofőr napidíj': r.driverRate, 'XL rakodó napidíj': r.loaderRate, 'Box 1. kör díj': r.boxRate, 'Box 2. kör díj': r.boxRound2Rate, 'XL betanuló napidíj': r.traineeRate, 'Box betanuló napidíj': r.boxTraineeRate, 'Alapbér': r.base,
+      'AlzaBox bér': boxPayOf(r), 'XL bér': xlPayOf(r),
       'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
     })))
   }
@@ -226,8 +227,8 @@ export default function Payroll() {
   const shownRows = (data?.rows ?? []).filter((r) => !onlyWorked || relevant(r))
   const workedCount = (data?.rows ?? []).filter(relevant).length
   const totals = (data?.rows ?? []).reduce(
-    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances, futureDays: a.futureDays + (r.futureDays ?? 0), futurePay: a.futurePay + (r.futurePay ?? 0) }),
-    { pay: 0, days: 0, deductions: 0, advances: 0, futureDays: 0, futurePay: 0 },
+    (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances, futureDays: a.futureDays + (r.futureDays ?? 0), futurePay: a.futurePay + (r.futurePay ?? 0), xl: a.xl + xlPayOf(r), box: a.box + boxPayOf(r) }),
+    { pay: 0, days: 0, deductions: 0, advances: 0, futureDays: 0, futurePay: 0, xl: 0, box: 0 },
   )
 
   return (
@@ -261,6 +262,9 @@ export default function Payroll() {
           <div className="grid-2">
             <div><div className="tiny muted">Kifizetendő összesen</div><div className="num num-lg">{formatHuf(totals.pay)}</div></div>
             <div><div className="tiny muted">{basis === 'schedule' ? 'Beosztott napok' : 'Ledolgozott napok'}</div><div className="num num-lg">{totals.days}</div></div>
+            {/* alapbér megbízó szerint: az AlzaBox-os napok és az XL-es napok díja külön */}
+            <div><div className="tiny muted">AlzaBox bér (alap)</div><div className="num">{formatHuf(totals.box)}</div></div>
+            <div><div className="tiny muted">XL bér (alap)</div><div className="num">{formatHuf(totals.xl)}</div></div>
             <div><div className="tiny muted">Levonás</div><div className="num" style={{ color: totals.deductions > 0 ? 'var(--danger)' : undefined }}>{formatHuf(totals.deductions)}</div></div>
             <div><div className="tiny muted">Felvett előleg</div><div className="num">{formatHuf(totals.advances)}</div></div>
           </div>
@@ -585,6 +589,12 @@ function PayrollCard({ row, ym, basis }: { row: PayrollRow; ym: string; basis: A
         {row.traineeDays > 0 && <div className="between"><span className="muted">XL betanulóként</span><span>{row.traineeDays} nap · {formatHuf(row.traineePay)}</span></div>}
         <div className="between"><span className="muted">{basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap'}</span><span>{row.days}</span></div>
         <div className="between"><span className="muted">Alapbér</span><span>{formatHuf(row.base)}</span></div>
+        {boxPayOf(row) > 0 && xlPayOf(row) > 0 && (
+          <>
+            <div className="between"><span className="muted">ebből AlzaBox</span><span>{formatHuf(boxPayOf(row))}</span></div>
+            <div className="between"><span className="muted">ebből XL</span><span>{formatHuf(xlPayOf(row))}</span></div>
+          </>
+        )}
         <div className="between"><span className="muted">Előleg</span><span style={{ color: row.advances > 0 ? 'var(--warning)' : undefined }}>{row.advances > 0 ? '−' : ''}{formatHuf(row.advances)}</span></div>
         <div className="between"><span className="muted">Levonás</span><span style={{ color: row.deductions > 0 ? 'var(--danger)' : undefined }}>{row.deductions > 0 ? '−' : ''}{formatHuf(row.deductions)}</span></div>
       </div>

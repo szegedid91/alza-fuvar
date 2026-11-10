@@ -1,4 +1,4 @@
-import { payRoleLabel } from './payroll'
+import { payRoleLabel, xlPayOf, boxPayOf } from './payroll'
 import type { PayrollRow } from './payroll'
 import { formatHuf } from './labels'
 import { printHtml } from './printWindow'
@@ -59,6 +59,7 @@ export function openPayslip(row: PayrollRow, ymRaw: string, basis: 'checkin' | '
     ${row.traineeDays > 0 ? `<tr><td>XL betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}
     ${row.boxTraineeDays > 0 ? `<tr><td>Box betanuló napok</td><td>${row.boxTraineeDays} nap</td><td>${HUF(row.boxTraineePay)}</td></tr>` : ''}
     <tr><td>Alapbér összesen</td><td>${row.days} nap</td><td>${HUF(row.base)}</td></tr>
+    ${boxPayOf(row) > 0 && xlPayOf(row) > 0 ? `<tr class="detail"><td>ebből AlzaBox</td><td></td><td>${HUF(boxPayOf(row))}</td></tr><tr class="detail"><td>ebből XL</td><td></td><td>${HUF(xlPayOf(row))}</td></tr>` : ''}
     <tr><td>Levonás</td><td></td><td class="neg">−${HUF(row.deductions)}</td></tr>
     <tr class="total"><td>Járandóság összesen</td><td></td><td>${HUF(row.earned)}</td></tr>
   </table>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, payrollDays } from './payroll'
+import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, payrollDays, xlPayOf, boxPayOf } from './payroll'
 
 describe('monthRange', () => {
   it('hónap eleje és a következő hónap eleje (kizáró vég)', () => {
@@ -195,5 +195,14 @@ describe('payrollDays — mely napok fizetendők', () => {
     const r = payrollDays('schedule', [], shifts, '2026-12-05')
     expect(r.paid.get('u1')!.size).toBe(3)
     expect(r.future.size).toBe(0)
+  })
+})
+
+describe('xlPayOf / boxPayOf — a bér XL és AlzaBox része', () => {
+  it('az XL a sofőr + rakodó + betanuló, a Box az 1. kör + 2. kör + Box-betanuló', () => {
+    const r = { driverPay: 100000, loaderPay: 36000, traineePay: 10000, boxPay: 75000, boxRound2Pay: 30000, boxTraineePay: 5000 }
+    expect(xlPayOf(r)).toBe(146000)
+    expect(boxPayOf(r)).toBe(110000)
+    expect(xlPayOf(r) + boxPayOf(r)).toBe(256000)
   })
 })
