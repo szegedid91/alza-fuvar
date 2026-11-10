@@ -5,6 +5,7 @@ import { useToday } from '../hooks/useToday'
 import { useInspectionGate } from '../hooks/useInspectionGate'
 import Icon, { type IconName } from './Icon'
 import ParkCarButton, { useSettledToday } from './ParkCarButton'
+import { useTodayStatusEvents } from '../lib/statusEvents'
 
 // "Mai nap" lépéssor a munkatárs kezdőlapján: hol tart a nap, és egy gombbal
 // a KÖVETKEZŐ lépésre visz. A sofőr napja lineáris (becsekk → ellenőrzés →
@@ -24,6 +25,9 @@ const STATE_ICON: Record<StepState, { name: IconName; color: string }> = {
 export default function TodayStepper() {
   const { data: today, isLoading } = useToday()
   const { data: settledAt } = useSettledToday()
+  // A Box-lap csak a „Kiindultam” jelzés után tölthető — addig a lépés és a gombja inaktív
+  const { data: todayEvents } = useTodayStatusEvents()
+  const departed = (todayEvents ?? []).some((e) => e.kind === 'departed')
   const car = today?.car ?? null
   const date = today?.date ?? ''
   const checkin = today?.checkin ?? null
@@ -76,7 +80,7 @@ export default function TodayStepper() {
     },
     ...(needsBoxSheet ? [{
       key: 'boxsheet', icon: 'package' as IconName, title: 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
-      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve — a nap végén zárd le` : 'Boxonként: behelyezett, hiány, visszáru…',
+      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve — a nap végén zárd le` : departed ? 'Boxonként: behelyezett, hiány, visszáru…' : 'A „Kiindultam” jelzés után tölthető',
       state: (boxSheet?.submitted ? 'done' : checkin ? 'todo' : 'todo') as StepState,
     }] : []),
     {
@@ -122,6 +126,11 @@ export default function TodayStepper() {
       </div>
       {next && next.key === 'parked' ? (
         <ParkCarButton />
+      ) : next && next.key === 'boxsheet' && !departed ? (
+        // kiindulás előtt a Box-lap gombja inaktív — a lap a járat közben, a járat-kártyáról tölthető
+        <button type="button" className="btn" disabled title="A Box-lap a „Kiindultam” jelzés után tölthető">
+          <Icon name="lock" />Box-lap — a „Kiindultam” után
+        </button>
       ) : next && (
         <Link to={next.to} className="btn" style={{ textDecoration: 'none' }}>
           <Icon name={next.icon} />{next.cta}
