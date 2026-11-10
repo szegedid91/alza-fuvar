@@ -6,6 +6,8 @@ import { useInspectionGate } from '../hooks/useInspectionGate'
 import Icon, { type IconName } from './Icon'
 import ParkCarButton, { useSettledToday } from './ParkCarButton'
 import { useTodayStatusEvents } from '../lib/statusEvents'
+import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
+import { allRoundsDone } from '../lib/rounds'
 
 // "Mai nap" lépéssor a munkatárs kezdőlapján: hol tart a nap, és egy gombbal
 // a KÖVETKEZŐ lépésre visz. A sofőr napja lineáris (becsekk → ellenőrzés →
@@ -28,6 +30,9 @@ export default function TodayStepper() {
   // A Box-lap csak a „Kiindultam” jelzés után tölthető — addig a lépés és a gombja inaktív
   const { data: todayEvents } = useTodayStatusEvents()
   const departed = (todayEvents ?? []).some((e) => e.kind === 'departed')
+  // Minden mai kör kész: a Box-lap már nem lépés, csak visszanézhető / javítható (a módosítás naplózódik)
+  const { data: myRoutes } = useMyRoutesToday()
+  const roundsOver = !!todayEvents && allRoundsDone(myRoutes?.length ?? 0, todayEvents)
   const car = today?.car ?? null
   const date = today?.date ?? ''
   const checkin = today?.checkin ?? null
@@ -80,8 +85,8 @@ export default function TodayStepper() {
     },
     ...(needsBoxSheet ? [{
       key: 'boxsheet', icon: 'package' as IconName, title: 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
-      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve — a nap végén zárd le` : departed ? 'Boxonként: behelyezett, hiány, visszáru…' : 'A „Kiindultam” jelzés után tölthető',
-      state: (boxSheet?.submitted ? 'done' : checkin ? 'todo' : 'todo') as StepState,
+      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : roundsOver ? `${boxSheet?.stops ?? 0} box rögzítve — visszanézheted és javíthatod, a módosítás naplózódik` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve` : departed ? 'Boxonként: behelyezett, hiány, visszáru…' : 'A „Kiindultam” jelzés után tölthető',
+      state: (boxSheet?.submitted || roundsOver ? 'done' : 'todo') as StepState,
     }] : []),
     {
       // Nap vége = elszámolás után az autó lerakva (elektromosnál töltőre téve) — nincs külön kijelentkezés
@@ -96,7 +101,7 @@ export default function TodayStepper() {
   let next: Step | null = null
   if (!checkin) next = steps[0]
   else if (!inspected && !gate.waived) next = steps[1]
-  else if (needsBoxSheet && !boxSheet?.submitted) next = steps.find((s) => s.key === 'boxsheet') ?? null
+  else if (needsBoxSheet && !boxSheet?.submitted && !roundsOver) next = steps.find((s) => s.key === 'boxsheet') ?? null
   else if (!checkedOut) next = steps[steps.length - 1]
   for (const s of steps) if (s === next) s.state = 'next'
   const allDone = !next

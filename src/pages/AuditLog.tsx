@@ -19,14 +19,14 @@ const ENTITY_LABEL: Record<string, string> = {
   evidence_photos: 'Bizonyíték', cars: 'Autó', fuel_logs: 'Tankolás', help_sessions: 'Segítségkérés',
   car_issues: 'Autó hiba', payroll_locks: 'Bérzárás', swap_requests: 'Csere',
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
-  route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó', route_stops: 'Járat-megálló',
+  route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó', route_stops: 'Járat-megálló', box_sheet_stops: 'Box-lap megálló',
 }
 const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
   check_ins: 'qr-code', workspaces: 'map-pin', car_categories: 'folder', box_sheets: 'package',
-  route_names: 'map', status_templates: 'file-text', invites: 'send', route_stops: 'map-pin',
+  route_names: 'map', status_templates: 'file-text', invites: 'send', route_stops: 'map-pin', box_sheet_stops: 'package',
 }
 
 // Mezőnkénti változás-lista: minden bejegyzésnél látszik, melyik mező miről mire változott
@@ -49,6 +49,13 @@ const FIELD_LABEL: Record<string, string> = {
   approved_by: 'Jóváhagyta', approved_at: 'Jóváhagyva', start_time: 'Indulás', end_time: 'Végzés', expires_at: 'Lejárat', used_at: 'Felhasználva',
   used_by: 'Felhasználta', placeholder_id: 'Helyőrző fiók', partner_decision: 'Társ döntése', decided_by: 'Döntött', decided_at: 'Döntés ideje',
   partner_id: 'Társ', requested_by: 'Kérte', shift_id: 'Beosztás', evidence_id: 'Bizonyíték', submitted_at: 'Lezárva',
+  // Box-lap megálló és lap
+  placed: 'Behelyezve', missorted: 'Rossz szortírozás', nf: 'NF (nincs szabad fiók)', oversize: 'Túlméretes', shortage: 'Hiány', returned: 'Visszáru',
+  invalid_code: 'ÉK (érvénytelen kód)', do_not_place: 'NHB (ne helyezd be)', cancelled: 'Törölt', damaged: 'ÉK/NHB/törölt (régi)', left_on_car: 'Autón maradt',
+  box_code: 'Box kód', box_name: 'Box neve', seq: 'Sorrend', done_at: 'Leadva', sheet_id: 'Box-lap', comp_bu: 'Box újraindítás', comp_szh: 'Szkenner hiba',
+  comp_hb: 'Nem tölthető box', comp_r: 'Redphonra bejelentve', comp_note: 'Komplikáció megjegyzés', wh_crates_no_label: 'Láda címke nélkül',
+  wh_packages_no_label: 'Csomag címke nélkül', wh_pallet_items: 'Raklapos, nem behelyezhető', wh_note: 'Raktári megjegyzés', ret_c: 'Leadott C', ret_d: 'Leadott D', ret_m: 'Leadott M', ret_e: 'Leadott E',
+  late: 'Utólagos', owner_id: 'A lap tulajdonosa',
 }
 // Technikai mezők, amik nem érdekesek a naplóban
 const NOISE = new Set(['id', 'created_at', 'updated_at', 'created_by', 'gps_lat', 'gps_lng', 'out_gps_lat', 'out_gps_lng', 'crew_key',

@@ -75,10 +75,12 @@ const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-h
 const shouldDehydrateQuery = (q: { queryKey: readonly unknown[]; state: { status: string } }) =>
   q.state.status === 'success' && !NO_PERSIST.some((k) => String(q.queryKey[0]).startsWith(k))
 
+// A gyorsítótár-buster a build ideje: új buildnél a régi (más alakú) tárolt lekérdezések nem élnek tovább
+// (a 2026-11-06-i „a is not iterable” az Előleg oldalon egy régi alakú tárolt válaszból jött)
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: 'v5', dehydrateOptions: { shouldDehydrateQuery } }}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24, buster: __BUILD_TIME__, dehydrateOptions: { shouldDehydrateQuery } }}>
         <BrowserRouter>
           <AuthProvider>
             <WorkspaceProvider>

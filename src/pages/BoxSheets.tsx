@@ -10,6 +10,7 @@ import UnmappedMessagesCard from '../components/UnmappedMessagesCard'
 import { monthRange, currentYm } from '../lib/payroll'
 import { shiftMonth, monthTitle } from '../lib/calendar'
 import { resolveNames } from '../lib/names'
+import { lateEditsBySheet, type AuditRow, type LateEdit } from '../lib/boxSheetAudit'
 import { formatDate } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, hhmm, hhmmOfISO, normalize, type BoxSheet, type BoxStop } from '../lib/boxSheet'
@@ -34,6 +35,20 @@ export default function BoxSheets() {
   const [codeQ, setCodeQ] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
 
+  // Utólagos módosítások a naplóból (ki, mikor, mit miről mire) — a hónap lapjaihoz
+  const { data: lateBysheet } = useQuery({
+    queryKey: ['box-sheet-late-edits', currentWorkspaceId, ym],
+    enabled: !!currentWorkspaceId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('audit_log').select('id, entity, action, actor_id, created_at, entity_id, detail')
+        .eq('workspace_id', currentWorkspaceId!).in('entity', ['box_sheets', 'box_sheet_stops']).eq('detail->>late', 'true')
+        .gte('detail->>work_date', range.start).lt('detail->>work_date', range.endExclusive).order('created_at').limit(1000)
+      if (error) throw error
+      const rows = (data ?? []) as AuditRow[]
+      const names = await resolveNames(rows.map((r) => r.actor_id).filter((x): x is string => !!x))
+      return { map: lateEditsBySheet(rows), names }
+    },
+  })
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['box-sheets', currentWorkspaceId, ym],
     enabled: !!currentWorkspaceId,
@@ -176,11 +191,12 @@ export default function BoxSheets() {
                       </div>
                       <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                         {issues > 0 && <span className="badge warning">{issues} eltérés</span>}
+                        {(lateBysheet?.map.get(s.id)?.length ?? 0) > 0 && <span className="badge warning" title="A lapot utólag módosították"><Icon name="pencil" size={12} />utólag</span>}
                         {s.status === 'submitted' ? <span className="badge success"><Icon name="check" />Lezárva</span> : <span className="badge">Piszkozat</span>}
                         <Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" />
                       </div>
                     </button>
-                    {open && <SheetDetail sheet={s} />}
+                    {open && <SheetDetail sheet={s} lateEdits={lateBysheet?.map.get(s.id) ?? []} names={lateBysheet?.names ?? {}} />}
                   </div>
                 )
               })}
@@ -192,7 +208,7 @@ export default function BoxSheets() {
   )
 }
 
-function SheetDetail({ sheet: s }: { sheet: SheetRow }) {
+function SheetDetail({ sheet: s, lateEdits = [], names = {} }: { sheet: SheetRow; lateEdits?: LateEdit[]; names?: Record<string, string | null> }) {
   const t = stopTotals(s.stops)
   const whItems = WH_FIELDS.filter((f) => s[f.key] > 0).map((f) => `${f.label}: ${s[f.key]}`)
   const compItems = COMP_FIELDS.filter((f) => s[f.key] > 0).map((f) => `${f.short}: ${s[f.key]}`)
@@ -239,6 +255,20 @@ function SheetDetail({ sheet: s }: { sheet: SheetRow }) {
       <div className="small"><span className="muted">Raktári: </span>{whItems.length ? whItems.join(' · ') : 'nincs'}{s.wh_note ? ` · ${s.wh_note}` : ''}</div>
       <div className="small"><span className="muted">Komplikációk: </span>{compItems.length ? compItems.join(' · ') : 'nincs'}{s.comp_note ? ` · ${s.comp_note}` : ''}</div>
       <div className="small"><span className="muted">Raktárban leadott: </span>{retItems.join(' · ')}</div>
+      {lateEdits.length > 0 && (
+        <div className="stack" style={{ gap: 4, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--warning)' }}>
+          <div className="small" style={{ fontWeight: 700 }}><Icon name="pencil" size={14} /> Utólagos módosítások ({lateEdits.length})</div>
+          <div className="tiny muted">A leadás után 15 perccel, illetve a lap lezárása után vagy másnap tett módosítások — ki, mikor, mit miről mire.</div>
+          {lateEdits.map((e) => (
+            <div key={e.id} className="tiny" style={{ borderTop: '1px solid var(--border)', paddingTop: 4 }}>
+              <span style={{ fontWeight: 700 }}>{new Date(e.at).toLocaleString('hu-HU', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              {' · '}{e.actorId ? names[e.actorId] ?? 'ismeretlen' : 'rendszer'}
+              {e.box ? <> · <span className="num">{e.box}</span></> : ' · a lap'}
+              {e.deleted ? ' · megálló törölve' : e.changes.map((c) => <span key={c.label}> · {c.label}: <s className="muted">{c.from}</s> → <strong>{c.to}</strong></span>)}
+            </div>
+          ))}
+        </div>
+      )}
       <Link to={`/box-lap?sheet=${s.id}`} className="btn ghost sm" style={{ textDecoration: 'none' }}><Icon name="pencil" size={16} />Lap szerkesztése</Link>
     </div>
   )

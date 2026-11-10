@@ -117,7 +117,7 @@ export default function Adjustments() {
   // A kiválasztott munkatárs becsekkolásai és beosztásai a hónapban, a hónapra érvényes napidíjjal —
   // a napi díj ugyanazzal a számítással készül, mint a Bérszámításban (szerep a beosztásból)
   const { data: monthData, isError: workedError } = useQuery({
-    queryKey: ['adjustments', 'worked', currentWorkspaceId, userId, ym],
+    queryKey: ['adjustments', 'worked', 'v2', currentWorkspaceId, userId, ym],
     enabled: !!currentWorkspaceId && !!userId,
     queryFn: async () => {
       const { start, endExclusive } = monthRange(ym)

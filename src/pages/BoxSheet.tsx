@@ -67,7 +67,13 @@ function DepartedGate({ children }: { children: React.ReactNode }) {
   const { data: events, isLoading } = useTodayStatusEvents()
   if (isLoading && !events) return <Skeleton rows={3} />
   const departed = (events ?? []).some((e) => e.kind === 'departed')
-  if (departed) return <>{children}</>
+  const anyDone = (events ?? []).some((e) => e.kind === 'done')
+  if (departed) return (
+    <>
+      {anyDone && <div className="tiny muted"><Icon name="pencil" size={12} style={{ verticalAlign: -2 }} /> A járat lezárása után tett módosítások naplózódnak (ki, mikor, mit miről mire) — a vezetők látják.</div>}
+      {children}
+    </>
+  )
   return (
     <div className="card stack" style={{ borderColor: 'var(--warning)' }}>
       <div className="row"><Icon name="lock" size={24} style={{ color: 'var(--warning)' }} /><strong>A Box-lap a „Kiindultam” után tölthető</strong></div>
