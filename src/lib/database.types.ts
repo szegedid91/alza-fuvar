@@ -247,6 +247,42 @@ export type Database = {
         }
         Relationships: []
       }
+      box_notes: {
+        Row: {
+          box_id: string
+          created_at: string
+          created_by: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          text: string
+          workspace_id: string
+        }
+        Insert: {
+          box_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          text: string
+          workspace_id: string
+        }
+        Update: {
+          box_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          text?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       box_sheet_stop_photos: {
         Row: {
           ai_result: Json | null

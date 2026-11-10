@@ -74,12 +74,13 @@ export default function Home() {
     enabled: isManagerOrAdmin && !!currentWorkspaceId,
     refetchInterval: 60000,
     queryFn: async () => {
-      const [p, i, h] = await Promise.all([
+      const [p, i, h, bn] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('car_issues').select('id', { count: 'exact', head: true }).eq('workspace_id', currentWorkspaceId!).neq('status', 'resolved'),
         supabase.from('help_sessions').select('id', { count: 'exact', head: true }).eq('workspace_id', currentWorkspaceId!).is('ended_at', null).gt('last_seen_at', new Date(Date.now() - 90_000).toISOString()),
+        supabase.from('box_notes').select('id', { count: 'exact', head: true }).eq('workspace_id', currentWorkspaceId!).eq('status', 'pending'),
       ])
-      return { pending: p.count ?? 0, issues: i.count ?? 0, help: h.count ?? 0 }
+      return { pending: p.count ?? 0, issues: i.count ?? 0, help: h.count ?? 0, boxNotes: bn.count ?? 0 }
     },
   })
   const managerHub: HubItem[] = [
@@ -98,7 +99,7 @@ export default function Home() {
     { group: 'Előzmények', to: '/box-lapok', icon: 'package', title: 'Box-lapok', desc: 'Napi szállítási lapok' },
     { group: 'Előzmények', to: '/tortenet', icon: 'history', title: 'Előzmények', desc: 'Autók, cserék, események' },
     { group: 'Előzmények', to: '/kepek', icon: 'image', title: 'Képek', desc: 'Autó, nap, ember szerint' },
-    { group: 'Előzmények', to: '/boxok', icon: 'map-pin', title: 'AlzaBoxok', desc: 'Hol van a box?' },
+    { group: 'Előzmények', to: '/boxok', icon: 'map-pin', title: 'AlzaBoxok', desc: 'Hol van a box?', badge: counts?.boxNotes },
   ]
   if (isAdmin) {
     managerHub.push({ group: 'Pénz és kimutatás', to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })

@@ -5,6 +5,7 @@ import { formatDistance, type AlzaBox } from '../lib/boxSheet'
 import { getNavApp, navUrl, NAV_LABEL } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
+import BoxNotes from './BoxNotes'
 import { errMsg } from '../lib/errors'
 
 // Egy AlzaBox "hol van?" kártyája: fotó, kód, cím, az alza.hu "hol található"
@@ -94,6 +95,8 @@ export default function BoxCard({
               <span>{box.notes}</span>
             </div>
           )}
+          {/* a munkatársak megjegyzései (vezetői jóváhagyással) — a járat-kártyáról és a keresőből is */}
+          <BoxNotes boxId={box.id} />
         </>
       )}
 

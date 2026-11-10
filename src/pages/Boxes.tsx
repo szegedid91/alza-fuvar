@@ -9,6 +9,7 @@ import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { batchStartFromRows, boxSyncStatus } from '../lib/boxImport'
 import BoxCard from '../components/BoxCard'
+import { PendingBoxNotesCard } from '../components/BoxNotes'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
@@ -112,6 +113,7 @@ export default function Boxes() {
         </>
       )}
 
+      {isManager && <PendingBoxNotesCard />}
       {isManager && <ImportCard />}
     </div>
   )
