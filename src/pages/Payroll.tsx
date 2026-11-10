@@ -12,6 +12,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { shiftMonth, monthTitle } from '../lib/calendar'
+import { normalize } from '../lib/boxSheet'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 
@@ -223,8 +224,12 @@ export default function Payroll() {
   // Alapból csak azok, akiknél van mit elszámolni (nap, előleg vagy levonás) —
   // 20+ nullás sor elrejtené a lényeget. Az export mindig az összes sort viszi.
   const [onlyWorked, setOnlyWorked] = useState(true)
+  // Gyors keresés névre (ékezet- és kisbetű-független) — kereséskor az „Elszámolás / Mind” szűrő nem számít
+  const [q, setQ] = useState('')
   const relevant = (r: PayrollRow) => r.days > 0 || r.advances > 0 || r.deductions > 0 || (r.futureDays ?? 0) > 0
-  const shownRows = (data?.rows ?? []).filter((r) => !onlyWorked || relevant(r))
+  const words = normalize(q).split(/\s+/).filter(Boolean)
+  const matches = (r: PayrollRow) => words.every((w) => normalize(r.name).includes(w) || normalize(r.workspace).includes(w))
+  const shownRows = (data?.rows ?? []).filter((r) => (words.length ? matches(r) : !onlyWorked || relevant(r)))
   const workedCount = (data?.rows ?? []).filter(relevant).length
   const totals = (data?.rows ?? []).reduce(
     (a, r) => ({ pay: a.pay + r.total, days: a.days + r.days, deductions: a.deductions + r.deductions, advances: a.advances + r.advances, futureDays: a.futureDays + (r.futureDays ?? 0), futurePay: a.futurePay + (r.futurePay ?? 0), xl: a.xl + xlPayOf(r), box: a.box + boxPayOf(r) }),
@@ -302,8 +307,14 @@ export default function Payroll() {
           </div>
         </div>
       )}
+      {data && data.rows.length > 0 && (
+        <div className="input-icon">
+          <Icon name="search" />
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Keresés névre (pl. Nagy Gábor)" autoComplete="off" />
+        </div>
+      )}
       {data && data.rows.length > 0 && shownRows.length === 0 && (
-        <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Ebben a hónapban még nincs elszámolandó tétel.</div>
+        <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>{words.length ? `Nincs ilyen nevű munkatárs: „${q.trim()}”` : 'Ebben a hónapban még nincs elszámolandó tétel.'}</div>
       )}
 
       {shownRows.map((r) => <PayrollCard key={r.userId} row={r} ym={ym} basis={basis} />)}
