@@ -10,7 +10,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
-import { fmtTime, lateMinutes, resolveRunIndex } from '../lib/routePlan'
+import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router'
 import Icon from './Icon'
@@ -160,6 +160,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
         }
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active} hasNextRound={i < myShifts.length - 1}
+            plannedStart={routes?.find((r) => r.id === sh.route_id)?.planned_start ?? null}
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
@@ -174,8 +175,10 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
+  // a járat tervezett (éjszakai) indulása — a 2. kör idői ehhez képest tolódnak az 5:30-as indulásra
+  plannedStart?: string | null
   // van még kör ma: a „kész” kártya a következő körre irányít, nem a nap végére
   hasNextRound?: boolean
   // az utolsó box leadásakor: „Járat kész” — a WhatsApp azonnal nyílik, a visszaadott
@@ -205,7 +208,10 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   const [carry, setCarry] = useState<string[]>(() => { try { return JSON.parse(sessionStorage.getItem(carryKey) ?? '[]') as string[] } catch { return [] } })
   const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
-  const lateNow = lateMinutes(cur?.deadline, round)
+  // a 2. körön a terv idői az 5:30-as induláshoz igazítva (ugyanaz a sorrend, ugyanannyi idő az indulástól) — a késés okát ott is kérjük
+  const curEta = planTime(cur?.eta, round, plannedStart)
+  const curDeadline = planTime(cur?.deadline, round, plannedStart)
+  const lateNow = lateMinutes(curDeadline, 1)
   const isLast = idx === stops.length - 1
   const finish = () => {
     if (lateNow != null && lateNow > 0) { setLate(lateNow); setReasons(carry); return }
@@ -254,9 +260,9 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
                   <div className="small muted">{cur.box.address}</div>
-                  {(cur.eta || cur.deadline) && (
+                  {(curEta || curDeadline) && (
                     <div className="tiny" style={{ marginTop: 4, color: lateNow != null && lateNow > 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
-                      <Icon name="clock" size={12} />{cur.eta ? ` terv: érkezés ${fmtTime(cur.eta)}` : ''}{cur.deadline ? `${cur.eta ? ' ·' : ''} határidő ${fmtTime(cur.deadline)}` : ''}
+                      <Icon name="clock" size={12} />{curEta ? ` terv: érkezés ${curEta}` : ''}{curDeadline ? `${curEta ? ' ·' : ''} határidő ${curDeadline}` : ''}{round === 2 ? ' (2. kör, az 5:30-as induláshoz igazítva)' : ''}
                       {lateNow != null && lateNow > 0 ? <strong> · késésben {lateNow} perc</strong> : null}
                     </div>
                   )}
@@ -281,7 +287,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A járat a „Kiindultam” jelzés után válik aktívvá — addig csak megnézheted a címeket.</div>}
                 {late != null && (
                   <div className="stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--danger)', background: 'var(--danger-ghost, rgba(239,68,68,0.08))' }}>
-                    <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {fmtTime(cur.deadline)} volt. Mi az oka? <span className="muted" style={{ fontWeight: 500 }}>(több is jelölhető)</span></div>
+                    <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {curDeadline} volt. Mi az oka? <span className="muted" style={{ fontWeight: 500 }}>(több is jelölhető)</span></div>
                     <div className="chips">
                       {LATE_REASONS.map((r) => (
                         <button key={r} type="button" className={`chip ${reasons.includes(r) ? 'active' : ''}`} aria-pressed={reasons.includes(r)} onClick={() => toggleReason(r)}>{r}</button>
@@ -320,7 +326,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                         style={{ gap: 6, alignItems: 'center', background: i === idx ? 'var(--primary-ghost)' : 'none', border: 'none', borderRadius: 6, padding: '4px 6px', color: 'inherit', textAlign: 'left', cursor: 'pointer', opacity: i < idx ? 0.6 : 1 }}>
                         <Icon name={i < idx ? 'check-circle' : i === idx ? 'navigation' : 'map-pin'} size={14} style={{ color: i < idx ? 'var(--success)' : i === idx ? 'var(--primary)' : 'var(--text-dim)' }} />
                         <span className="tiny" style={{ flex: 1, textDecoration: i < idx ? 'line-through' : 'none' }}>{i + 1}. {s.box.code ? `${s.box.code} · ` : ''}{s.box.name}</span>
-                        {s.eta && <span className="tiny muted num">{fmtTime(s.eta)}</span>}
+                        {planTime(s.eta, round, plannedStart) && <span className="tiny muted num">{planTime(s.eta, round, plannedStart)}</span>}
                       </button>
                     ))}
                   </div>

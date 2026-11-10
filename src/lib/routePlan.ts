@@ -143,3 +143,19 @@ export function lateMinutes(deadline: string | null | undefined, round = 1, now 
   const n = now < 240 ? now + 1440 : now
   return n - dl
 }
+
+// A 2. kör (same day, 5:30-as indulás) tervezett idői: a terv az éjszakai körre szól, ezért a 2. körnél
+// az idők az indulások különbségével tolódnak — ugyanaz a sorrend, ugyanannyi idő az indulástól.
+// Pl. éjszakai indulás 23:59, box határideje 01:30 (91 perc az indulás után) → 2. körön 05:30 + 91 = 07:01.
+export const ROUND2_START = '05:30'
+export function planTime(t: string | null | undefined, round: number, plannedStart: string | null | undefined, round2Start = ROUND2_START): string | null {
+  if (!t) return null
+  if (round !== 2) return fmtTime(t)
+  let base = timeToMin(t); const start = timeToMin(plannedStart || '23:59'); const r2 = timeToMin(round2Start)
+  if (base == null || start == null || r2 == null) return null
+  if (base < start) base += 1440 // az indulásnál korábbi óra: már a következő nap
+  const elapsed = base - start
+  if (elapsed > 720) return null // 12 óránál több az indulás után: nem a járat ideje
+  const m = (r2 + elapsed) % 1440
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
