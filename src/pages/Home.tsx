@@ -9,7 +9,7 @@ import StatusCard from '../components/StatusCard'
 import SetOffCard from '../components/SetOffCard'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
-import { dayComplete } from '../lib/rounds'
+import { dayComplete, allRoundsDone } from '../lib/rounds'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -44,6 +44,8 @@ export default function Home() {
   // A nap vége: minden mai kör kész, és az utolsó után megvolt az elszámolás (két körnél az első elszámolás még nem zárja a napot)
   const { data: myRoutes } = useMyRoutesToday()
   const settled = !!todayStatus && dayComplete(myRoutes?.length ?? 0, todayStatus)
+  // Az utolsó kör is kész: nincs több járat-kártya és kiindulás, a raktári rész (elszámolás, nap vége) jön
+  const roundsOver = !!todayStatus && allRoundsDone(myRoutes?.length ?? 0, todayStatus)
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
 
@@ -125,12 +127,12 @@ export default function Home() {
         </div>
       )}
       {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
-      {isCrew && !inspectionLocked && !!today?.checkin && arrived && departed && <RouteCard active />}
-      {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard />}
-      {isCrew && !inspectionLocked && !!today?.checkin && arrived && !departed && <RouteCard active={false} />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
+      {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard roundsOver={roundsOver} />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
       {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
           Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}
-      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || !!today.checkin.checked_out_at) && <TodayStepper />}
+      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || roundsOver || !!today.checkin.checked_out_at) && <TodayStepper />}
       {isCrew && !inspectionLocked && !!today?.checkin && arrived && !today.checkin.checked_out_at && settled && (
         <div className="card stack" style={{ borderColor: 'var(--success)', gap: 8 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="flag" />Nap vége</div>

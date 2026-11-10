@@ -19,7 +19,8 @@ type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_pa
 // "Jelzés a csoportba": Megérkeztem / Kiindultam / Járat kész / Elszámoltam egy
 // koppintásra (az app rögzíti — idő, GPS, autó — a vezetők látják; a WhatsApp a
 // kész üzenettel nyílik). A box-hibák fotóval a Box-lapon mennek.
-export default function StatusCard() {
+// roundsOver: minden mai kör „Járat kész” — a „Kiindultam” inaktív, a következő lépés az „Elszámoltam”
+export default function StatusCard({ roundsOver = false }: { roundsOver?: boolean } = {}) {
   const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const { data: today } = useToday()
@@ -101,7 +102,12 @@ export default function StatusCard() {
   const simple: StatusKind[] = ['arrived', 'departed', 'done', 'settled']
   // Melyik a következő lépés? (ciklus: Megérkeztem → Kiindultam → Járat kész → Megérkeztem…)
   const lastPhase = [...(events ?? [])].reverse().find((e) => e.kind === 'arrived' || e.kind === 'departed' || e.kind === 'done')?.kind ?? null
-  const nextKind: StatusKind = lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? 'done' : 'arrived'
+  const settledAfterDone = (() => { const d = lastOf('done'); const s = lastOf('settled'); return !!s && (!d || s.at > d.at) })()
+  const nextKind: StatusKind | null = roundsOver
+    ? (settledAfterDone ? null : 'settled')
+    : lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? 'done' : 'arrived'
+  // az utolsó kör után már nincs kiindulás és járat kész — ezek inaktívak
+  const inactive = (kind: StatusKind) => roundsOver && (kind === 'departed' || kind === 'done')
 
   return (
     <div className="card stack" style={{ gap: 10 }}>
@@ -116,7 +122,7 @@ export default function StatusCard() {
           const last = lastOf(kind)
           if (kind === 'settled') {
             return (
-              <button key={kind} type="button" className={`btn ${last ? 'secondary' : ''}`}
+              <button key={kind} type="button" className={`btn ${nextKind === 'settled' ? '' : last ? 'secondary' : ''}`}
                 style={{ flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px' }}
                 onClick={() => setSettleCamera(true)}>
                 <Icon name="camera" />
@@ -128,13 +134,14 @@ export default function StatusCard() {
           const text = statusText(kind, new Date(), name, route)
           const target = groupTarget(currentWorkspace, text)
           return (
-            <a key={kind} className={`btn ${kind === nextKind ? '' : 'secondary'}`} href={target.url} target="_blank" rel="noopener noreferrer"
-              style={{ textDecoration: 'none', flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px', opacity: kind === nextKind ? 1 : 0.7 }}
+            <a key={kind} className={`btn ${kind === nextKind ? '' : 'secondary'}`} href={target.url} target="_blank" rel="noopener noreferrer" aria-disabled={inactive(kind)}
+              title={inactive(kind) ? 'Minden mai kör kész — már nem kell kiindulni' : undefined}
+              style={{ textDecoration: 'none', flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px', opacity: kind === nextKind ? 1 : inactive(kind) ? 0.35 : 0.7, pointerEvents: inactive(kind) ? 'none' : undefined }}
               // Az üzenet ideje a KOPPINTÁS pillanata — a href-et a navigáció előtt frissítjük;
               // csoport-linknél a szöveg a vágólapra megy
               onClick={(e) => {
                 // LOG-37: amíg az előző koppintás rögzítése fut, a második nem rögzít újra
-                if (sending) { e.preventDefault(); return }
+                if (sending || inactive(kind)) { e.preventDefault(); return }
                 // a WhatsApp a koppintáson belül nyílik, de nem új fülön: visszaváltáskor az app legyen elöl
                 e.preventDefault()
                 const at = new Date()
@@ -155,6 +162,11 @@ export default function StatusCard() {
         <MultiShotCamera title="Elszámolás — fotók" sendLabel="Küldés a csoportba" onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
+      {roundsOver && (
+        <div className="tiny" style={{ color: 'var(--success)', fontWeight: 600 }}>
+          <Icon name="check-circle" size={12} style={{ verticalAlign: -2 }} /> Minden mai kör kész. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része, takarítás, végül „Autó lerakva”.
+        </div>
+      )}
       <p className="tiny muted" style={{ margin: 0 }}>
         Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: egy vagy több kép, a Küldésre a WhatsApp nyílik a képekkel — a képek az appba is mentődnek.
       </p>

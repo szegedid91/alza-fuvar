@@ -34,3 +34,10 @@ export function dayComplete(roundCount: number, events: RoundEvent[]): boolean {
   const states = roundStates(roundCount, events)
   return states.every((s) => !!s.doneAt) && !!states[states.length - 1].settledAt
 }
+
+// Minden mai kör „Járat kész”: innen már nem kell újra kiindulni — a raktárban az elszámolás és a nap
+// vége (Box-lap zárása, takarítás, autó lerakva) következik. Beosztott kör nélkül nincs ilyen pont.
+export function allRoundsDone(roundCount: number, events: RoundEvent[]): boolean {
+  if (roundCount === 0) return false
+  return roundStates(roundCount, events).every((s) => !!s.doneAt)
+}

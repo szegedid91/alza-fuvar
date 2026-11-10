@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dayComplete, roundStates } from './rounds'
+import { allRoundsDone, dayComplete, roundStates } from './rounds'
 
 const ev = (kind: string, hm: string) => ({ kind, at: `2026-11-10T${hm}:00Z` })
 
@@ -43,5 +43,16 @@ describe('dayComplete', () => {
   it('járat nélkül az első elszámolás', () => {
     expect(dayComplete(0, [ev('settled', '09:50')])).toBe(true)
     expect(dayComplete(0, [])).toBe(false)
+  })
+})
+
+describe('allRoundsDone — az utolsó kör kész: nincs több kiindulás', () => {
+  it('két körnél csak a második „Járat kész” után igaz', () => {
+    expect(allRoundsDone(2, [ev('done', '09:00')])).toBe(false)
+    expect(allRoundsDone(2, [ev('done', '09:00'), ev('departed', '10:00'), ev('done', '14:00')])).toBe(true)
+  })
+  it('egy körnél az első kész után; kör nélkül sosem', () => {
+    expect(allRoundsDone(1, [ev('done', '09:00')])).toBe(true)
+    expect(allRoundsDone(0, [ev('done', '09:00')])).toBe(false)
   })
 })
