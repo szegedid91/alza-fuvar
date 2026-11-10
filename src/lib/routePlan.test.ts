@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deadlineMin, lateMinutes, timeToMin, assertUniqueRouteCodes, planTime } from './routePlan'
+import { deadlineMin, lateMinutes, timeToMin, assertUniqueRouteCodes, planTime, planRound } from './routePlan'
 
 describe('lateMinutes — késés a határidőhöz képest (LOG-02)', () => {
   it('nappal: most − határidő', () => {
@@ -15,8 +15,7 @@ describe('lateMinutes — késés a határidőhöz képest (LOG-02)', () => {
     // 00:10-kor egy 22:00-s határidő 130 perce lejárt
     expect(lateMinutes('22:00', 1, timeToMin('00:10')!)).toBe(130)
   })
-  it('2. kör és hiányzó határidő → null', () => {
-    expect(lateMinutes('10:00', 2, 700)).toBeNull()
+  it('hiányzó határidő → null', () => {
     expect(lateMinutes(null, 1, 700)).toBeNull()
   })
 })
@@ -31,21 +30,22 @@ describe('assertUniqueRouteCodes — duplikált járatkód a tervfájlban (LOG-0
   })
 })
 
-describe('planTime — a 2. kör idői az 5:30-as induláshoz igazítva', () => {
-  it('1. körön változatlan', () => {
-    expect(planTime('01:30:00', 1, '23:59')).toBe('01:30')
+describe('planRound / planTime — a terv idői arra a körre szólnak, amelyiknek az indulása a tervben van', () => {
+  it('5:30-as tervezett indulás → nappali (2.) kör; 23:59 vagy ismeretlen → éjszakai (1.)', () => {
+    expect(planRound('05:30:00')).toBe(2)
+    expect(planRound('23:59')).toBe(1)
+    expect(planRound('00:30')).toBe(1)
+    expect(planRound(null)).toBe(1)
   })
-  it('2. körön az indulás óta eltelt idő számít: 23:59 → 01:30 az 91 perc, tehát 05:30 + 91 = 07:01', () => {
-    expect(planTime('01:30', 2, '23:59')).toBe('07:01')
-    expect(planTime('23:59', 2, '23:59')).toBe('05:30')
-    expect(planTime('04:10', 2, '23:59')).toBe('09:41')
+  it('a terv körén az idő változatlan, a másik körön nincs idő', () => {
+    expect(planTime('06:19:00', 2, '05:30:00')).toBe('06:19')
+    expect(planTime('06:19:00', 1, '05:30:00')).toBeNull()
+    expect(planTime('01:30', 1, '23:59')).toBe('01:30')
+    expect(planTime('01:30', 2, '23:59')).toBeNull()
+    expect(planTime(null, 2, '05:30')).toBeNull()
   })
-  it('tervezett indulás nélkül 23:59-cel számol; az indulás előtti idő nem értelmezhető', () => {
-    expect(planTime('00:29', 2, null)).toBe('06:00')
-    expect(planTime('22:00', 2, '23:59')).toBeNull() // 22 órával az indulás után — nem a járat ideje
-    expect(planTime(null, 2, '23:59')).toBeNull()
-  })
-  it('a 2. kör késése az eltolt határidőhöz képest', () => {
-    expect(lateMinutes(planTime('01:30', 2, '23:59'), 1, timeToMin('07:20')!)).toBe(19)
+  it('a 2. kör késése a terv határidejéhez képest', () => {
+    expect(lateMinutes(planTime('11:00', 2, '05:30'), 1, timeToMin('11:20')!)).toBe(20)
+    expect(lateMinutes(planTime('11:00', 1, '05:30'), 1, timeToMin('11:20')!)).toBeNull()
   })
 })

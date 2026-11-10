@@ -8,7 +8,7 @@ import { useRouteStops } from '../hooks/useRouteStops'
 import { resolveNames } from '../lib/names'
 import { todayISO } from '../lib/labels'
 import Icon from './Icon'
-import { fmtTime, lateMinutes, resolveRunIndex } from '../lib/routePlan'
+import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 
 // Vezetői nézet: a mai járatok (beosztásból), ki viszi, és hanyadik címnél tart
 // a futár — a route_runs haladásból, realtime frissülve
@@ -63,7 +63,8 @@ export default function RouteProgressCard() {
         const cur = stops[idx]
         const pct = stops.length ? Math.round((idx / stops.length) * 100) : 0
         // Késésben: az aktuális box határideje lejárt, még nincs leadva (csak itt jelezzük, push nem megy róla)
-        const lateNow = cur && !done ? lateMinutes(cur.deadline, s.round) : null
+        const curDeadline = cur ? planTime(cur.deadline, s.round, routes?.find((r) => r.id === s.routeId)?.planned_start) : null
+        const lateNow = cur && !done ? lateMinutes(curDeadline) : null
         const lateLogs = s.logs.filter((l) => l.reason)
         return (
           <div key={s.id} className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
@@ -87,7 +88,7 @@ export default function RouteProgressCard() {
               <div className="tiny" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span><Icon name="navigation" size={12} />{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</span>
                 {s.run?.updated_at && <span className="muted">· lépett {hhmm(s.run.updated_at)}</span>}
-                {cur.deadline && <span className={lateNow != null && lateNow > 0 ? '' : 'muted'} style={lateNow != null && lateNow > 0 ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>· határidő {fmtTime(cur.deadline)}{lateNow != null && lateNow > 0 ? ` — késésben ${lateNow} perc` : ''}</span>}
+                {curDeadline && <span className={lateNow != null && lateNow >0 ? '' : 'muted'} style={lateNow != null && lateNow > 0 ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>· határidő {curDeadline}{lateNow != null && lateNow > 0 ? ` — késésben ${lateNow} perc` : ''}</span>}
               </div>
             )}
             {lateLogs.length > 0 && (
