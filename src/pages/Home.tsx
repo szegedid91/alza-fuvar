@@ -10,6 +10,7 @@ import SetOffCard from '../components/SetOffCard'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { dayComplete, allRoundsDone } from '../lib/rounds'
+import { CleaningCard } from './Inspection'
 import RouteCard from '../components/RouteCard'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -128,14 +129,20 @@ export default function Home() {
       )}
       {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
-      {isCrew && !inspectionLocked && !!today?.checkin && <StatusCard roundsOver={roundsOver} />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} />}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
       {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
           Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}
-      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || roundsOver || !!today.checkin.checked_out_at) && <TodayStepper />}
-      {isCrew && !inspectionLocked && !!today?.checkin && arrived && !today.checkin.checked_out_at && settled && (
-        <div className="card stack" style={{ borderColor: 'var(--success)', gap: 8 }}>
+      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || roundsOver || !!today.checkin.checked_out_at) && !(settled && !today.checkin.checked_out_at) && <TodayStepper />}
+      {/* Elszámolva, nincs több kör: már csak a takarítás (fotóval) és az autó lerakása / töltőre tétele van hátra */}
+      {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && settled && (
+        <div className="card stack" style={{ borderColor: 'var(--success)', gap: 10 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="flag" />Nap vége</div>
+          <div className="small">Elszámoltál, a mai körök megvannak. Két dolog maradt:</div>
+          <div className="small" style={{ fontWeight: 700 }}>1. Takarítottad az autót?</div>
+          {today.car && <CleaningCard car={today.car} date={today.date} askPhotos />}
+          <div className="tiny muted">Ha nem takarítottál, ezt hagyd ki.</div>
+          <div className="small" style={{ fontWeight: 700 }}>2. {today.car?.fuel_type === 'electric' ? 'Autó lerakva, töltőre téve' : 'Autó lerakva'}</div>
           <ParkCarButton />
         </div>
       )}

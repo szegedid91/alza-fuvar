@@ -16,7 +16,7 @@ import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, format
 import type { Enums } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 
-type PhotoType = 'inspection' | 'fuel' | 'incident' | 'evidence' | 'issue'
+type PhotoType = 'inspection' | 'fuel' | 'incident' | 'evidence' | 'issue' | 'cleaning'
 type ViewFilter = Enums<'inspection_view'> | ''
 
 interface Filters {
@@ -44,6 +44,7 @@ const TABS: { key: PhotoType; label: string }[] = [
   { key: 'incident', label: 'Esemény' },
   { key: 'evidence', label: 'Bizonyíték' },
   { key: 'issue', label: 'Autó-hiba' },
+  { key: 'cleaning', label: 'Takarítás' },
 ]
 
 // Fotó-hitelesség ellenőrzése: a tárolt fájl hash-ét összevetjük a
@@ -355,6 +356,26 @@ async function fetchPhotos(type: PhotoType, f: Filters, ws: string): Promise<Ite
         id: r.id, path: r.storage_path, title: `${insp?.car?.plate ?? '—'} · ${inspectionViewLabel[r.view]}`,
         subtitle: insp?.user_id ? names[insp.user_id] ?? '' : '', when: formatDateTime(r.taken_at),
       }
+    })
+  }
+
+  if (type === 'cleaning') {
+    // a nap végi takarítás fotói — az autó / személy szűrő a szülő takarításon át érvényesül
+    let q = supabase
+      .from('cleaning_photos')
+      .select('id, storage_path, created_at, cleaning:cleanings!inner(user_id, car_id, work_date, car:cars(plate))')
+      .eq('workspace_id', ws)
+      .order('created_at', { ascending: false }).limit(60)
+    if (f.carId) q = q.eq('cleaning.car_id', f.carId)
+    if (f.userId) q = q.eq('cleaning.user_id', f.userId)
+    q = dateRange(q, 'created_at', f)
+    const { data, error } = await q
+    if (error) throw error
+    const rows = data ?? []
+    const names = await resolveNames(rows.map((r) => (r.cleaning as unknown as { user_id: string } | null)?.user_id))
+    return rows.map((r) => {
+      const c = r.cleaning as unknown as { user_id: string; car: { plate: string } | null } | null
+      return { id: r.id, path: r.storage_path, title: `${c?.car?.plate ?? '—'} · takarítás`, subtitle: c?.user_id ? names[c.user_id] ?? '' : '', when: formatDateTime(r.created_at) }
     })
   }
 

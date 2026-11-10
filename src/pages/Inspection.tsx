@@ -17,6 +17,8 @@ import { resolveNames } from '../lib/names'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
 import WaiverRequest from '../components/WaiverRequest'
+import MultiShotCamera from '../components/MultiShotCamera'
+import PhotoThumb from '../components/PhotoThumb'
 import type { Enums, Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 
@@ -318,23 +320,26 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
 
 // Takarítás: önálló oldalon (/takaritas) ÉS az ellenőrzés alján is elérhető.
 // Az autó MAI takarításait mutatja (a társét is) — párosnál így látszik, ki csinálta.
-export function CleaningCard({ car, date }: { car: Car; date: string }) {
+// askPhotos: a nap végén a takarításról fotót kérünk (a rögzítés után rögtön a kamera nyílik)
+export function CleaningCard({ car, date, askPhotos = false }: { car: Car; date: string; askPhotos?: boolean }) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // fotózás ehhez a takarításhoz (null = zárva)
+  const [cameraFor, setCameraFor] = useState<string | null>(null)
 
   const { data: cleaning } = useQuery({
     queryKey: ['cleaning', car.id, date, profile?.id],
     enabled: !!profile,
     queryFn: async () => {
-      const { data, error } = await supabase.from('cleanings').select('*')
+      const { data, error } = await supabase.from('cleanings').select('*, photos:cleaning_photos(id, storage_path)')
         .eq('car_id', car.id).eq('work_date', date).order('created_at', { ascending: false })
       if (error) throw error
-      const rows = data ?? []
+      const rows = (data ?? []) as (Tables<'cleanings'> & { photos: { id: string; storage_path: string }[] | null })[]
       const names = await resolveNames(rows.map((r) => r.user_id))
-      return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null }))
+      return rows.map((r) => ({ ...r, _name: names[r.user_id] ?? null, photos: r.photos ?? [] }))
     },
   })
 
@@ -349,8 +354,29 @@ export function CleaningCard({ car, date }: { car: Car; date: string }) {
         values: { id, workspace_id: currentWorkspaceId, car_id: car.id, user_id: profile.id, work_date: date, done: true, gps_lat: gps.lat, gps_lng: gps.lng },
       })
       await qc.invalidateQueries({ queryKey: ['cleaning', car.id] })
+      if (askPhotos) setCameraFor(id)
     } catch (e) {
       setErr('A takarítás mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Fotók feltöltése a takarításhoz (a kamera a koppintásra nyílik; a feltöltés a háttérben)
+  async function savePhotos(cleaningId: string, blobs: Blob[]) {
+    if (!currentWorkspaceId || !profile) return
+    setCameraFor(null); setBusy(true); setErr(null)
+    try {
+      for (const blob of blobs) {
+        const id = crypto.randomUUID()
+        const path = await uploadPhoto(currentWorkspaceId, `cleaning/${cleaningId}`, id, blob)
+        const { error } = await supabase.from('cleaning_photos').insert({ id, workspace_id: currentWorkspaceId, cleaning_id: cleaningId, storage_path: path, created_by: profile.id })
+        if (error) throw error
+      }
+      toast.success(`${blobs.length} fotó mentve a takarításhoz.`)
+      await qc.invalidateQueries({ queryKey: ['cleaning', car.id] })
+    } catch (e) {
+      setErr('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
     } finally {
       setBusy(false)
     }
@@ -360,6 +386,7 @@ export function CleaningCard({ car, date }: { car: Car; date: string }) {
     <div className="card stack">
       <div className="card-title"><Icon name="sparkles" />Takarítás</div>
       {err && <div className="alert error">{err}</div>}
+      {cameraFor && <MultiShotCamera title="Takarítás — fotók" sendLabel="Fotók mentése" onCancel={() => setCameraFor(null)} onSend={(blobs) => void savePhotos(cameraFor, blobs)} />}
       {(cleaning?.length ?? 0) > 0 ? (
         <div className="list">
           {cleaning!.map((c) => (
@@ -371,9 +398,18 @@ export function CleaningCard({ car, date }: { car: Car; date: string }) {
                 </span>
               </span>
               {/* mai esemény: elég az óra:perc — a dátum csak helyet foglal a név elől */}
-              <span className="tiny muted" style={{ flexShrink: 0 }}>{new Date(c.created_at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="row" style={{ gap: 6, flexShrink: 0 }}>
+                <span className="tiny muted">{new Date(c.created_at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</span>
+                {c.user_id === profile?.id && <button type="button" className="btn ghost sm auto" style={{ minHeight: 30, padding: '0 8px' }} disabled={busy} onClick={() => setCameraFor(c.id)}><Icon name="camera" size={14} />{c.photos.length ? '+ fotó' : 'Fotó'}</button>}
+              </span>
             </div>
           ))}
+          {cleaning!.some((c) => c.photos.length > 0) && (
+            <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+              {cleaning!.flatMap((c) => c.photos).map((p) => <div key={p.id} style={{ width: 64 }}><PhotoThumb path={p.storage_path} /></div>)}
+            </div>
+          )}
+          {askPhotos && cleaning!.every((c) => c.photos.length === 0) && <div className="tiny" style={{ color: 'var(--warning)' }}>Kérünk egy-két fotót a kitakarított autóról — a „Fotó” gombbal.</div>}
           <p className="tiny muted" style={{ margin: 0 }}>A vezetők a beosztás-naptárban látják, ki és mikor takarított.</p>
           <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}><Icon name="plus" />{busy ? 'Mentés…' : 'Újabb takarítás rögzítése'}</button>
         </div>

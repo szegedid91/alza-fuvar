@@ -956,6 +956,41 @@ export type Database = {
           },
         ]
       }
+      cleaning_photos: {
+        Row: {
+          cleaning_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          storage_path: string
+          workspace_id: string
+        }
+        Insert: {
+          cleaning_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          storage_path: string
+          workspace_id: string
+        }
+        Update: {
+          cleaning_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          storage_path?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cleaning_photos_cleaning_id_fkey"
+            columns: ["cleaning_id"]
+            isOneToOne: false
+            referencedRelation: "cleanings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cleanings: {
         Row: {
           car_id: string
