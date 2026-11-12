@@ -10,6 +10,7 @@ import { toast } from '../lib/toast'
 import { batchStartFromRows, boxSyncStatus } from '../lib/boxImport'
 import BoxCard from '../components/BoxCard'
 import { PendingBoxNotesCard } from '../components/BoxNotes'
+import { BoxIssueStatsCard } from '../components/BoxIssue'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
@@ -114,6 +115,7 @@ export default function Boxes() {
       )}
 
       {isManager && <PendingBoxNotesCard />}
+      {isManager && <BoxIssueStatsCard />}
       {isManager && <ImportCard />}
     </div>
   )

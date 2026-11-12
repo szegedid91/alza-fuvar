@@ -283,6 +283,148 @@ export type Database = {
         }
         Relationships: []
       }
+      box_stop_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          note: string | null
+          package_code: string | null
+          return_to_depot: boolean
+          stop_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          package_code?: string | null
+          return_to_depot?: boolean
+          stop_id?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          package_code?: string | null
+          return_to_depot?: boolean
+          stop_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      box_stop_item_photos: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          storage_path: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          storage_path?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          storage_path?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "box_stop_item_photos_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "box_stop_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      box_issue_reports: {
+        Row: {
+          box_code: string | null
+          box_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          stop_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          box_code?: string | null
+          box_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stop_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          box_code?: string | null
+          box_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stop_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      box_issue_photos: {
+        Row: {
+          created_at: string
+          id: string
+          report_id: string
+          storage_path: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          report_id: string
+          storage_path?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          report_id?: string
+          storage_path?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "box_issue_photos_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "box_issue_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       box_sheet_stop_photos: {
         Row: {
           ai_result: Json | null

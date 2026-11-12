@@ -35,8 +35,22 @@ vi.mock('../context/WorkspaceContext', () => ({ useWorkspace: () => ({ currentWo
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u-1' } }) }))
 vi.mock('../lib/photos', () => ({
   uploadPhoto: (_ws: string, folder: string, id: string) => Promise.resolve(`ws-1/${folder}/${id}.jpg`),
+  recordPhotoProof: () => Promise.resolve(),
   signedUrl: () => Promise.resolve(null),
 }))
+// A feltöltés a helyi soron át megy (gyenge netnél sorba áll) — a tesztben közvetlenül „felmegy”
+vi.mock('../lib/outbox', async () => {
+  const photos = await import('../lib/photos')
+  const { supabase } = await import('../lib/supabase')
+  return {
+    submitNow: async (rec: { table: string; values: Record<string, unknown>; photo?: { workspaceId: string; folder: string; id: string; column: string; blob: Blob } }) => {
+      const values = { ...rec.values }
+      if (rec.photo) values[rec.photo.column] = await photos.uploadPhoto(rec.photo.workspaceId, rec.photo.folder, rec.photo.id, rec.photo.blob)
+      await supabase.from(rec.table as never).insert(values as never)
+      return { queued: false }
+    },
+  }
+})
 vi.mock('../lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 vi.mock('./PhotoThumb', () => ({ default: () => null }))
 // A kamera helyett egy gomb: megnyomva „elkészül” a kép

@@ -20,6 +20,7 @@ import { recordStatusEvent, useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { roundStates } from '../lib/rounds'
 import { statusText, openWhatsApp } from '../lib/groupMessage'
+import { BoxIssueButton } from './BoxIssue'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -165,7 +166,8 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
-            onFillSheet={needsBoxSheet ? () => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}`) : undefined} />
+            courierName={profile?.full_name ?? 'Futár'}
+            onFillSheet={needsBoxSheet ? () => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}`) : undefined} />
         )
       })}
     </>
@@ -176,7 +178,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, planSource = null, planImportedAt = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, planSource = null, planImportedAt = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet, courierName = 'Futár' }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   // a betöltött terv: tervezett indulás (ebből derül ki, melyik körre szól), a fájl neve és a betöltés ideje
   plannedStart?: string | null; planSource?: string | null; planImportedAt?: string | null
@@ -191,7 +193,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // A raktár: az utolsó box után ide navigál a futár (az admin állítja a Járatok oldalon)
   depot: Depot
   // Box-lap csak eltérésnél: a „Kész, következő” mindig mehet; ha ehhez a boxhoz már van sor a mai lapon, jelezzük
-  sheetFilled?: boolean; onFillSheet?: () => void
+  sheetFilled?: boolean; onFillSheet?: () => void; courierName?: string
 }) {
   const done = idx >= stops.length && stops.length > 0
   const cur = stops[idx]
@@ -266,7 +268,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   <span className="tiny muted">{stops.length - idx - 1} van hátra</span>
                 </div>
                 <div>
-                  <div style={{ fontWeight: 800, fontSize: 18 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
+                  <div style={{ fontWeight: 800, fontSize: 18 }}><span className="badge primary num" style={{ marginRight: 6, verticalAlign: 'middle' }}>{idx + 1}/{stops.length}</span>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
                   <div className="small muted">{cur.box.address}</div>
                   {(curEta || curDeadline) && (
                     <div className="tiny" style={{ marginTop: 4, color: lateNow != null && lateNow > 0 ? 'var(--danger)' : 'var(--text-dim)' }}>
@@ -288,6 +290,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   </button>
                 </div>
                 {showBox && <BoxCard box={cur.box} onClose={() => setShowBox(false)} hideNav />}
+                {!locked && <BoxIssueButton box={{ id: cur.box_id, code: cur.box.code, name: cur.box.name }} courierName={courierName} />}
                 <div className="row" style={{ gap: 6 }}>
                   <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
                   <button type="button" className="btn secondary sm" disabled={busy || locked || late != null || (!!onFillSheet && !sheetFilled)} onClick={finish} style={{ flex: 2 }}><Icon name={isLast ? 'flag' : 'check'} size={14} />{isLast ? 'Járat kész' : 'Kész, következő'}</button>

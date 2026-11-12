@@ -8,6 +8,8 @@ import { useToday } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
 import StopPhotos from '../components/StopPhotos'
+import StopItems, { useStopItems } from '../components/StopItems'
+import { BoxIssueButton } from '../components/BoxIssue'
 import InspectionGate from '../components/InspectionGate'
 import ConfirmButton from '../components/ConfirmButton'
 import Icon from '../components/Icon'
@@ -88,6 +90,9 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
   // A járat-kártyáról érkezve (?box=<id>) az aktuális box megállója automatikusan felkerül a lapra
   const [params] = useSearchParams()
   const prefillBox = params.get('box')
+  // a járat-kártyáról jön a box sorszáma is (n/of) — a lapon és a csoportüzenetben látszik
+  const n = params.get('n'), of = params.get('of')
+  const seqLabel = n && of ? `${n}/${of}` : null
   const { currentWorkspaceId } = useWorkspace()
   const { data: today } = useToday()
   const category = today?.car?.category ?? null
@@ -134,12 +139,12 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
   if (sheetQ.isError || !sheetQ.data) {
     return <div className="alert error">Nem sikerült megnyitni a mai lapot: {errMsg(sheetQ.error, '')}</div>
   }
-  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} />
+  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} seqLabel={seqLabel} />
 }
 
 type SheetRow = BoxSheet & { car: { plate: string } | null }
 
-export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null }) {
+export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null }) {
   const qc = useQueryClient()
   const { data: boxes } = useAlzaBoxes()
   const boxById = useMemo(() => new Map((boxes ?? []).map((b) => [b.id, b])), [boxes])
@@ -276,7 +281,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null 
           const i = stops.findIndex((x) => x.id === s.id)
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
-            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null}
+            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null}
               courierName={name ?? 'Futár'} resetKey={resetTick} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
@@ -387,23 +392,24 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0 }: {
+function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null }: {
   stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
-  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number
+  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number; seqLabel?: string | null; readOnly?: boolean
 }) {
+  const { data: items } = useStopItems(stop.id)
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
   // hogy 10-20 boxnál is áttekinthető maradjon a lap. Járat-módban a kijelölt box nyitva.
   const [open, setOpen] = useState(focus || (isLast && stop.placed === 0 && !stop.note))
   useEffect(() => { if (!isLast && !focus) setOpen(false) }, [isLast, focus])
   useEffect(() => { if (focus) setOpen(true) }, [focus])
   const extras = STOP_FIELDS.filter((f) => f.key !== 'placed' && stop[f.key] > 0)
-  const flagged = stop.shortage > 0 || stop.invalid_code > 0 || stop.do_not_place > 0 || stop.cancelled > 0 || stop.damaged > 0 || stop.left_on_car > 0
+  const flagged = stop.shortage > 0 || stop.invalid_code > 0 || stop.do_not_place > 0 || stop.cancelled > 0 || stop.damaged > 0 || stop.left_on_car > 0 || (items?.length ?? 0) > 0
   return (
     <div className="stack" style={{ gap: 8, padding: 10, border: focus ? '2px solid var(--primary)' : `1px solid ${flagged ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 'var(--radius-sm)', background: focus ? 'var(--primary-ghost)' : undefined }}>
       <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }} onClick={() => setOpen((o) => !o)}>
         <div style={{ minWidth: 0 }}>
           <div className="small" style={{ fontWeight: 800 }}>
-            <span className="muted">{index}.</span> <span className="num">{stop.box_code ?? '—'}</span>
+            <span className="muted">{seqLabel ? `${seqLabel}.` : `${index}.`}</span> <span className="num">{stop.box_code ?? '—'}</span>
             {stop.done_at && <span className="tiny muted" style={{ fontWeight: 500, marginLeft: 6 }}>végzés {hhmmOfISO(stop.done_at)}</span>}
           </div>
           <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.box_name ?? box?.name ?? 'nincs a jegyzékben'}</div>
@@ -418,18 +424,21 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
           {extras.map((f) => <span key={f.key} className="badge warning">{f.short} {stop[f.key]}</span>)}
         </div>
       )}
+      {!open && (items?.length ?? 0) > 0 && <div className="tiny muted">{items!.length} csomag-eltérés</div>}
       {!open && stop.note && <div className="tiny muted">{stop.note}</div>}
       {open && (
         <>
           {/* Fotó a box kijelzőjéről LEGFELÜL — egyből elérhető, nem kell a számok alá görgetni */}
-          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} />
+          <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} items={items ?? []} seqLabel={seqLabel} />
           <div className="grid-2">
             {STOP_FIELDS.map((f) => (
               <NumField key={f.key} label={f.label} value={stop[f.key]} resetKey={resetKey} onCommit={(v) => onPatch({ [f.key]: v })} highlight={f.key === 'placed'} autoFocus={f.key === 'placed' && (focus || isLast) && stop.placed === 0} />
             ))}
           </div>
+          <StopItems stopId={stop.id} items={items ?? []} />
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <BoxIssueButton box={{ id: stop.box_id, code: stop.box_code, name: stop.box_name ?? box?.name ?? null }} stopId={stop.id} courierName={courierName} />
             <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
               <Icon name="trash" size={16} />Megálló törlése
             </ConfirmButton>

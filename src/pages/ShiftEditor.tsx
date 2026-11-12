@@ -12,6 +12,7 @@ import { resolveNames } from '../lib/names'
 import { todayISO, formatDate, carIssueStatusLabel } from '../lib/labels'
 import { monthGrid, shiftMonth, localDateOf, monthTitle, shortName, crewSizeFor, groupByCategory } from '../lib/calendar'
 import SwapApprovals from './shift/SwapApprovals'
+import RouteCancelCard from '../components/RouteCancelCard'
 import WeekTable from './shift/WeekTable'
 import Icon, { type IconName } from '../components/Icon'
 import type { Tables } from '../lib/database.types'
@@ -231,6 +232,7 @@ export default function ShiftEditor() {
       <h2>Beosztás — {currentWorkspace?.name}</h2>
 
       <SwapApprovals workspaceId={currentWorkspaceId} />
+      <RouteCancelCard />
       <Link to="/jaratok" className="card between" style={{ textDecoration: 'none', color: 'inherit', padding: 12 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Járatok{(routes?.length ?? 0) ? ` (${routes!.map((r) => r.code).join(', ')})` : ''}</div>
         <span className="tiny muted row" style={{ gap: 4 }}>járatok és boxok kezelése <Icon name="chevron-right" size={14} /></span>

@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useAuth } from '../context/AuthContext'
 import { cleanUnmapped, mergeStopNote, unmappedKey } from '../lib/boxUnmapped'
-import { uploadPhoto, signedUrl } from '../lib/photos'
+import { signedUrl } from '../lib/photos'
+import { submitNow } from '../lib/outbox'
+import { itemLines, type StopItemLike } from '../lib/boxItems'
 import { sharePhotos, canShareFiles } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
@@ -21,8 +23,10 @@ type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[];
 // A box kijelzőjének fotói az appban: a kép az adatbázisba kerül, az AI kiolvassa a
 // számokat (előtölti a mezőket — a futár ellenőrzi), és ugyanaz a kép egy koppintással
 // a WhatsApp-csoportba megy a kész szöveggel.
-export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch }: {
+export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch, items = [], seqLabel = null }: {
   stop: BoxStop; boxLabel: string; boxAddress?: string | null; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
+  // csomagszintű eltérések (a csoportüzenetbe soronként) és a box sorszáma a járaton (n/of)
+  items?: StopItemLike[]; seqLabel?: string | null
 }) {
   const { currentWorkspaceId } = useWorkspace()
   const { profile } = useAuth()
@@ -69,18 +73,25 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
   const read = useMutation({
     mutationFn: async () => {
       if (!currentWorkspaceId || !hasAny) return null
-      // csak a még fel nem töltött fotók mennek fel (újbóli kiolvasásnál nem duplázódnak)
+      // csak a még fel nem töltött fotók mennek fel (újbóli kiolvasásnál nem duplázódnak);
+      // a feltöltés a helyi soron át megy: gyenge netnél sorba áll, és kapcsolatnál felmegy
       const fresh: string[] = []
+      let queued = false
       for (const p of photos) {
         if (p.path) { fresh.push(p.path); continue }
         const id = crypto.randomUUID()
-        const path = await uploadPhoto(currentWorkspaceId, `boxsheet/${stop.id}`, id, p.blob)
-        const { error } = await supabase.from('box_sheet_stop_photos').insert({ id, workspace_id: currentWorkspaceId, stop_id: stop.id, storage_path: path })
-        if (error) throw error
+        const folder = `boxsheet/${stop.id}`
+        const path = `${currentWorkspaceId}/${folder}/${id}.jpg`
+        const r = await submitNow({
+          id, table: 'box_sheet_stop_photos', op: 'insert', label: `Box-fotó (${stop.box_code ?? boxLabel})`,
+          values: { id, workspace_id: currentWorkspaceId, stop_id: stop.id, storage_path: null },
+          photo: { workspaceId: currentWorkspaceId, folder, id, column: 'storage_path', blob: p.blob },
+        })
         // helyben jelöljük feltöltöttnek (közben készülhetett újabb fotó — azt nem írjuk felül)
         setPhotos((prev) => prev.map((x) => (x === p ? { ...x, path } : x)))
-        fresh.push(path)
+        if (r.queued) queued = true; else fresh.push(path)
       }
+      if (queued) return 'queued' as const
       // a kiolvasó a legfrissebb képeket kapja (a korábban feltöltöttek elöl, a mostaniak a végén)
       const paths = aiPhotoPaths(fresh, savedPaths)
       const { data, error } = await supabase.functions.invoke('read-box-photo', { body: { paths, box: stop.box_code ?? boxLabel } })
@@ -112,6 +123,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
       return result
     },
     onSuccess: (r) => {
+      if (r === 'queued') { toast.info('Nincs net — a fotó sorba állt, kapcsolatnál felmegy. A kiolvasást akkor indítsd újra; a számokat addig írd be kézzel.'); return }
       setAi(r); void qc.invalidateQueries({ queryKey: ['stop-photos', stop.id] })
       const got = r ? STOP_FIELDS.some((f) => typeof r[f.key] === 'number') : false
       if (got) toast.success('Kiolvasva — ellenőrizd a számokat, és javítsd, ha kell.')
@@ -124,8 +136,8 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
   const share = useMutation({
     mutationFn: async () => {
       // Első sor: box, cím, idő, név — alatta soronként a számok, végül a megjegyzés
-      const head = [boxLabel, boxAddress, new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }), courierName].filter((x): x is string => !!x).join(' – ')
-      const lines = [head, ...STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`)]
+      const head = [seqLabel ? `${seqLabel}. box` : null, boxLabel, boxAddress, new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }), courierName].filter((x): x is string => !!x).join(' – ')
+      const lines = [head, ...STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`), ...itemLines(items)]
       if (stop.note) lines.push(`Megjegyzés: ${stop.note}`)
       const text = lines.join('\n')
       const blobs = [...taken.map((p) => p.blob), ...savedPaths.filter((sp) => !taken.some((p) => p.path === sp)).map((sp) => savedBlobs[sp]).filter((b): b is Blob => !!b)]
