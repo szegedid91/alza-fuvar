@@ -8,11 +8,14 @@ import Icon from './Icon'
 export default function MultiShotCamera({
   title,
   sendLabel = 'Küldés',
+  hint = 'Készíts egy vagy több képet, majd koppints a Küldésre.',
   onSend,
   onCancel,
 }: {
   title: string
   sendLabel?: string
+  // mit fotózzon (a kamera tetején, amíg nincs kép)
+  hint?: string
   onSend: (blobs: Blob[]) => void
   onCancel: () => void
 }) {
@@ -92,7 +95,7 @@ export default function MultiShotCamera({
               ))}
             </div>
           )}
-          {shots.length === 0 && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center' }}>Készíts egy vagy több képet, majd koppints a Küldésre.</p>}
+          {shots.length === 0 && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '6px 8px', borderRadius: 8 }}>{hint}</p>}
         </div>
       )}
       <div className="camera-foot" style={{ gap: 16, alignItems: 'center' }}>

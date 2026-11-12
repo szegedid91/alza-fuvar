@@ -16,7 +16,7 @@ import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, format
 import type { Enums } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 
-type PhotoType = 'inspection' | 'fuel' | 'incident' | 'evidence' | 'issue' | 'cleaning'
+type PhotoType = 'inspection' | 'fuel' | 'incident' | 'evidence' | 'issue' | 'cleaning' | 'settle'
 type ViewFilter = Enums<'inspection_view'> | ''
 
 interface Filters {
@@ -45,6 +45,7 @@ const TABS: { key: PhotoType; label: string }[] = [
   { key: 'evidence', label: 'Bizonyíték' },
   { key: 'issue', label: 'Autó-hiba' },
   { key: 'cleaning', label: 'Takarítás' },
+  { key: 'settle', label: 'Visszáru' },
 ]
 
 // Fotó-hitelesség ellenőrzése: a tárolt fájl hash-ét összevetjük a
@@ -356,6 +357,26 @@ async function fetchPhotos(type: PhotoType, f: Filters, ws: string): Promise<Ite
         id: r.id, path: r.storage_path, title: `${insp?.car?.plate ?? '—'} · ${inspectionViewLabel[r.view]}`,
         subtitle: insp?.user_id ? names[insp.user_id] ?? '' : '', when: formatDateTime(r.taken_at),
       }
+    })
+  }
+
+  if (type === 'settle') {
+    // az „Elszámoltam” jelzés fotói: a raktárba visszahozott áru — bizonyíték, hogy visszakerült
+    let q = supabase
+      .from('status_event_photos')
+      .select('id, storage_path, created_at, event:status_events!inner(user_id, car_id, at, kind, car:cars(plate))')
+      .eq('workspace_id', ws).eq('event.kind', 'settled').not('storage_path', 'is', null)
+      .order('created_at', { ascending: false }).limit(60)
+    if (f.carId) q = q.eq('event.car_id', f.carId)
+    if (f.userId) q = q.eq('event.user_id', f.userId)
+    q = dateRange(q, 'created_at', f)
+    const { data, error } = await q
+    if (error) throw error
+    const rows = data ?? []
+    const names = await resolveNames(rows.map((r) => (r.event as unknown as { user_id: string } | null)?.user_id))
+    return rows.map((r) => {
+      const e = r.event as unknown as { user_id: string; at: string; car: { plate: string } | null } | null
+      return { id: r.id, path: r.storage_path!, title: `${e?.car?.plate ?? '—'} · visszáru (elszámolás)`, subtitle: e?.user_id ? names[e.user_id] ?? '' : '', when: formatDateTime(e?.at ?? r.created_at) }
     })
   }
 
