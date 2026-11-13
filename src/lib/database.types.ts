@@ -2139,6 +2139,45 @@ export type Database = {
           },
         ]
       }
+      route_plan_versions: {
+        Row: {
+          code: string
+          id: string
+          imported_at: string
+          imported_by: string | null
+          planned_end: string | null
+          planned_start: string | null
+          route_id: string | null
+          source: string | null
+          stops: Json
+          workspace_id: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          planned_end?: string | null
+          planned_start?: string | null
+          route_id?: string | null
+          source?: string | null
+          stops?: Json
+          workspace_id: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          planned_end?: string | null
+          planned_start?: string | null
+          route_id?: string | null
+          source?: string | null
+          stops?: Json
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       route_stops: {
         Row: {
           box_id: string

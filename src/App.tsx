@@ -38,6 +38,7 @@ const Statistics = lazyRetry(() => import('./pages/Statistics'), 'Statistics')
 const PhotoReview = lazyRetry(() => import('./pages/PhotoReview'), 'PhotoReview')
 const History = lazyRetry(() => import('./pages/History'), 'History')
 const AuditLog = lazyRetry(() => import('./pages/AuditLog'), 'AuditLog')
+const RouteChanges = lazyRetry(() => import('./pages/RouteChanges'), 'RouteChanges')
 const BoxSheet = lazyRetry(() => import('./pages/BoxSheet'), 'BoxSheet')
 const BoxSheets = lazyRetry(() => import('./pages/BoxSheets'), 'BoxSheets')
 const RoutesPage = lazyRetry(() => import('./pages/Routes'), 'Routes')
@@ -132,6 +133,7 @@ export default function App() {
           {isManagerOrAdmin && <Route path="/kepek" element={<PhotoReview />} />}
           {isManagerOrAdmin && <Route path="/tortenet" element={<History />} />}
           {isAdmin && <Route path="/naplo" element={<AuditLog />} />}
+          {isAdmin && <Route path="/jarat-valtozasok" element={<RouteChanges />} />}
           {isManagerOrAdmin && <Route path="/box-lapok" element={<BoxSheets />} />}
           {isManagerOrAdmin && <Route path="/jaratok" element={<RoutesPage />} />}
 

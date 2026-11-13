@@ -29,7 +29,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
   '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
   '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',
-  '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló',
+  '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló', '/jarat-valtozasok': 'Járat-változások',
   '/box-lap': 'Box-lap', '/box-lapok': 'Box-lapok', '/boxok': 'AlzaBox kereső', '/jaratok': 'Járatok',
 }
 
@@ -227,7 +227,7 @@ function PushPrompt() {
 }
 
 // Ezek az oldalak nagy képernyőn a teljes szélességet használják
-const WIDE_ROUTES = ['/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/tortenet']
+const WIDE_ROUTES = ['/jarat-valtozasok', '/beosztas-szerkeszto', '/terkep', '/attekintes', '/riportok', '/ber', '/kepek', '/naplo', '/tortenet']
 
 // A becsekkolás körüli 20 m-es kör figyelése (hiányzó autó-ellenőrzés esetén
 // a szerver küld értesítést a páros MINDKÉT tagjának, amíg valaki el nem végzi)

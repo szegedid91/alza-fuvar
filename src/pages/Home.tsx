@@ -108,6 +108,7 @@ export default function Home() {
     managerHub.push({ group: 'Pénz és kimutatás', to: '/ber', icon: 'calculator', title: 'Bér / kimutatás', desc: 'Bér, Excel export' })
     managerHub.push({ group: 'Pénz és kimutatás', to: '/statisztika', icon: 'target', title: 'Statisztika', desc: 'Átlagok, rangsorok' })
     managerHub.push({ group: 'Előzmények', to: '/naplo', icon: 'scroll', title: 'Napló', desc: 'Ki mit módosított' })
+    managerHub.push({ group: 'Előzmények', to: '/jarat-valtozasok', icon: 'map', title: 'Járat-változások', desc: 'Feltöltésről feltöltésre, diagramokkal' })
   }
   const hubGroups = ['Napi munka', 'Emberek és autók', 'Pénz és kimutatás', 'Előzmények']
 

@@ -8,6 +8,8 @@ import { parseRoutePlan, type PlanRoute } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
 import { errMsg } from '../lib/errors'
+import { Link } from 'react-router'
+import { useAuth } from '../context/AuthContext'
 
 type KnownBox = { id: string; code: string | null; lat: number | null; lng: number | null }
 type Preview = { fileName: string; routes: PlanRoute[]; known: Map<string, KnownBox> }
@@ -19,6 +21,7 @@ export default function RoutePlanImport() {
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
   const { data: routes } = useRoutes()
+  const { profile } = useAuth()
   const { data: stopsByRoute } = useRouteStops()
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -146,6 +149,7 @@ export default function RoutePlanImport() {
         </div>
       )}
       {err && <div className="alert error">{err}</div>}
+      {profile?.role === 'admin' && <Link to="/jarat-valtozasok" className="tiny row" style={{ gap: 4, textDecoration: 'none' }}><Icon name="bar-chart" size={14} />Járat-változások feltöltésről feltöltésre (diagramok)</Link>}
     </div>
   )
 }

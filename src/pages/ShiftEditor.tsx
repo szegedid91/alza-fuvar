@@ -110,20 +110,24 @@ export default function ShiftEditor() {
 
   // Havi összesítő: ki hány napot dolgozott ebben a hónapban (a beosztás alapján).
   // Minden nem-admin/nem-menedzser tag látszik (0 nappal is); vezető csak ha beosztották.
+  // Külön is: Box-os (box_sheet kategóriájú autó) és XL-es napok — egy nap mindkettőbe beleszámít, ha mindkettőn dolgozott
   const monthCounts = useMemo(() => {
-    const byUser = new Map<string, Set<string>>()
+    const byUser = new Map<string, { all: Set<string>; box: Set<string>; xl: Set<string> }>()
+    const isBoxCar = new Map((cars ?? []).map((c) => [c.id, !!c.category?.box_sheet]))
     for (const s of cal?.shifts ?? []) {
       for (const uid of [s.driver_id, s.loader_id, s.trainee_id]) {
         if (!uid) continue
-        if (!byUser.has(uid)) byUser.set(uid, new Set())
-        byUser.get(uid)!.add(s.work_date)
+        if (!byUser.has(uid)) byUser.set(uid, { all: new Set(), box: new Set(), xl: new Set() })
+        const u = byUser.get(uid)!
+        u.all.add(s.work_date)
+        ;(isBoxCar.get(s.car_id) ? u.box : u.xl).add(s.work_date)
       }
     }
     return (members ?? [])
-      .filter((m) => (m.role !== 'admin' && m.role !== 'manager') || (byUser.get(m.id)?.size ?? 0) > 0)
-      .map((m) => ({ id: m.id, name: m.full_name || m.email || '—', count: byUser.get(m.id)?.size ?? 0 }))
+      .filter((m) => (m.role !== 'admin' && m.role !== 'manager') || (byUser.get(m.id)?.all.size ?? 0) > 0)
+      .map((m) => ({ id: m.id, name: m.full_name || m.email || '—', count: byUser.get(m.id)?.all.size ?? 0, box: byUser.get(m.id)?.box.size ?? 0, xl: byUser.get(m.id)?.xl.size ?? 0 }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [cal, members])
+  }, [cal, members, cars])
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, Shift[]>()
@@ -465,11 +469,16 @@ export default function ShiftEditor() {
       <div className="card stack">
         <div className="card-title"><Icon name="users" />Napok ebben a hónapban — {monthTitle(month)}</div>
         {monthCounts.length === 0 && <div className="tiny muted">Nincs munkatárs ezen a munkaterületen.</div>}
+        <div className="tiny muted">Box = AlzaBox-szállító autón, XL = XL-es autón beosztott napok; az összes a különböző napok száma.</div>
         <div className="grid-2">
           {monthCounts.map((r) => (
-            <div key={r.id} className="between">
-              <span className="small" style={{ fontWeight: r.count > 0 ? 700 : 400, color: r.count === 0 ? 'var(--text-dim)' : undefined }}>{r.name}</span>
-              <span className={`badge ${r.count > 0 ? 'primary' : ''}`}>{r.count} nap</span>
+            <div key={r.id} className="between" style={{ gap: 6 }}>
+              <span className="small" style={{ fontWeight: r.count > 0 ? 700 : 400, color: r.count === 0 ? 'var(--text-dim)' : undefined, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+              <span className="row" style={{ gap: 4, flexShrink: 0 }}>
+                <span className={`badge ${r.box > 0 ? 'warning' : ''}`} title="Box-os napok">Box {r.box}</span>
+                <span className={`badge ${r.xl > 0 ? 'success' : ''}`} title="XL-es napok">XL {r.xl}</span>
+                <span className={`badge ${r.count > 0 ? 'primary' : ''}`}>{r.count} nap</span>
+              </span>
             </div>
           ))}
         </div>
