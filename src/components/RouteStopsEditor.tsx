@@ -8,6 +8,7 @@ import { normalize, formatDistance, type AlzaBox } from '../lib/boxSheet'
 import { routeLegs } from '../lib/routeLookup'
 import { distanceMeters } from '../lib/geo'
 import { depotOf } from '../lib/depot'
+const fmtKmNum = (k: number) => k.toLocaleString('hu-HU', { maximumFractionDigits: 1 })
 import { useRoutes, type RouteName } from '../hooks/useRoutes'
 import ConfirmButton from './ConfirmButton'
 import Icon from './Icon'
@@ -31,6 +32,11 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
   const fromCode = (id: string) => allRoutes?.find((r) => r.id === id)?.code ?? '?'
   const used = new Set(stops.map((s) => s.box_id))
   const legs = routeLegs(stops.map((s) => s.box), depotOf(currentWorkspace), distanceMeters)
+  // közúti km az Alza tervfájljából (megállónként az előzőtől), ha van; különben légvonal
+  const roadKm = stops.length > 0 && stops.every((s) => s.dist_prev_km != null)
+  const legText = (i: number) => roadKm ? `${fmtKmNum(stops[i].dist_prev_km!)} km` : legs.legs[i] == null ? '—' : formatDistance(legs.legs[i]!)
+  const totalText = roadKm && route.plan_km != null ? `${fmtKmNum(route.plan_km)} km (terv szerint)` : legs.missing === 0 && stops.length ? `kb. ${formatDistance(legs.total)} légvonalban` : ''
+  const backText = roadKm ? (route.plan_back_km != null ? `${fmtKmNum(route.plan_back_km)} km` : '—') : legs.back == null ? '—' : formatDistance(legs.back)
   const invalidate = () => { void qc.invalidateQueries({ queryKey: ['route-stops'] }); setErr(null) }
   const fail = (e: unknown) => setErr(errMsg(e, 'A művelet nem sikerült'))
 
@@ -125,13 +131,13 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
     <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
       <div className="between">
         <span className="small" style={{ fontWeight: 700 }}><Icon name="map" size={14} />{route.code} járat megállói</span>
-        <span className="tiny muted">{stops.length} box{legs.missing === 0 && stops.length ? ` · kb. ${formatDistance(legs.total)} légvonalban` : ''}</span>
+        <span className="tiny muted">{stops.length} box{totalText ? ` · ${totalText}` : ''}</span>
       </div>
-      {stops.length > 0 && <div className="tiny muted"><Icon name="navigation" size={11} /> A sorok közti km a két box közti légvonalbeli távolság (a közúti ennél hosszabb); az első a raktártól számít.{legs.missing > 0 ? ` ${legs.missing} szakaszon nincs koordináta.` : ''}</div>}
+      {stops.length > 0 && <div className="tiny muted"><Icon name="navigation" size={11} /> {roadKm ? 'A sorok közti km az Alza tervfájljának közúti távolsága az előző boxtól; az első a raktártól számít.' : `A sorok közti km a két box közti légvonalbeli távolság (a közúti ennél hosszabb); az első a raktártól számít.${legs.missing > 0 ? ` ${legs.missing} szakaszon nincs koordináta.` : ''}`}</div>}
       {stops.length === 0 && <div className="tiny muted">Még nincs box a járaton — keress rá kódra vagy névre, és add hozzá sorrendben.</div>}
       {stops.length > 1 && <div className="tiny muted">Sorrend: a <Icon name="grip" size={12} /> fogantyúnál megfogva húzd a kívánt helyre (ujjal is), vagy a nyilakkal lépkedj. A <Icon name="pencil" size={12} /> gombbal megjegyzést írhatsz a boxhoz (kapukód, hol található) — a futár az aktuális címnél látja.</div>}
       {stops.map((s, i) => (<Fragment key={s.id}>
-        <div className="tiny muted row" style={{ gap: 4, paddingLeft: 30, lineHeight: 1 }}><Icon name="arrow-down" size={10} />{legs.legs[i] == null ? '—' : formatDistance(legs.legs[i]!)}{i === 0 ? ' a raktártól' : ''}</div>
+        <div className="tiny muted row" style={{ gap: 4, paddingLeft: 30, lineHeight: 1 }}><Icon name="arrow-down" size={10} />{legText(i)}{i === 0 ? ' a raktártól' : ''}</div>
         <div ref={(el) => { rowRefs.current[i] = el }} className="row"
           style={{ gap: 6, alignItems: 'center', borderRadius: 8, padding: '2px 4px',
             background: drag && drag.over === i && drag.from !== i ? 'var(--primary-ghost)' : undefined,
@@ -166,7 +172,7 @@ export default function RouteStopsEditor({ route }: { route: RouteName }) {
           </ConfirmButton>
         </div>
       </Fragment>))}
-      {stops.length > 0 && <div className="tiny muted row" style={{ gap: 4, paddingLeft: 30, lineHeight: 1 }}><Icon name="arrow-down" size={10} />{legs.back == null ? '—' : formatDistance(legs.back)} vissza a raktárba</div>}
+      {stops.length > 0 && <div className="tiny muted row" style={{ gap: 4, paddingLeft: 30, lineHeight: 1 }}><Icon name="arrow-down" size={10} />{backText} vissza a raktárba</div>}
       <div className="input-icon">
         <Icon name="search" size={16} />
         <input className="input" style={{ minHeight: 38, fontSize: 14 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Box hozzáadása: kód (AB1234) vagy név, cím…" />

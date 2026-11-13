@@ -86,14 +86,14 @@ export default function RoutePlanImport() {
         // 3) megállók cseréje a terv szerint — egy tranzakcióban a szerveren (félbeszakadva nem marad üres járat)
         const { error: rpcErr } = await supabase.rpc('replace_route_stops', {
           p_route_id: route.id,
-          p_stops: pr.stops.map((s) => ({ box_id: ids.get(s.code)!, eta: s.eta, etd: s.etd, deadline: s.deadline })),
-          p_planned_start: pr.start, p_planned_end: pr.end, p_source: preview.fileName,
+          p_stops: pr.stops.map((s) => ({ box_id: ids.get(s.code)!, eta: s.eta, etd: s.etd, deadline: s.deadline, dist_km: s.distKm })),
+          p_planned_start: pr.start, p_planned_end: pr.end, p_source: preview.fileName, p_plan_km: pr.distanceKm, p_back_km: pr.backKm,
         } as never)
         if (rpcErr) throw rpcErr
       }
     },
     onSuccess: () => {
-      toast.success('Járatterv betöltve — a járatok a fájl szerint frissültek.')
+      toast.success('Járatterv betöltve — a járatok a fájl szerint frissültek (ugyanannak a fájlnak az újratöltése a meglévő verziót frissíti).')
       setPreview(null)
       void qc.invalidateQueries({ queryKey: ['route-stops'] }); void qc.invalidateQueries({ queryKey: ['route-names'] })
     },

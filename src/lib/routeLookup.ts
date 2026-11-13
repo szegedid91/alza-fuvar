@@ -37,3 +37,12 @@ export function routeLegs(stops: { lat: number | null; lng: number | null }[], d
   const back = pts.length ? leg(pts[pts.length - 1], d0) : null
   return { legs, back, total, missing }
 }
+
+// Járat hossza a koordináta nélküli boxokat kihagyva (raktár → ismert boxok sorrendben → raktár):
+// km és hány box maradt ki — a Járat-változások összevetéséhez (régebbi pillanatképekben lehet törölt box)
+export function routeKm(stops: { lat: number | null; lng: number | null }[], depot: { lat: number | null; lng: number | null } | null, dist: (a: number, b: number, c: number, d: number) => number): { km: number; missing: number } | null {
+  const known = stops.filter((s) => s.lat != null && s.lng != null)
+  if (known.length === 0) return null
+  const legs = routeLegs(known, depot, dist)
+  return { km: legs.total / 1000, missing: stops.length - known.length }
+}

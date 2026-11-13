@@ -1,6 +1,6 @@
 // Járatterv-verziók összevetése: feltöltésről feltöltésre mi változott (boxok, áthelyezés, sorrend, idők).
-export interface VersionStop { box_id: string | null; code: string | null; name: string | null; eta: string | null; etd: string | null; deadline: string | null }
-export interface PlanVersion { id: string; route_id: string | null; code: string; source: string | null; imported_at: string; imported_by: string | null; planned_start: string | null; planned_end: string | null; stops: VersionStop[] }
+export interface VersionStop { box_id: string | null; code: string | null; name: string | null; eta: string | null; etd: string | null; deadline: string | null; lat?: number | null; lng?: number | null; dist_km?: number | null }
+export interface PlanVersion { id: string; route_id: string | null; code: string; source: string | null; imported_at: string; imported_by: string | null; planned_start: string | null; planned_end: string | null; stops: VersionStop[]; plan_km?: number | null; back_km?: number | null }
 
 // Egy feltöltés = az ugyanazzal a forrással, egymáshoz közel (10 percen belül) betöltött járat-verziók
 export interface Upload { key: string; at: string; source: string | null; by: string | null; routes: PlanVersion[] }

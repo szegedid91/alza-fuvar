@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findBoxInRoutes, routeLegs } from './routeLookup'
+import { findBoxInRoutes, routeKm, routeLegs } from './routeLookup'
 import type { AlzaBox } from './boxSheet'
 
 const box = (id: string, code: string, name: string): AlzaBox => ({ id, code, name, address: null, lat: null, lng: null, description: null, notes: null, image_url: null, updated_at: '', last_seen_at: null, active: true } as unknown as AlzaBox)
@@ -23,5 +23,13 @@ describe('routeLegs', () => {
     expect(r.back).toBe(2000)
     expect(r.total).toBe(5000)
     expect(r.missing).toBe(2)
+  })
+})
+
+describe('routeKm', () => {
+  it('a koordináta nélküli boxot kihagyja, és számolja, hány maradt ki', () => {
+    const dist = (a: number, b: number, c: number, d: number) => Math.abs(a - c) * 1000 + Math.abs(b - d) * 1000
+    expect(routeKm([{ lat: 1, lng: 0 }, { lat: null, lng: null }, { lat: 1, lng: 2 }], { lat: 0, lng: 0 }, dist)).toEqual({ km: 6, missing: 1 })
+    expect(routeKm([{ lat: null, lng: null }], { lat: 0, lng: 0 }, dist)).toBeNull()
   })
 })

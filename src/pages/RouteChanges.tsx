@@ -6,7 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import { depotOf } from '../lib/depot'
 import { distanceMeters } from '../lib/geo'
-import { routeLegs } from '../lib/routeLookup'
+import { routeKm } from '../lib/routeLookup'
 import { resolveNames } from '../lib/names'
 import { formatDateTime } from '../lib/labels'
 import { boxLabel, diffUploads, groupUploads, hm, type PlanVersion, type Upload, type UploadDiff } from '../lib/routeHistory'
@@ -24,7 +24,7 @@ export default function RouteChanges() {
     queryKey: ['route-plan-versions', currentWorkspaceId],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
-      const { data, error } = await supabase.from('route_plan_versions').select('id, route_id, code, source, imported_at, imported_by, planned_start, planned_end, stops')
+      const { data, error } = await supabase.from('route_plan_versions').select('id, route_id, code, source, imported_at, imported_by, planned_start, planned_end, stops, plan_km, back_km')
         .eq('workspace_id', currentWorkspaceId!).order('imported_at')
       if (error) throw error
       const versions = (data ?? []) as unknown as PlanVersion[]
@@ -35,19 +35,27 @@ export default function RouteChanges() {
   const uploads = useMemo(() => groupUploads(data?.versions ?? []), [data])
   const diffs = useMemo(() => uploads.map((u, i) => diffUploads(i > 0 ? uploads[i - 1] : null, u)), [uploads])
   const routeCodes = useMemo(() => [...new Set(uploads.flatMap((u) => u.routes.map((r) => r.code)))].sort(), [uploads])
-  // Légvonalbeli km járatonként (raktár → boxok → raktár) a pillanatkép boxainak koordinátáiból; verzió-azonosító → km
+  // Légvonalbeli km járatonként (raktár → boxok → raktár) a pillanatkép koordinátáiból (régebbi képnél a jegyzék
+  // mai koordinátája); a koordináta nélküli (időközben törölt) box kimarad, és a szám „~” jelet kap
   const kmOf = useMemo(() => {
     const byId = new Map((boxes ?? []).map((b) => [b.id, b]))
     const depot = depotOf(currentWorkspace)
-    const m = new Map<string, number | null>()
+    const m = new Map<string, { km: number; missing: number; road: boolean } | null>()
     for (const u of uploads) for (const v of u.routes) {
-      const pts = v.stops.map((st) => { const b = st.box_id ? byId.get(st.box_id) : undefined; return { lat: b?.lat ?? null, lng: b?.lng ?? null } })
-      const legs = routeLegs(pts, depot, distanceMeters)
-      m.set(v.id, legs.missing > 0 ? null : legs.total / 1000)
+      // elsőbbség: a tervfájl közúti km-e; ha nincs (régebbi feltöltés), légvonal
+      if (v.plan_km != null) { m.set(v.id, { km: v.plan_km, missing: 0, road: true }); continue }
+      const pts = v.stops.map((st) => { const b = st.box_id ? byId.get(st.box_id) : undefined; return { lat: st.lat ?? b?.lat ?? null, lng: st.lng ?? b?.lng ?? null } })
+      const r = routeKm(pts, depot, distanceMeters)
+      m.set(v.id, r ? { ...r, road: false } : null)
     }
     return m
   }, [uploads, boxes, currentWorkspace])
-  const uploadKm = (u: Upload) => { const ks = u.routes.map((v) => kmOf.get(v.id)).filter((k): k is number => k != null); return ks.length ? { total: ks.reduce((a, b) => a + b, 0), avg: ks.reduce((a, b) => a + b, 0) / ks.length, n: ks.length } : null }
+  const uploadKm = (u: Upload) => {
+    const ks = u.routes.map((v) => kmOf.get(v.id)).filter((k): k is { km: number; missing: number; road: boolean } => !!k)
+    if (!ks.length) return null
+    const total = ks.reduce((a, b) => a + b.km, 0)
+    return { total, avg: total / ks.length, n: ks.length, missing: ks.reduce((a, b) => a + b.missing, 0), air: ks.some((k) => !k.road) }
+  }
   const selIdx = Math.max(0, sel ? uploads.findIndex((u) => u.key === sel) : uploads.length - 1)
 
   if (isLoading) return <div className="stack"><h2>Járat-változások</h2><Skeleton rows={6} /></div>
@@ -74,7 +82,7 @@ export default function RouteChanges() {
         <div className="card-title" style={{ margin: 0 }}><Icon name="navigation" />Km járatonként, feltöltésenként</div>
         <KmBars uploads={uploads} codes={routeCodes} kmOf={kmOf} />
         <Legend codes={routeCodes} />
-        <div className="tiny muted">Légvonalbeli távolság a raktártól a boxokon át vissza a raktárig (a közúti ennél hosszabb). Az oszlop felett a járat km-e; a feltöltés alatt az összes és a járatonkénti átlag. Ahol egy járat valamelyik boxának nincs koordinátája (régebbi feltöltések, időközben törölt box), ott nincs oszlop, és a zárójel mutatja, hány járat számít.</div>
+        <div className="tiny muted">A járat közúti hossza az Alza tervfájlja szerint (raktár → boxok → raktár). Az oszlop felett a járat km-e; a feltöltés alatt az összes és a járatonkénti átlag. A „~” jelű, halványabb oszlop: ahhoz a feltöltéshez nincs km a fájlból, ezért légvonalban számolt (a közúti ennél jóval hosszabb), és a jegyzékből időközben törölt box kimaradt belőle.</div>
       </div>
 
       <div className="card stack" style={{ gap: 8 }}>
@@ -95,7 +103,7 @@ export default function RouteChanges() {
             <button key={u.key} type="button" className="between" style={{ background: active ? 'var(--primary-ghost)' : 'none', border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 10, padding: 8, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }} onClick={() => setSel(u.key)}>
               <div style={{ minWidth: 0 }}>
                 <div className="small" style={{ fontWeight: 700 }}>{formatDateTime(u.at)} <span className="muted" style={{ fontWeight: 500 }}>· {u.source ?? 'ismeretlen fájl'}</span></div>
-                <div className="tiny muted">{u.by ? data?.names[u.by] ?? '–' : '–'} · {u.routes.length} járat · {d.totals.boxes} box{i > 0 ? ` (${d.totals.boxes - d.totals.prevBoxes >= 0 ? '+' : ''}${d.totals.boxes - d.totals.prevBoxes})` : ''}{(() => { const k = uploadKm(u); return k ? ` · ${fmtKm(k.total)} km összesen, átlag ${fmtKm(k.avg)} km/járat${k.n < u.routes.length ? ` (${k.n}/${u.routes.length} járatnál van koordináta)` : ''}` : '' })()}</div>
+                <div className="tiny muted">{u.by ? data?.names[u.by] ?? '–' : '–'} · {u.routes.length} járat · {d.totals.boxes} box{i > 0 ? ` (${d.totals.boxes - d.totals.prevBoxes >= 0 ? '+' : ''}${d.totals.boxes - d.totals.prevBoxes})` : ''}{(() => { const k = uploadKm(u); return k ? ` · ${k.air ? '~' : ''}${fmtKm(k.total)} km összesen, átlag ${fmtKm(k.avg)} km/járat${k.air ? ' (légvonal)' : ''}${k.missing ? ` (${k.missing} törölt box nélkül)` : ''}` : '' })()}</div>
               </div>
               <div className="chips" style={{ gap: 4, flexShrink: 0 }}>
                 {i === 0 ? <span className="badge">első</span> : <>
@@ -114,7 +122,7 @@ export default function RouteChanges() {
 
       <div className="card stack" style={{ gap: 10 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Részletek — {formatDateTime(cur.at)}{prev ? <span className="muted" style={{ fontWeight: 500 }}> (az előzőhöz, {formatDateTime(prev.at)}, képest)</span> : <span className="muted" style={{ fontWeight: 500 }}> (első betöltés)</span>}</div>
-        {curDiff.routes.map((r) => <RouteDetail key={r.code} r={r} upload={cur} km={(() => { const v = cur.routes.find((x) => x.code === r.code); return v ? kmOf.get(v.id) ?? null : null })()} prevKm={(() => { const v = prev?.routes.find((x) => x.code === r.code); return v ? kmOf.get(v.id) ?? null : null })()} />)}
+        {curDiff.routes.map((r) => <RouteDetail key={r.code} r={r} upload={cur} km={(() => { const v = cur.routes.find((x) => x.code === r.code); return v ? kmOf.get(v.id) ?? null : null })()} prevKm={(() => { const v = prev?.routes.find((x) => x.code === r.code); return v ? kmOf.get(v.id)?.km ?? null : null })()} />)}
       </div>
     </div>
   )
@@ -166,9 +174,9 @@ function StackedBars({ uploads, codes }: { uploads: Upload[]; codes: string[] })
 }
 
 // Csoportos oszlopok: feltöltésenként járatonként a légvonalbeli km, alatta az összes és az átlag
-function KmBars({ uploads, codes, kmOf }: { uploads: Upload[]; codes: string[]; kmOf: Map<string, number | null> }) {
+function KmBars({ uploads, codes, kmOf }: { uploads: Upload[]; codes: string[]; kmOf: Map<string, { km: number; missing: number; road: boolean } | null> }) {
   const W = 640, H = 220, padL = 32, padB = 40, padT = 16
-  const all = uploads.flatMap((u) => u.routes.map((v) => kmOf.get(v.id) ?? 0))
+  const all = uploads.flatMap((u) => u.routes.map((v) => kmOf.get(v.id)?.km ?? 0))
   const max = Math.max(1, ...all)
   const slot = (W - padL - 8) / uploads.length
   const bw = Math.max(6, Math.min(26, (slot - 12) / codes.length))
@@ -178,18 +186,18 @@ function KmBars({ uploads, codes, kmOf }: { uploads: Upload[]; codes: string[]; 
       {[0, 0.5, 1].map((f) => <g key={f}><line x1={padL} x2={W} y1={y(max * f)} y2={y(max * f)} stroke="var(--border)" /><text x={padL - 4} y={y(max * f) + 4} fontSize="10" textAnchor="end" fill="var(--text-dim)">{Math.round(max * f)}</text></g>)}
       {uploads.map((u, i) => {
         const x0 = padL + 8 + i * slot + (slot - bw * codes.length) / 2
-        const ks = u.routes.map((v) => kmOf.get(v.id)).filter((k): k is number => k != null)
-        const total = ks.reduce((a, b) => a + b, 0), avg = ks.length ? total / ks.length : 0
+        const ks = u.routes.map((v) => kmOf.get(v.id)).filter((k): k is { km: number; missing: number; road: boolean } => !!k)
+        const total = ks.reduce((a, b) => a + b.km, 0), avg = ks.length ? total / ks.length : 0, miss = ks.some((k) => !k.road) ? 1 : 0
         return (
           <g key={u.key}>
             {codes.map((c, ci) => {
               const v = u.routes.find((r) => r.code === c)
               const k = v ? kmOf.get(v.id) : undefined
-              if (k == null) return null
-              return <g key={c}><rect x={x0 + ci * bw} y={y(k)} width={bw - 2} height={y(0) - y(k)} fill={routeColor(ci)} rx={2}><title>{c} járat: {fmtKm(k)} km</title></rect><text x={x0 + ci * bw + bw / 2 - 1} y={y(k) - 3} fontSize="9" textAnchor="middle" fill="var(--text)">{Math.round(k)}</text></g>
+              if (!k) return null
+              return <g key={c}><rect x={x0 + ci * bw} y={y(k.km)} width={bw - 2} height={y(0) - y(k.km)} fill={routeColor(ci)} rx={2} opacity={k.road ? 1 : 0.55}><title>{c} járat: {k.road ? '' : '~'}{fmtKm(k.km)} km{k.road ? ' (terv szerint)' : ' légvonalban'}{k.missing ? ` (${k.missing} törölt box nélkül)` : ''}</title></rect><text x={x0 + ci * bw + bw / 2 - 1} y={y(k.km) - 3} fontSize="9" textAnchor="middle" fill="var(--text)">{k.road ? '' : '~'}{Math.round(k.km)}</text></g>
             })}
             <text x={padL + 8 + i * slot + slot / 2} y={H - 22} fontSize="10" textAnchor="middle" fill="var(--text-dim)">{shortDate(u.at)}</text>
-            {ks.length > 0 && <text x={padL + 8 + i * slot + slot / 2} y={H - 8} fontSize="10" fontWeight="700" textAnchor="middle" fill="var(--text)">{fmtKm(total)} km · átl. {fmtKm(avg)}{ks.length < u.routes.length ? ` (${ks.length}/${u.routes.length})` : ''}</text>}
+            {ks.length > 0 && <text x={padL + 8 + i * slot + slot / 2} y={H - 8} fontSize="10" fontWeight="700" textAnchor="middle" fill="var(--text)">{miss ? '~' : ''}{fmtKm(total)} km · átl. {fmtKm(avg)}</text>}
           </g>
         )
       })}
@@ -224,7 +232,7 @@ function ChangeBars({ uploads, diffs }: { uploads: Upload[]; diffs: UploadDiff[]
   )
 }
 
-function RouteDetail({ r, upload, km, prevKm }: { r: UploadDiff['routes'][number]; upload: Upload; km: number | null; prevKm: number | null }) {
+function RouteDetail({ r, upload, km, prevKm }: { r: UploadDiff['routes'][number]; upload: Upload; km: { km: number; missing: number; road: boolean } | null; prevKm: number | null }) {
   const [open, setOpen] = useState(r.status !== 'same')
   const ver = upload.routes.find((v) => v.code === r.code)
   const badge = r.status === 'new' ? <span className="badge success">új járat</span> : r.status === 'removed' ? <span className="badge danger">megszűnt</span> : r.status === 'same' ? <span className="badge">nincs változás</span> : <span className="badge warning">változott</span>
@@ -232,7 +240,7 @@ function RouteDetail({ r, upload, km, prevKm }: { r: UploadDiff['routes'][number
   return (
     <div className="stack" style={{ gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
       <button type="button" className="between" style={{ background: 'none', border: 'none', padding: 0, width: '100%', textAlign: 'left', color: 'inherit', cursor: 'pointer', gap: 8 }} onClick={() => setOpen((o) => !o)}>
-        <div className="small" style={{ fontWeight: 800 }}>{r.code} járat <span className="muted" style={{ fontWeight: 500 }}>· {r.prevCount !== r.count && r.status !== 'new' ? `${r.prevCount} → ` : ''}{r.count} box{km != null ? ` · ${prevKm != null && Math.abs(prevKm - km) >= 0.05 ? `${fmtKm(prevKm)} → ` : ''}${fmtKm(km)} km${r.count ? ` (${fmtKm(km / r.count)} km/box)` : ''}` : ''}{ver?.planned_start ? ` · indulás ${hm(ver.planned_start)}` : ''}</span></div>
+        <div className="small" style={{ fontWeight: 800 }}>{r.code} járat <span className="muted" style={{ fontWeight: 500 }}>· {r.prevCount !== r.count && r.status !== 'new' ? `${r.prevCount} → ` : ''}{r.count} box{km ? ` · ${prevKm != null && Math.abs(prevKm - km.km) >= 0.05 ? `${fmtKm(prevKm)} → ` : ''}${km.road ? '' : '~'}${fmtKm(km.km)} km${r.count ? ` (${fmtKm(km.km / r.count)} km/box)` : ''}${km.road ? '' : ' légvonal'}${km.missing ? ` · ${km.missing} törölt box nélkül` : ''}` : ''}{ver?.planned_start ? ` · indulás ${hm(ver.planned_start)}` : ''}</span></div>
         <div className="row" style={{ gap: 6, flexShrink: 0 }}>{badge}<Icon name={open ? 'chevron-up' : 'chevron-down'} className="muted" /></div>
       </button>
       {open && (

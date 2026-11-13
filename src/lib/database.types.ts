@@ -1948,6 +1948,8 @@ export type Database = {
           sort_order: number
           stops_notified_at: string | null
           workspace_id: string
+          plan_back_km: number | null
+          plan_km: number | null
         }
         Insert: {
           active?: boolean
@@ -1962,6 +1964,8 @@ export type Database = {
           sort_order?: number
           stops_notified_at?: string | null
           workspace_id: string
+          plan_back_km?: number | null
+          plan_km?: number | null
         }
         Update: {
           active?: boolean
@@ -1976,6 +1980,8 @@ export type Database = {
           sort_order?: number
           stops_notified_at?: string | null
           workspace_id?: string
+          plan_back_km?: number | null
+          plan_km?: number | null
         }
         Relationships: [
           {
@@ -2151,6 +2157,8 @@ export type Database = {
           source: string | null
           stops: Json
           workspace_id: string
+          back_km: number | null
+          plan_km: number | null
         }
         Insert: {
           code: string
@@ -2163,6 +2171,8 @@ export type Database = {
           source?: string | null
           stops?: Json
           workspace_id: string
+          back_km?: number | null
+          plan_km?: number | null
         }
         Update: {
           code?: string
@@ -2175,6 +2185,8 @@ export type Database = {
           source?: string | null
           stops?: Json
           workspace_id?: string
+          back_km?: number | null
+          plan_km?: number | null
         }
         Relationships: []
       }
@@ -2191,6 +2203,7 @@ export type Database = {
           route_id: string
           sort_order: number
           workspace_id: string
+          dist_prev_km: number | null
         }
         Insert: {
           box_id: string
@@ -2204,6 +2217,7 @@ export type Database = {
           route_id: string
           sort_order?: number
           workspace_id: string
+          dist_prev_km?: number | null
         }
         Update: {
           box_id?: string
@@ -2217,6 +2231,7 @@ export type Database = {
           route_id?: string
           sort_order?: number
           workspace_id?: string
+          dist_prev_km?: number | null
         }
         Relationships: [
           {
@@ -2873,6 +2888,8 @@ export type Database = {
       push_inspection_reminder: { Args: { p_id: string }; Returns: undefined }
       replace_route_stops: {
         Args: {
+          p_back_km?: number
+          p_plan_km?: number
           p_planned_end?: string
           p_planned_start?: string
           p_route_id: string

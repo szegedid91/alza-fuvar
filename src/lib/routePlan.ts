@@ -5,10 +5,12 @@ export type PlanStop = {
   order: number; code: string; name: string; address: string | null
   lat: number | null; lng: number | null
   eta: string | null; etd: string | null; deadline: string | null
+  distKm: number | null // közúti km az előző megállótól (az elsőnél a raktártól)
 }
 export type PlanRoute = {
   vehicle: string; code: string
   start: string | null; end: string | null; distanceKm: number | null
+  backKm: number | null // közúti km az utolsó boxtól vissza a raktárba
   stops: PlanStop[]
 }
 
@@ -62,18 +64,19 @@ export async function parseRoutePlan(file: File): Promise<PlanRoute[]> {
   const cVeh = findCol(h, /^vehicle$/i), cOrd = findCol(h, /po[řr]ad[ií]|order|sorrend/i), cEta = findCol(h, /^eta$/i), cEtd = findCol(h, /^etd$/i)
   const cDl = findCol(h, /korekce|deadline|hat[aá]rid/i), cCode = findCol(h, /identifik|zak[aá]zk|box|k[oó]d/i), cName = findCol(h, /zast[aá]vka|stop|meg[aá]ll/i)
   const cAddr = findCol(h, /adres|address|c[ií]m/i), cLng = findCol(h, /^x\b|d[eé]lka|lng|lon/i), cLat = findCol(h, /^y\b|[šs][ií][řr]ka|lat/i)
+  const cDist = findCol(h, /vzd[aá]lenost z|dist.*prev|el[őo]z[őo]t[őo]l/i)
   if (cVeh < 0 || cCode < 0) throw new Error('Hiányzik a Vehicle vagy az Identifikátor Zakázky oszlop.')
 
   const byVehicle = new Map<string, PlanRoute>()
   for (const row of details.slice(1)) {
     const vehicle = str(row[cVeh]); if (!vehicle) continue
     let r = byVehicle.get(vehicle)
-    if (!r) { r = { vehicle, code: routeCodeOf(vehicle), start: null, end: null, distanceKm: null, stops: [] }; byVehicle.set(vehicle, r) }
+    if (!r) { r = { vehicle, code: routeCodeOf(vehicle), start: null, end: null, distanceKm: null, backKm: null, stops: [] }; byVehicle.set(vehicle, r) }
     const code = str(row[cCode])
     if (!code) {
       // kezdő / záró sor (depó): az ETA az indulás, illetve a visszaérkezés
       const t = excelTime(row[cEta])
-      if (r.stops.length === 0 && !r.start) r.start = t; else r.end = t
+      if (r.stops.length === 0 && !r.start) r.start = t; else { r.end = t; r.backKm = num(cDist >= 0 ? row[cDist] : null) }
       continue
     }
     const order = num(cOrd >= 0 ? row[cOrd] : null) ?? r.stops.length + 1
@@ -83,6 +86,7 @@ export async function parseRoutePlan(file: File): Promise<PlanRoute[]> {
       address: str(cAddr >= 0 ? row[cAddr] : null),
       lat: num(cLat >= 0 ? row[cLat] : null), lng: num(cLng >= 0 ? row[cLng] : null),
       eta: excelTime(cEta >= 0 ? row[cEta] : null), etd: excelTime(cEtd >= 0 ? row[cEtd] : null), deadline: excelTime(cDl >= 0 ? row[cDl] : null),
+      distKm: num(cDist >= 0 ? row[cDist] : null),
     })
   }
   // összefoglaló lap: tervezett kezdés / vége / km, ha van
