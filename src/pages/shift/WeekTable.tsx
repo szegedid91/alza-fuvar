@@ -15,6 +15,8 @@ import { sendPush } from '../../lib/push'
 import { todayISO, formatDate } from '../../lib/labels'
 import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG, weekLabel } from '../../lib/calendar'
 import Icon from '../../components/Icon'
+import CrewDaysCard from '../../components/CrewDaysCard'
+import { crewDayCounts } from '../../lib/crewDayCounts'
 import type { Tables } from '../../lib/database.types'
 import { errMsg } from '../../lib/errors'
 import { nextShiftValues, isEmptyShift } from '../../lib/shiftCell'
@@ -174,25 +176,11 @@ export default function WeekTable() {
   }
   const isGroupStart = (idx: number) => idx === 0 || (rowCars[idx - 1].category_id ?? '') !== (rowCars[idx].category_id ?? '')
 
-  // Fejenkénti napszám ezen a héten (mint a táblázat K–L oszlopa)
+  // Fejenkénti napszám ezen a héten (összes, Box, XL, betanuló) — a havi nézettel közös számítás
   const weekCounts = useMemo(() => {
-    const byUser = new Map<string, Set<string>>()
-    for (const s of shifts ?? []) {
-      for (const uid of [s.driver_id, s.loader_id, s.trainee_id]) {
-        if (!uid) continue
-        if (!byUser.has(uid)) byUser.set(uid, new Set())
-        byUser.get(uid)!.add(s.work_date)
-      }
-    }
-    // Minden nem-admin/nem-menedzser tag felsorolva (0 nappal is);
-    // admin/menedzser csak akkor, ha ténylegesen be van osztva a héten
-    return (members ?? [])
-      .filter((m) => (m.role !== 'admin' && m.role !== 'manager') || (byUser.get(m.id)?.size ?? 0) > 0)
-      .map((m) => ({
-        id: m.id, name: m.full_name || m.email || '—', count: byUser.get(m.id)?.size ?? 0,
-      }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [shifts, members])
+    const isBoxCar = new Map((cars ?? []).map((c) => [c.id, !!c.category?.box_sheet]))
+    return crewDayCounts(shifts ?? [], members ?? [], (id) => !!isBoxCar.get(id))
+  }, [shifts, members, cars])
 
   // Ütközés: ugyanaz az ember aznap több AUTÓRA beosztva (ugyanannak az autónak
   // a két köre nem ütközés — szezonban egy ember mehet mindkettőt)
@@ -690,18 +678,7 @@ export default function WeekTable() {
         </div>
       )}
 
-      <div className="card stack">
-        <div className="card-title"><Icon name="users" />Napok ezen a héten</div>
-        {weekCounts.length === 0 && <div className="tiny muted">Nincs munkatárs ezen a munkaterületen.</div>}
-        <div className="grid-2">
-          {weekCounts.map((r) => (
-            <div key={r.id} className="between">
-              <span className="small" style={{ fontWeight: r.count > 0 ? 700 : 400, color: r.count === 0 ? 'var(--text-dim)' : undefined }}>{r.name}</span>
-              <span className={`badge ${r.count > 0 ? 'primary' : ''}`}>{r.count}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <CrewDaysCard title="Napok ezen a héten" rows={weekCounts} />
     </>
   )
 }
