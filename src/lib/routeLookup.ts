@@ -17,9 +17,9 @@ export function findBoxInRoutes(
       placements.get(s.box_id)!.push({ route: r.code, index: i + 1, total: stops.length, eta: s.eta, deadline: s.deadline })
     })
   }
-  const hits = searchBoxes(boxes, query, limit * 2).map((box) => ({ box, placements: placements.get(box.id) ?? [] }))
-  // a járatban lévők elöl
-  return hits.sort((a, b) => (b.placements.length > 0 ? 1 : 0) - (a.placements.length > 0 ? 1 : 0)).slice(0, limit)
+  // csak a járatainkon lévő boxok közt keresünk — a jegyzék többi (idegen) boxa nem érdekes itt
+  const ours = boxes.filter((b) => placements.has(b.id))
+  return searchBoxes(ours, query, limit).map((box) => ({ box, placements: placements.get(box.id) ?? [] }))
 }
 
 // Légvonalbeli távolság a járat szakaszain: raktár → 1. box → … → utolsó box → raktár.

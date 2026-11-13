@@ -5,14 +5,13 @@ import type { AlzaBox } from './boxSheet'
 const box = (id: string, code: string, name: string): AlzaBox => ({ id, code, name, address: null, lat: null, lng: null, description: null, notes: null, image_url: null, updated_at: '', last_seen_at: null, active: true } as unknown as AlzaBox)
 
 describe('findBoxInRoutes', () => {
-  it('melyik járat hanyadik címe; a járatban lévő találat elöl', () => {
+  it('melyik járat hanyadik címe; csak a járatainkon lévő boxok közt keres', () => {
     const boxes = [box('1', 'AB9001', 'Pomáz'), box('2', 'AB9002', 'Pomáz Fő tér'), box('3', 'AB9003', 'Pilis')]
     const routes = [{ id: 'r', code: 'R' }, { id: 'g', code: 'G' }]
     const stops = { r: [{ box_id: '3', eta: '06:00:00', deadline: null }, { box_id: '2', eta: '06:20:00', deadline: '10:00:00' }], g: [{ box_id: '2', eta: null, deadline: null }] }
     const hits = findBoxInRoutes(boxes, routes, stops, 'pomáz')
-    expect(hits.map((h) => h.box.code)).toEqual(['AB9002', 'AB9001'])
+    expect(hits.map((h) => h.box.code)).toEqual(['AB9002'])
     expect(hits[0].placements).toEqual([{ route: 'R', index: 2, total: 2, eta: '06:20:00', deadline: '10:00:00' }, { route: 'G', index: 1, total: 1, eta: null, deadline: null }])
-    expect(hits[1].placements).toEqual([])
   })
 })
 
