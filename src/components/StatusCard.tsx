@@ -145,29 +145,28 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
         <span className="tiny muted">a csoportot a WhatsAppban választod</span>
       </div>
 
-      <div className="grid-2" style={{ gap: 8 }}>
-        {simple.map((kind) => {
+      {/* Egy nagy gomb: a soron következő jelzés. A többi kicsiben, alatta — koppintható marad (javításhoz, ismétléshez). */}
+      {(() => {
+        const button = (kind: StatusKind, big: boolean) => {
           const meta = STATUS_META[kind]
           const last = lastOf(kind)
+          const bigStyle: React.CSSProperties = { flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px', width: '100%' }
+          const smallStyle: React.CSSProperties = { gap: 6, minHeight: 36, padding: '4px 10px', fontSize: 13, opacity: inactive(kind) ? 0.35 : 0.8, pointerEvents: inactive(kind) ? 'none' : undefined }
           if (kind === 'settled') {
             return (
-              <button key={kind} type="button" className={`btn ${nextKind === 'settled' ? '' : last ? 'secondary' : ''}`}
-                style={{ flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px' }}
-                onClick={() => setSettleCamera(true)}>
-                <Icon name="camera" />
-                <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
+              <button key={kind} type="button" className={big ? 'btn' : 'btn ghost sm auto'} style={big ? bigStyle : smallStyle} onClick={() => setSettleCamera(true)}>
+                <Icon name="camera" size={big ? 24 : 14} />
+                <span style={{ fontWeight: 800 }}>{meta.label}</span>
                 <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : 'fotóval'}</span>
               </button>
             )
           }
-          const text = statusText(kind, new Date(), name, route)
-          const target = groupTarget(currentWorkspace, text)
+          const target = groupTarget(currentWorkspace, statusText(kind, new Date(), name, route))
           return (
-            <a key={kind} className={`btn ${kind === nextKind ? '' : 'secondary'}`} href={target.url} target="_blank" rel="noopener noreferrer" aria-disabled={inactive(kind)}
+            <a key={kind} className={big ? 'btn' : 'btn ghost sm auto'} href={target.url} target="_blank" rel="noopener noreferrer" aria-disabled={inactive(kind)}
               title={inactive(kind) ? 'Minden mai kör kész — már nem kell kiindulni' : undefined}
-              style={{ textDecoration: 'none', flexDirection: 'column', gap: 2, minHeight: 64, padding: '8px 4px', opacity: kind === nextKind ? 1 : inactive(kind) ? 0.35 : 0.7, pointerEvents: inactive(kind) ? 'none' : undefined }}
-              // Az üzenet ideje a KOPPINTÁS pillanata — a href-et a navigáció előtt frissítjük;
-              // csoport-linknél a szöveg a vágólapra megy
+              style={{ textDecoration: 'none', ...(big ? bigStyle : smallStyle) }}
+              // Az üzenet ideje a KOPPINTÁS pillanata — a href-et a navigáció előtt frissítjük
               onClick={(e) => {
                 // LOG-37: amíg az előző koppintás rögzítése fut, a második nem rögzít újra
                 if (sending || inactive(kind)) { e.preventDefault(); return }
@@ -179,13 +178,21 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
                 setSending(kind)
                 void record(kind, at).finally(() => setSending(null))
               }}>
-              <Icon name={meta.icon} />
-              <span style={{ fontSize: 13, fontWeight: 800 }}>{meta.label}</span>
+              <Icon name={meta.icon} size={big ? 24 : 14} />
+              <span style={{ fontWeight: 800 }}>{meta.label}</span>
               <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>
             </a>
           )
-        })}
-      </div>
+        }
+        return (
+          <>
+            {nextKind && button(nextKind, true)}
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              {simple.filter((k) => k !== nextKind).map((k) => button(k, false))}
+            </div>
+          </>
+        )
+      })()}
 
       {moreCamera && (
         <MultiShotCamera title="További visszáru-fotók" sendLabel="Mentés és küldés" hint="Fotózd le, ami az előző képekről kimaradt — minden visszahozott tétel látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
