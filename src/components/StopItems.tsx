@@ -94,7 +94,7 @@ export default function StopItems({ stopId, items, readOnly = false }: { stopId:
           {!readOnly && <ConfirmButton className="icon-btn" confirmLabel="Törlés?" onConfirm={() => remove.mutate(it.id)}><Icon name="trash" size={14} /></ConfirmButton>}
         </div>
       ))}
-      {items.length === 0 && !adding && <div className="tiny muted">Sérült, ismeretlen, vonalkód nélküli, rossz ládába címkézett, máshová berakott, reklamációs vagy ADMIN csomagnál: „+ Eltérés” — kóddal és fotóval, így a raktár és az Alza is látja.</div>}
+      {items.length === 0 && !adding && <div className="tiny muted">Sérült, ismeretlen, vonalkód nélküli vagy rossz ládába címkézett csomagnál: „+ Eltérés” — kóddal és fotóval.</div>}
       {adding && (
         <div className="stack" style={{ gap: 8, padding: 8, borderRadius: 10, background: 'var(--primary-ghost)' }}>
           <div className="chips" style={{ gap: 6 }}>

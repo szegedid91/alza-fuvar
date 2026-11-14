@@ -5,13 +5,16 @@ export const ITEM_KINDS: { key: ItemKind; label: string; short: string; hint: st
   { key: 'unknown', label: 'Ismeretlen csomag', short: 'Ismeretlen', hint: 'Nincs a listán, nem tudni, hova való — fotó a címkéről' },
   { key: 'no_barcode', label: 'Nincs vonalkód', short: 'Nincs vonalkód', hint: 'A címke hiányzik vagy olvashatatlan — fotó' },
   { key: 'mislabelled_crate', label: 'Rossz ládába címkézve', short: 'Rossz láda', hint: 'Másik box ládájában volt — pótolod a megfelelő boxnál' },
-  { key: 'placed_elsewhere', label: 'Máshová berakva', short: 'Máshová', hint: 'Nem a tervezett boxba került — írd meg, hova' },
-  { key: 'complaint_pickup', label: 'Reklamációs visszavét', short: 'Reklamáció', hint: 'A boxból kivett reklamációs csomag' },
-  { key: 'admin', label: 'ADMIN csomag', short: 'ADMIN', hint: 'ADMIN jelölésű csomag — fotó a címkéről' },
   { key: 'other', label: 'Egyéb', short: 'Egyéb', hint: 'Más eltérés — írd le röviden' },
 ]
-export const itemKindLabel = (k: string): string => ITEM_KINDS.find((x) => x.key === k)?.label ?? k
-export const itemKindShort = (k: string): string => ITEM_KINDS.find((x) => x.key === k)?.short ?? k
+// Korábban választható fajták — újat már nem lehet felvenni belőlük, de a régi tételek címkéje megmarad
+const LEGACY_ITEM_KINDS: Record<string, { label: string; short: string }> = {
+  placed_elsewhere: { label: 'Máshová berakva', short: 'Máshová' },
+  complaint_pickup: { label: 'Reklamációs visszavét', short: 'Reklamáció' },
+  admin: { label: 'ADMIN csomag', short: 'ADMIN' },
+}
+export const itemKindLabel = (k: string): string => ITEM_KINDS.find((x) => x.key === k)?.label ?? LEGACY_ITEM_KINDS[k]?.label ?? k
+export const itemKindShort = (k: string): string => ITEM_KINDS.find((x) => x.key === k)?.short ?? LEGACY_ITEM_KINDS[k]?.short ?? k
 
 export type IssueKind = 'not_opening' | 'scanner' | 'emergency' | 'no_new' | 'security' | 'other'
 export const ISSUE_KINDS: { key: IssueKind; label: string; hint: string; urgent?: boolean }[] = [
