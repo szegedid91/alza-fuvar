@@ -22,6 +22,8 @@ import { roundStates } from '../lib/rounds'
 import { statusText, openWhatsApp } from '../lib/groupMessage'
 import { BoxIssueButton } from './BoxIssue'
 
+type RunRow = { route_id: string; round: number; car_id: string; current_index: number; current_stop_id: string | null; current_box_id: string | null }
+
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
 // a választás a telefonon marad). A haladás az adatbázisban van (autó + járat +
@@ -88,8 +90,22 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
         if (logErr) throw logErr
       }
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['route-runs'] }),
-    onError: (e) => toast.error('Nem sikerült menteni: ' + (errMsg(e, 'ismeretlen hiba'))),
+    // Azonnali léptetés: a kártya a koppintásra rögtön a következő boxra vált, a mentés a háttérben megy
+    // (eddig két írás + egy újraolvasás után váltott — gyenge térerőn ez másodpercek). Hiba esetén visszaáll.
+    onMutate: async (v) => {
+      const key = ['route-runs', currentWorkspaceId, date]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<RunRow[]>(key)
+      const row: RunRow = { route_id: v.routeId, round: v.round, car_id: v.carId, current_index: v.index, current_stop_id: v.stopId ?? null, current_box_id: v.boxId ?? null }
+      const same = (r: RunRow) => r.route_id === v.routeId && r.round === v.round && r.car_id === v.carId
+      qc.setQueryData<RunRow[]>(key, (old) => ((old ?? []).some(same) ? (old ?? []).map((r) => (same(r) ? row : r)) : [...(old ?? []), row]))
+      return { key, prev }
+    },
+    onError: (e, _v, ctx) => {
+      if (ctx) qc.setQueryData(ctx.key, ctx.prev)
+      toast.error('Nem sikerült menteni — visszaálltunk az előző boxra: ' + (errMsg(e, 'ismeretlen hiba')))
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['route-runs'] }),
   })
 
   if (!myShifts || myShifts.length === 0) return null
@@ -142,7 +158,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
                 <Icon name="clock" size={18} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
                   <div className="small" style={{ fontWeight: 700 }}>{roundLabel} — következik</div>
-                  <div className="tiny muted">{stops.length} cím · az „Elszámoltam” vagy a „Kiindultam” után nyílik meg</div>
+                  <div className="tiny muted">{stops.length} cím</div>
                 </div>
               </div>
               <span className="badge num">{sh.plate}</span>
