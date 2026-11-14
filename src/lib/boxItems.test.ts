@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanPackageCode, issueMessage, issueStats, itemLines } from './boxItems'
+import { ISSUE_KINDS, cleanPackageCode, issueKindLabel, issueMessage, issueStats, itemLines } from './boxItems'
 
 describe('csomagszintű eltérések', () => {
   it('a csoportüzenet sorai', () => {
@@ -27,5 +27,13 @@ describe('issueStats', () => {
     ])
     expect(s[0]).toMatchObject({ label: 'AB1', total: 2, open: 1, security: 0, last: '2026-11-11T01:00:00Z', kinds: { not_opening: 1, scanner: 1 } })
     expect(s[1]).toMatchObject({ label: 'AB2', total: 1, security: 1 })
+  })
+})
+
+describe('box-hiba fajták', () => {
+  it('csak három választható; a régi fajták címkéje megmarad', () => {
+    expect(ISSUE_KINDS.map((k) => k.key)).toEqual(['not_opening', 'scanner', 'other'])
+    expect(issueKindLabel('security')).toBe('Biztonsági esemény')
+    expect(issueKindLabel('emergency')).toBe('Emergency kidobott')
   })
 })

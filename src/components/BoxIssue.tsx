@@ -14,9 +14,8 @@ import CameraCapture from './CameraCapture'
 import PhotoThumb from './PhotoThumb'
 import Icon from './Icon'
 
-// Box-hiba bejelentés (nem nyílik, szkenner, emergency, nem enged újat, biztonsági esemény):
-// az appban rögzül (statisztika boxonként), és egy koppintással megy az Alza diszpécsernek a
-// WhatsApp-csoportba. Biztonsági eseménynél a vezetők azonnal pusht kapnak (DB-trigger).
+// Box-hiba bejelentés (nem nyílik a fiók, szkenner hiba, egyéb): az appban rögzül (statisztika
+// boxonként), és egy koppintással megy az Alza diszpécsernek a WhatsApp-csoportba.
 export function BoxIssueButton({ box, stopId = null, courierName }: {
   box: { id: string | null; code: string | null; name?: string | null }; stopId?: string | null; courierName: string
 }) {

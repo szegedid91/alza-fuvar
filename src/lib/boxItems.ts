@@ -17,12 +17,11 @@ export type IssueKind = 'not_opening' | 'scanner' | 'emergency' | 'no_new' | 'se
 export const ISSUE_KINDS: { key: IssueKind; label: string; hint: string; urgent?: boolean }[] = [
   { key: 'not_opening', label: 'Nem nyílik a fiók', hint: 'A box nem nyitja a fiókot / nem engedi behelyezni' },
   { key: 'scanner', label: 'Szkenner hiba', hint: 'Nem olvassa a kódot, lefagy a kijelző' },
-  { key: 'emergency', label: 'Emergency kidobott', hint: 'A rendszer emergencyt dobott, nem enged vissza' },
-  { key: 'no_new', label: 'Nem enged újat', hint: 'Nem lehet új csomagot indítani' },
-  { key: 'security', label: 'Biztonsági esemény', hint: 'Feltört vagy kipakolt box, idegen a boxban, rongálás — a vezető azonnal pusht kap', urgent: true },
-  { key: 'other', label: 'Egyéb hiba', hint: 'Más box-hiba' },
+  { key: 'other', label: 'Egyéb hiba', hint: 'Más box-hiba — írd le röviden' },
 ]
-export const issueKindLabel = (k: string): string => ISSUE_KINDS.find((x) => x.key === k)?.label ?? k
+// Korábban választható fajták — újat már nem lehet felvenni belőlük, de a régi bejelentések címkéje megmarad
+const LEGACY_ISSUE_LABELS: Record<string, string> = { emergency: 'Emergency kidobott', no_new: 'Nem enged újat', security: 'Biztonsági esemény' }
+export const issueKindLabel = (k: string): string => ISSUE_KINDS.find((x) => x.key === k)?.label ?? LEGACY_ISSUE_LABELS[k] ?? k
 
 export interface StopItemLike { kind: string; package_code: string | null; note: string | null; return_to_depot: boolean }
 // A csoportüzenet sorai a csomagszintű eltérésekből: „Sérült: 1612345678 (visszaviszem) — eltört a doboz”
