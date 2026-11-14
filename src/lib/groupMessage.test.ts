@@ -9,7 +9,7 @@ describe('WhatsApp megnyitása', () => {
   it('előbb az app sémája ugyanazon a lapon; ha az app elindult (a lap eltűnt), nincs új fül', async () => {
     vi.useFakeTimers()
     const go = vi.fn(); const open = vi.fn()
-    openWhatsApp('szia', { go, open, isHidden: () => true, delayMs: 100 })
+    openWhatsApp('szia', { go, open, isHidden: () => true, delayMs: 100, watch: () => () => undefined })
     expect(go).toHaveBeenCalledWith('whatsapp://send?text=szia')
     vi.advanceTimersByTime(200)
     expect(open).not.toHaveBeenCalled()
@@ -18,9 +18,21 @@ describe('WhatsApp megnyitása', () => {
   it('ha az app nem indult el (a lap látható maradt), a wa.me nyílik új fülön', () => {
     vi.useFakeTimers()
     const go = vi.fn(); const open = vi.fn()
-    openWhatsApp('szia', { go, open, isHidden: () => false, delayMs: 100 })
+    openWhatsApp('szia', { go, open, isHidden: () => false, delayMs: 100, watch: () => () => undefined })
     vi.advanceTimersByTime(200)
     expect(open).toHaveBeenCalledWith('https://wa.me/?text=szia')
+    vi.useRealTimers()
+  })
+  it('ha a lap közben háttérbe került (az app elindult), akkor sem nyílik fül, ha a várakozás végén már megint látszik', () => {
+    vi.useFakeTimers()
+    const go = vi.fn(); const open = vi.fn()
+    let leave: (() => void) | null = null
+    const stop = vi.fn()
+    openWhatsApp('szia', { go, open, isHidden: () => false, delayMs: 100, watch: (onLeave) => { leave = onLeave; return stop } })
+    leave!()
+    vi.advanceTimersByTime(200)
+    expect(open).not.toHaveBeenCalled()
+    expect(stop).toHaveBeenCalled()
     vi.useRealTimers()
   })
 })

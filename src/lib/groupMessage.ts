@@ -14,12 +14,24 @@ export const whatsappSchemeUrl = (text: string) => `whatsapp://send?text=${encod
 // WhatsApp megnyitása a kész szöveggel a koppintáson belül. Előbb az app sémája (a mi lapunk
 // megmarad, visszaváltáskor az app van elöl — nem egy üres fül); ha az app nem indult el
 // (a lap látható maradt), a wa.me webes változat nyílik új fülön.
-export function openWhatsApp(text: string, deps: { go?: (url: string) => void; open?: (url: string) => void; isHidden?: () => boolean; delayMs?: number } = {}): void {
+export function openWhatsApp(text: string, deps: { go?: (url: string) => void; open?: (url: string) => void; isHidden?: () => boolean; delayMs?: number; watch?: (onLeave: () => void) => () => void } = {}): void {
   const go = deps.go ?? ((url) => { window.location.href = url })
   const open = deps.open ?? ((url) => { window.open(url, '_blank', 'noopener') })
   const isHidden = deps.isHidden ?? (() => document.hidden)
+  // Ha a WhatsApp elindult, a lap háttérbe kerül — de ez telefonon néha csak a 2,5 mp-es
+  // várakozás UTÁN látszik, és akkor feleslegesen nyílt egy wa.me fül is. Ezért a lap
+  // elhagyását (háttérbe kerülés, fókuszvesztés) azonnal figyeljük, és akkor nincs fül.
+  let left = false
+  const watch = deps.watch ?? ((onLeave) => {
+    const h = () => { if (document.hidden) onLeave() }
+    document.addEventListener('visibilitychange', h)
+    window.addEventListener('pagehide', onLeave)
+    window.addEventListener('blur', onLeave)
+    return () => { document.removeEventListener('visibilitychange', h); window.removeEventListener('pagehide', onLeave); window.removeEventListener('blur', onLeave) }
+  })
+  const stop = watch(() => { left = true })
   go(whatsappSchemeUrl(text))
-  setTimeout(() => { if (!isHidden()) open(waUrl(text)) }, deps.delayMs ?? 2500)
+  setTimeout(() => { stop(); if (!left && !isHidden()) open(waUrl(text)) }, deps.delayMs ?? 4000)
 }
 
 export function groupTarget(_ws: GroupWorkspace | null | undefined, text: string): { url: string; viaClipboard: boolean; groupName: string | null } {
