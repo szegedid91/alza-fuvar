@@ -10,7 +10,7 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
 import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
-import { lateMinutes, resolveRunIndex, planTime, planRound } from '../lib/routePlan'
+import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useNavigate } from 'react-router'
 import Icon from './Icon'
@@ -162,7 +162,6 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
         return (
           <RouteCardView key={sh.id} code={codeOf(sh.route_id)} round={sh.round} plate={sh.plate} stops={stops} idx={idx} busy={setIndex.isPending} locked={!active} hasNextRound={i < myShifts.length - 1}
             plannedStart={routes?.find((r) => r.id === sh.route_id)?.planned_start ?? null}
-            planSource={routes?.find((r) => r.id === sh.route_id)?.plan_source ?? null} planImportedAt={routes?.find((r) => r.id === sh.route_id)?.plan_imported_at ?? null}
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes ?? []).includes(stops[idx].box_id)}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
@@ -178,10 +177,10 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, planSource = null, planImportedAt = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet, courierName = 'Futár' }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet, courierName = 'Futár' }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   // a betöltött terv: tervezett indulás (ebből derül ki, melyik körre szól), a fájl neve és a betöltés ideje
-  plannedStart?: string | null; planSource?: string | null; planImportedAt?: string | null
+  plannedStart?: string | null
   // van még kör ma: a „kész” kártya a következő körre irányít, nem a nap végére
   hasNextRound?: boolean
   // az utolsó box leadásakor: „Járat kész” — a WhatsApp azonnal nyílik, a visszaadott
@@ -212,7 +211,6 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
   // a terv idői (érkezés, határidő) csak arra a körre, amelyikre a betöltött terv szól — ott a késés okát kérjük
-  const planIsThisRound = planRound(plannedStart) === (round === 2 ? 2 : 1)
   const curEta = planTime(cur?.eta, round, plannedStart)
   const curDeadline = planTime(cur?.deadline, round, plannedStart)
   const lateNow = lateMinutes(curDeadline, 1)
@@ -236,14 +234,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
               <div className="card-title" style={{ margin: 0 }}><Icon name="map" />{code} járat{round === 2 ? ' · 2. kör' : ''}</div>
               <span className="badge num">{plate}</span>
             </div>
-            {stops.length > 0 && planSource && (
-              <div className="tiny muted">
-                Terv: {planSource}{planImportedAt ? ` · betöltve ${new Date(planImportedAt).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })}` : ''}
-                {planIsThisRound ? '' : ` · a terv a${planRound(plannedStart) === 2 ? ' nappali (5:30-as)' : 'z éjszakai'} körre szól, ezen a körön nincs tervidő`}
-              </div>
-            )}
             {stops.length === 0 ? (
-              <div className="tiny muted">Ehhez a járathoz még nincsenek boxok rendelve — a vezető a Beosztás oldalon, a „Járatok” kártyán adja meg.</div>
+              <div className="tiny muted">Ehhez a járathoz még nincs box — szólj a vezetőnek.</div>
             ) : done ? (
               <div className="stack" style={{ gap: 6 }}>
                 <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--primary-ghost)', border: '1px solid var(--success)' }}>
@@ -254,7 +246,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 </div>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}><Icon name="warehouse" size={18} /> {depot.name}</div>
-                  {depot.address ? <div className="small muted">{depot.address}</div> : <div className="tiny muted">A raktár címét az admin a Járatok oldalon adhatja meg.</div>}
+                  {depot.address && <div className="small muted">{depot.address}</div>}
                 </div>
                 <a className="btn" href={navUrl(navApp, depot.lat, depot.lng)} target="_blank" rel="noopener noreferrer">
                   <Icon name="navigation" />Navigálás a raktárba ({NAV_LABEL[navApp]})
