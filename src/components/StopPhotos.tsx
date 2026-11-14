@@ -204,7 +204,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
           ))}
         </div>
       )}
-      <div className="tiny muted">A kép az appban is megmarad (a vezetők látják), a „Küldés a csoportba” a telefon megosztás-menüjén át a WhatsApp-csoportba küldi a szöveggel együtt.</div>
+      <div className="tiny muted">A kép az appban marad; a „Küldés a csoportba” a WhatsAppba küldi a szöveggel.</div>
     </div>
   )
 }

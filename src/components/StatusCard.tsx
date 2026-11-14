@@ -201,11 +201,11 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
 
       {roundsOver && (
         <div className="tiny" style={{ color: 'var(--success)', fontWeight: 600 }}>
-          <Icon name="check-circle" size={12} style={{ verticalAlign: -2 }} /> Minden mai kör kész. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része, takarítás, végül „Autó lerakva”.
+          <Icon name="check-circle" size={12} style={{ verticalAlign: -2 }} /> Minden kör kész. Most: „Elszámoltam” a visszáruval, utána takarítás és „Autó lerakva”.
         </div>
       )}
       <p className="tiny muted" style={{ margin: 0 }}>
-        Koppints, és a WhatsApp a kész üzenettel nyílik — válaszd ki a csoportot, küldd el. Az idő itt is rögzül, a vezetők látják. Az „Elszámoltam” fotóval megy: egy vagy több kép, a Küldésre a WhatsApp nyílik a képekkel — a képek az appba is mentődnek.
+        Koppints: a WhatsApp a kész üzenettel nyílik, válaszd a csoportot és küldd el.
       </p>
     </div>
   )

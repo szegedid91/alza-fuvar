@@ -118,6 +118,22 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
             </div>
           )
         }
+        // kész kör, már a raktárban („Megérkeztem” a „Járat kész” után): csak egy sor — a navigálás a raktárba már nem kell
+        const arrivedBack = !!state.doneAt && (todayStatus ?? []).some((e) => e.kind === 'arrived' && e.at > state.doneAt!)
+        if (state.status === 'current' && arrivedBack) {
+          return (
+            <div key={sh.id} className="card between" style={{ gap: 8 }}>
+              <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                <Icon name="check-circle" size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div className="small" style={{ fontWeight: 700 }}>{roundLabel} — kész, a raktárban</div>
+                  <div className="tiny muted">járat kész {hhmm(state.doneAt!)} · most: „Elszámoltam” a visszáruval</div>
+                </div>
+              </div>
+              <span className="badge num">{sh.plate}</span>
+            </div>
+          )
+        }
         // következő kör: amíg az előző tart, csak egy sor — a teljes kártya az előző lezárása után nyílik
         if (state.status === 'upcoming') {
           return (
@@ -126,7 +142,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
                 <Icon name="clock" size={18} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
                 <div style={{ minWidth: 0 }}>
                   <div className="small" style={{ fontWeight: 700 }}>{roundLabel} — következik</div>
-                  <div className="tiny muted">{stops.length} cím · az előző kör elszámolása (vagy az újabb „Kiindultam”) után nyílik meg</div>
+                  <div className="tiny muted">{stops.length} cím · az „Elszámoltam” vagy a „Kiindultam” után nyílik meg</div>
                 </div>
               </div>
               <span className="badge num">{sh.plate}</span>
@@ -287,7 +303,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
                   <button type="button" className="btn secondary sm" disabled={busy || locked || late != null || (!!onFillSheet && !sheetFilled)} onClick={finish} style={{ flex: 2 }}><Icon name={isLast ? 'flag' : 'check'} size={14} />{isLast ? 'Járat kész' : 'Kész, következő'}</button>
                 </div>
-                {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A járat a „Kiindultam” jelzés után válik aktívvá — addig csak megnézheted a címeket.</div>}
+                {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A „Kiindultam” után indul a járat.</div>}
                 {late != null && (
                   <div className="stack" style={{ gap: 6, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--danger)', background: 'var(--danger-ghost, rgba(239,68,68,0.08))' }}>
                     <div className="small" style={{ fontWeight: 800 }}><Icon name="clock" size={14} /> Késés {late} perc — a határidő {curDeadline} volt. Mi az oka? <span className="muted" style={{ fontWeight: 500 }}>(több is jelölhető)</span></div>
@@ -313,7 +329,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   : <button type="button" className="btn sm" disabled={locked} onClick={onFillSheet}>
                       <Icon name="clipboard" size={16} />Box-lap kitöltése (kötelező)
                     </button>)}
-                {onFillSheet && !sheetFilled && <div className="tiny muted">Minden boxnál ki kell tölteni a Box-lapot (behelyezett, hiány, visszáru…) — enélkül nem léphetsz a következő címre. Fotó csak eltérésnél kell.</div>}
+                {onFillSheet && !sheetFilled && <div className="tiny muted">Töltsd ki a Box-lapot, utána mehetsz tovább.</div>}
               </>
             ) : null}
             {stops.length > 0 && (

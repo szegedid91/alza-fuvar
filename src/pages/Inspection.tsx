@@ -307,7 +307,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
             {busy ? (phase === 'upload' ? 'Fotók feltöltése…' : 'Mentés…') : allCaptured ? 'Ellenőrzés mentése' : `Még ${VIEWS.length - captured} fotó hiányzik`}
           </button>
         )}
-        <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával, GPS-szel és szerver-időbélyeggel rögzül. Galériából nem tölthető fel, a telefonra nem mentődik.</p>
+        <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával készíthető, galériából nem tölthető fel.</p>
       </div>
 
       {/* Takarítás csak akkor, ha az ellenőrzés már megvan (vagy engedéllyel továbbengedve) */}

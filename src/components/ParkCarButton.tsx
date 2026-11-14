@@ -5,6 +5,8 @@ import { useToday } from '../hooks/useToday'
 import { submitNow } from '../lib/outbox'
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { useTodayStatusEvents } from '../lib/statusEvents'
+import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
+import { dayComplete } from '../lib/rounds'
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import ConfirmButton from './ConfirmButton'
@@ -15,8 +17,15 @@ import Icon from './Icon'
 // checked_out_at-ja, idővel, GPS-szel, geofence-jelzéssel). Külön
 // „Kijelentkezés” gomb nincs: vagy így ér véget a nap, vagy autócserével
 // (a Beolvasás oldalon), vagy napközben mások ülnek át az ő autójára.
-export function useSettledToday() {
-  return useTodayStatusEvents((rows) => rows.find((r) => r.kind === 'settled')?.at ?? null)
+// Elszámolva = a nap kész: minden kör „Járat kész”, és az UTOLSÓ után is megvolt az elszámolás
+// (két körnél az első kör elszámolása még nem zárja a napot — addig nincs „Autó lerakva”)
+export function useSettledToday(): { data: string | null; isLoading: boolean } {
+  const { data: events, isLoading } = useTodayStatusEvents()
+  const { data: myRoutes } = useMyRoutesToday()
+  if (!events) return { data: null, isLoading }
+  const done = dayComplete(myRoutes?.length ?? 0, events)
+  const last = [...events].reverse().find((e) => e.kind === 'settled')?.at ?? null
+  return { data: done ? last : null, isLoading: false }
 }
 
 export default function ParkCarButton({ className = 'btn' }: { className?: string }) {

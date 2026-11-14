@@ -237,6 +237,8 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
 
   return (
     <>
+      {/* A lap fejléce (dátum, piszkozat, végzés) a járatról jövet nem kell — csak a vezetőnek és a nap végi lapnál */}
+      {!(prefillBoxId && !managerView) && (
       <div className="card stack" style={{ gap: 10 }}>
         <div className="between" style={{ alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
@@ -261,6 +263,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
           </div>
         )}
       </div>
+      )}
 
       {prefillBoxId && (
         <Link to="/" className="btn" style={{ textDecoration: 'none' }}>
@@ -274,7 +277,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
           <span className="badge primary num">{stops.length} box</span>
         </div>
         {prefillBoxId
-          ? <div className="tiny muted">A járat aktuális boxa automatikusan ki van jelölve — csak a darabszámokat kell beírni. A többi megálló összecsukva alatta.</div>
+          ? <div className="tiny muted">Írd be a darabszámokat ehhez a boxhoz.</div>
           : <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />}
         {stops.length === 0 && !prefillBoxId && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
         {[...stops].sort((a, b) => (a.box_id === prefillBoxId ? -1 : b.box_id === prefillBoxId ? 1 : 0)).map((s) => {
@@ -439,9 +442,12 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
           <TextField label="Komplikáció / megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
             <BoxIssueButton box={{ id: stop.box_id, code: stop.box_code, name: stop.box_name ?? box?.name ?? null }} stopId={stop.id} courierName={courierName} />
-            <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
-              <Icon name="trash" size={16} />Megálló törlése
-            </ConfirmButton>
+            {/* a járat aktuális boxát nem lehet levenni a lapról — a törlés csak a kézzel felvett megállókhoz kell */}
+            {!focus && (
+              <ConfirmButton className="btn ghost sm auto" confirmLabel="Törlés?" onConfirm={onRemove}>
+                <Icon name="trash" size={16} />Megálló törlése
+              </ConfirmButton>
+            )}
           </div>
         </>
       )}

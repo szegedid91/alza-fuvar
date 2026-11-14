@@ -68,7 +68,6 @@ export default function SetOffCard({ setOffAt }: { setOffAt: string | null }) {
       <ConfirmButton className="btn" confirmLabel="Biztos? Elindultam" disabled={busy} onConfirm={() => void setOff()} style={{ minHeight: 56, fontSize: 17 }}>
         <Icon name="navigation" />{busy ? 'Jelzés…' : 'Elindultam a munkába'}
       </ConfirmButton>
-      <div className="tiny muted">A vezetők értesítést kapnak, hogy elindultál. A becsekkolás (QR) ezután jön, a telephelyen.</div>
     </div>
   )
 }

@@ -130,7 +130,7 @@ export default function Home() {
       )}
       {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
-      {isCrew && !inspectionLocked && !!today?.checkin && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} />}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
       {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
           Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}

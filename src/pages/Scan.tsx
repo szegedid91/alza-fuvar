@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { useEffect, lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
@@ -333,13 +333,19 @@ export default function Scan() {
   const checkedIn = !!today?.checkin
 
   // Kézi autóválasztás panel — becsekkolásnál és napközbeni cserénél is ugyanaz
+  // a beosztott autó előre kiválasztva — a futárnak csak megerősítenie kell
+  useEffect(() => {
+    if (!manualOpen || manualCarId || checkedIn) return
+    const c = (cars ?? []).find((x) => x.plate === today?.planned?.plate)
+    if (c) setManualCarId(c.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualOpen])
   const manualPanel = (
     <div className="stack" style={checkedIn ? undefined : { borderTop: '1px solid var(--border)', paddingTop: 10 }}>
       <div className="tiny muted">
         {checkedIn
-          ? 'Sérült matrica vagy tiltott kamera esetén válaszd ki az új autót — a csere okát a következő lépésben kérjük. A kézi választást a vezetők jelzésként látják.'
-          : 'Sérült matrica vagy tiltott kamera esetén válaszd ki az autót. A kézi becsekkolást a vezetők jelzésként látják.'}
-        {today?.planned?.isBox != null && <> A lista csak a beosztásod szerinti {today.planned.isBox ? 'Box' : 'XL'} kategóriás autókat mutatja.</>}
+          ? 'Válaszd ki az új autót — a csere okát a következő lépésben kérjük.'
+          : 'Ha nem megy a QR, válaszd ki az autót. A beosztott autó előre ki van választva.'}
       </div>
       <div className="field">
         <label>Autó</label>
