@@ -72,7 +72,7 @@ function DepartedGate({ children }: { children: React.ReactNode }) {
   const anyDone = (events ?? []).some((e) => e.kind === 'done')
   if (departed) return (
     <>
-      {anyDone && <div className="tiny muted"><Icon name="pencil" size={12} style={{ verticalAlign: -2 }} /> A járat lezárása után tett módosítások naplózódnak (ki, mikor, mit miről mire) — a vezetők látják.</div>}
+      {anyDone && <div className="tiny muted"><Icon name="pencil" size={12} style={{ verticalAlign: -2 }} /> A javításokat a vezetők látják.</div>}
       {children}
     </>
   )
@@ -217,6 +217,12 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const prefilledRef = useRef<string | null>(null)
   // Végzés idő szerkesztése (egy soros kijelzés, koppintásra mező)
   const [editEnd, setEditEnd] = useState(false)
+  // A futár saját lapja a járat-kártyán kívülről megnyitva: ÁTTEKINTÉS — minden box összecsukva, a szerkesztéshez
+  // ki kell nyitni egyet; a kézi box-felvétel és a nap végi (raktári) mezők csak kérésre látszanak
+  const overview = !managerView && !prefillBoxId
+  const [showAdd, setShowAdd] = useState(false)
+  const [showDayEnd, setShowDayEnd] = useState(false)
+  const [addedNow, setAddedNow] = useState(false)
   useEffect(() => {
     if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
     if (data.stops.some((st) => st.box_id === prefillBoxId)) { prefilledRef.current = prefillBoxId; return }
@@ -234,11 +240,25 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const totals = stopTotals(stops)
   const submitted = sheet.status === 'submitted'
   const saving = updateSheet.isPending || updateStop.isPending || addStop.isPending || removeStop.isPending
+  const dayEndVisible = !prefillBoxId && (!overview || showDayEnd)
+  const TOTALS = stops.length > 0 && !prefillBoxId ? (
+    <div className="card stack" style={{ gap: 6 }}>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />Összesen</div>
+          <div className="grid-2" style={{ gap: 4 }}>
+            {STOP_FIELDS.map((f) => (
+              <div key={f.key} className="between">
+                <span className="tiny muted">{f.short}</span>
+                <span className="num" style={{ color: f.key !== 'placed' && totals[f.key] > 0 ? 'var(--warning)' : undefined }}>{totals[f.key]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+  ) : null
 
   return (
     <>
-      {/* A lap fejléce (dátum, piszkozat, végzés) a járatról jövet nem kell — csak a vezetőnek és a nap végi lapnál */}
-      {!(prefillBoxId && !managerView) && (
+      {/* A lap fejléce (dátum, piszkozat, végzés) csak a vezetőnek — a futárnak nem kell */}
+      {managerView && (
       <div className="card stack" style={{ gap: 10 }}>
         <div className="between" style={{ alignItems: 'flex-start', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
@@ -271,40 +291,41 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         </Link>
       )}
 
+      {overview && TOTALS}
+
       <div className="card stack" style={{ gap: 10 }}>
         <div className="between">
-          <div className="card-title" style={{ margin: 0 }}><Icon name="package" />{prefillBoxId ? 'Aktuális box' : 'Megállók'}</div>
+          <div className="card-title" style={{ margin: 0 }}><Icon name="package" />{prefillBoxId ? 'Aktuális box' : overview ? 'Mai Box-lapok' : 'Megállók'}</div>
           <span className="badge primary num">{stops.length} box</span>
         </div>
         {prefillBoxId
           ? <div className="tiny muted">Írd be a darabszámokat ehhez a boxhoz.</div>
-          : <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />}
-        {stops.length === 0 && !prefillBoxId && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
+          : overview
+            ? <div className="tiny muted">{stops.length ? 'Koppints egy boxra, ha meg akarod nézni vagy javítani.' : 'Ma még nincs kitöltött box.'}</div>
+            : <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />}
+        {stops.length === 0 && !prefillBoxId && !overview && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
         {[...stops].sort((a, b) => (a.box_id === prefillBoxId ? -1 : b.box_id === prefillBoxId ? 1 : 0)).map((s) => {
           const i = stops.findIndex((x) => x.id === s.id)
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
-            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null}
+            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1 && (!overview || addedNow)} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null}
               courierName={name ?? 'Futár'} resetKey={resetTick} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
+        {overview && (showAdd
+          ? <AddStop onAdd={(b) => { setAddedNow(true); addStop.mutate(b) }} busy={addStop.isPending} />
+          : <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowAdd(true)}><Icon name="plus" size={12} /> Kimaradt egy box? Hozzáadás</button>)}
       </div>
 
-      {stops.length > 0 && !prefillBoxId && (
-        <div className="card stack" style={{ gap: 6 }}>
-          <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />Összesen</div>
-          <div className="grid-2" style={{ gap: 4 }}>
-            {STOP_FIELDS.map((f) => (
-              <div key={f.key} className="between">
-                <span className="tiny muted">{f.short}</span>
-                <span className="num" style={{ color: f.key !== 'placed' && totals[f.key] > 0 ? 'var(--warning)' : undefined }}>{totals[f.key]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {!overview && TOTALS}
+
+      {overview && !showDayEnd && (
+        <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowDayEnd(true)}>
+          <Icon name="chevron-down" size={12} /> Raktári probléma vagy komplikáció volt? Megnyitás
+        </button>
       )}
 
-      {!prefillBoxId && (
+      {dayEndVisible && (
       <div className="card stack" style={{ gap: 8 }}>
         <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
         <div className="tiny muted">Ezeket a nap legvégén, a raktárba visszaérve töltsd ki, az egész napra összesítve.</div>
@@ -321,7 +342,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
       </div>
       )}
 
-      {!prefillBoxId && (
+      {dayEndVisible && (
       <div className="card stack" style={{ gap: 8 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Komplikációk</div>
         <div className="grid-2">
@@ -331,7 +352,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
       </div>
       )}
 
-      {!prefillBoxId && (
+      {dayEndVisible && (
       <div className="card stack">
         {submitted ? (
           <div className="alert success row" style={{ gap: 8 }}>

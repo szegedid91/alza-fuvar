@@ -157,7 +157,7 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
               <button key={kind} type="button" className={big ? 'btn' : 'btn ghost sm auto'} style={big ? bigStyle : smallStyle} onClick={() => setSettleCamera(true)}>
                 <Icon name="camera" size={big ? 24 : 14} />
                 <span style={{ fontWeight: 800 }}>{meta.label}</span>
-                <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : 'fotóval'}</span>
+                <span className="tiny" style={{ opacity: 0.85 }}>{!big && last ? hhmm(last.at) : 'fotóval'}</span>
               </button>
             )
           }
@@ -180,7 +180,7 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
               }}>
               <Icon name={meta.icon} size={big ? 24 : 14} />
               <span style={{ fontWeight: 800 }}>{meta.label}</span>
-              <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>
+              {!big && <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>}
             </a>
           )
         }

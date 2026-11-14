@@ -30,6 +30,8 @@ export default function TodayStepper() {
   // A Box-lap csak a „Kiindultam” jelzés után tölthető — addig a lépés és a gombja inaktív
   const { data: todayEvents } = useTodayStatusEvents()
   const departed = (todayEvents ?? []).some((e) => e.kind === 'departed')
+  // Volt már „Járat kész”: innen a Box-lap csak megtekinthető (áttekintés), és az autó lerakása a nap végi kártyán jön
+  const anyDone = (todayEvents ?? []).some((e) => e.kind === 'done')
   // Minden mai kör kész: a Box-lap már nem lépés, csak visszanézhető / javítható (a módosítás naplózódik)
   const { data: myRoutes } = useMyRoutesToday()
   const roundsOver = !!todayEvents && allRoundsDone(myRoutes?.length ?? 0, todayEvents)
@@ -84,9 +86,9 @@ export default function TodayStepper() {
       state: inspected || gate.waived ? 'done' : !checkin ? 'todo' : 'blocked',
     },
     ...(needsBoxSheet ? [{
-      key: 'boxsheet', icon: 'package' as IconName, title: 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
-      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : roundsOver ? `${boxSheet?.stops ?? 0} box rögzítve — visszanézheted és javíthatod, a módosítás naplózódik` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve` : departed ? 'Boxonként: behelyezett, hiány, visszáru…' : 'A „Kiindultam” jelzés után tölthető',
-      state: (boxSheet?.submitted || roundsOver ? 'done' : 'todo') as StepState,
+      key: 'boxsheet', icon: 'package' as IconName, title: anyDone ? 'Box-lapok' : 'Box-lap', to: '/box-lap', cta: 'Box-lap kitöltése',
+      detail: boxSheet?.submitted ? `Lezárva ${hhmm(boxSheet.submittedAt!)} · ${boxSheet.stops} box` : anyDone || roundsOver ? `${boxSheet?.stops ?? 0} box rögzítve` : boxSheet?.stops ? `${boxSheet.stops} box rögzítve` : departed ? 'Boxonként: behelyezett, hiány, visszáru…' : 'A „Kiindultam” jelzés után tölthető',
+      state: (boxSheet?.submitted || roundsOver || anyDone ? 'done' : 'todo') as StepState,
     }] : []),
     {
       // Nap vége = elszámolás után az autó lerakva (elektromosnál töltőre téve) — nincs külön kijelentkezés
@@ -98,16 +100,22 @@ export default function TodayStepper() {
 
   // A következő lépés: az első, ami nincs kész és nem "kihagyható"
   // (kötelező ellenőrzés mindent megelőz)
+  // „Járat kész” után (amíg a nap nincs lezárva): nincs kitöltendő lépés ezen a kártyán — csak a Box-lapok megtekintése
+  const review = anyDone && !checkedOut
   let next: Step | null = null
   if (!checkin) next = steps[0]
   else if (!inspected && !gate.waived) next = steps[1]
+  else if (review) next = null
   else if (needsBoxSheet && !boxSheet?.submitted && !roundsOver) next = steps.find((s) => s.key === 'boxsheet') ?? null
   else if (!checkedOut) next = steps[steps.length - 1]
   for (const s of steps) if (s === next) s.state = 'next'
-  const allDone = !next
+  const allDone = !next && !review
+  // járat kész után az „Autó lerakva” sor nem látszik — a nap végén a saját kártyáján jön
+  const visible = steps.filter((s) => !((s.key === 'checkin' || s.key === 'inspection') && s.state === 'done') && !(review && s.key === 'parked'))
+  if (review && visible.length === 0) return null
 
   return (
-    <div className={`card stack${allDone ? '' : ' primary'}`} style={{ borderColor: allDone ? 'var(--success)' : undefined }}>
+    <div className={`card stack${allDone || review ? '' : ' primary'}`} style={{ borderColor: allDone ? 'var(--success)' : undefined }}>
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="clipboard" />Mai nap</div>
         {/* A kész becsekkolás és ellenőrzés nem sor: kis ikonként a felső sávban (AppShell) látszik */}
@@ -116,7 +124,7 @@ export default function TodayStepper() {
         </span>
       </div>
       <div className="stack" style={{ gap: 8 }}>
-        {steps.filter((s) => !((s.key === 'checkin' || s.key === 'inspection') && s.state === 'done')).map((s) => {
+        {visible.map((s) => {
           const st = STATE_ICON[s.state]
           return (
             <div key={s.key} className="row" style={{ gap: 12, alignItems: 'flex-start', opacity: s.state === 'todo' ? 0.65 : 1 }}>
@@ -139,6 +147,12 @@ export default function TodayStepper() {
       ) : next && (
         <Link to={next.to} className="btn" style={{ textDecoration: 'none' }}>
           <Icon name={next.icon} />{next.cta}
+        </Link>
+      )}
+      {/* járat kész után és a lezárt napon: a mai Box-lapok áttekintése (összecsukva, kinyitva javítható) */}
+      {needsBoxSheet && (review || checkedOut) && (
+        <Link to="/box-lap" className="btn secondary" style={{ textDecoration: 'none' }}>
+          <Icon name="package" />Box-lapok megtekintése
         </Link>
       )}
       {allDone && <div className="tiny muted">Szép munka! A holnapi beosztásod a Beosztás fülön.</div>}
