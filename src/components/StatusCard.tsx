@@ -6,7 +6,7 @@ import { useToday } from '../hooks/useToday'
 import { recordStatusEvent } from '../lib/statusEvents'
 import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
-import { groupTarget, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
+import { groupTarget, statusText, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
 import MultiShotCamera from './MultiShotCamera'
 import { useState, useEffect } from 'react'
@@ -37,7 +37,6 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
   // további visszáru-fotók a mai (legutóbbi) elszámoláshoz — új jelzés nélkül
   const [moreCamera, setMoreCamera] = useState(false)
   const [sending, setSending] = useState<StatusKind | null>(null)
-  const shareOk = canShareFiles()
 
   const { data: events } = useQuery({
     queryKey: ['status-events', currentWorkspaceId, profile?.id, date],
@@ -75,9 +74,8 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
     const at = new Date()
     const text = statusText('settled', at, name, route)
     setSettleCamera(false)
-    let sharing: Promise<'shared' | 'cancelled' | 'unsupported'> | null = null
-    if (shareOk) sharing = sharePhotos(blobs, text, 'elszamolas')
-    else openWhatsApp(text)
+    // A visszáru fotói és videói CSAK az appban maradnak (bizonyíték a vezetőknek) — a csoportba csak a jelzés szövege megy
+    openWhatsApp(text)
     void (async () => {
       try {
         const eventId = await record('settled', at)
@@ -90,26 +88,19 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
             photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob, poster: posters[i] },
           })
         }
+        toast.success('Elszámolás rögzítve — a felvételek az appban vannak, a vezetők látják.')
         invalidate()
       } catch (e) {
-        toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
+        toast.error('A felvétel mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
       }
     })()
-    void sharing?.then((res) => {
-      if (res === 'shared') toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el. A képek az appban is megvannak.')
-      else if (res === 'cancelled') toast.info('A megosztás megszakadt — a jelzés és a képek az appban megvannak, a listából újraküldheted.')
-      else openWhatsApp(text)
-    })
   }
 
-  // További fotók a már rögzített elszámoláshoz (pl. ha egy láda kimaradt a képről): mentés az appba, és megosztás a csoportba
+  // További felvételek a már rögzített elszámoláshoz (pl. ha egy láda kimaradt a képről): csak az appba mentjük
   function addSettlePhotos(blobs: Blob[], posters: (Blob | undefined)[] = []) {
     const ev = lastOf('settled')
     if (!currentWorkspaceId || !profile || !ev) return
     setMoreCamera(false)
-    const text = `Elszámolás – további visszáru-fotók – ${name}${route ? ` (${route} járat)` : ''}`
-    let sharing: Promise<'shared' | 'cancelled' | 'unsupported'> | null = null
-    if (shareOk) sharing = sharePhotos(blobs, text, 'elszamolas')
     void (async () => {
       try {
         for (const [i, blob] of blobs.entries()) {
@@ -123,10 +114,9 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
         toast.success(`${blobs.length} további felvétel mentve az elszámoláshoz.`)
         invalidate()
       } catch (e) {
-        toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
+        toast.error('A felvétel mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
       }
     })()
-    void sharing?.then((res) => { if (res === 'cancelled') toast.info('A megosztás megszakadt — a képek az appban megvannak.') })
   }
 
   const simple: StatusKind[] = ['arrived', 'departed', 'done', 'settled']
@@ -202,7 +192,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
       })()}
 
       {moreCamera && (
-        <MultiShotCamera video title="További visszáru-felvétel" sendLabel="Mentés és küldés" hint="Fotózd vagy videózd le, ami az előző felvételekről kimaradt — minden visszahozott csomag látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
+        <MultiShotCamera video title="További visszáru-felvétel" sendLabel="Mentés" hint="Fotózd vagy videózd le, ami az előző felvételekről kimaradt — minden visszahozott csomag látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
       )}
       {lastOf('settled') && !moreCamera && (
         <button type="button" className="btn secondary sm" onClick={() => setMoreCamera(true)}>
@@ -210,7 +200,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
         </button>
       )}
       {settleCamera && (
-        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Küldés a csoportba" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
+        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Mentés" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le. A felvétel csak az appba kerül." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
       {roundsOver && (
