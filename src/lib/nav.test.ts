@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { launchNav, navSchemeUrl, navTargetOf, navUrl, openNav, shouldNavAfterFill, type AfterFill } from './nav'
+import { clearNavPrompt, launchNav, navPromptPending, navSchemeUrl, navTargetOf, navUrl, openNav, requestNavPrompt, shouldNavAfterFill, type AfterFill } from './nav'
 
 describe('navigáció koordinátára', () => {
   it('a cél mindig a koordináta, és a navigáció rögtön indul', () => {
@@ -53,5 +53,28 @@ describe('navigáció a Box-lap „Kész, következő box” gombjáról', () =>
     expect(shouldNavAfterFill(after, 'b2', { lateMin: () => null })).toBeNull()
     expect(shouldNavAfterFill({ ...after, nav: null }, 'b1', { lateMin: () => null })).toBeNull()
     expect(shouldNavAfterFill(null, 'b1')).toBeNull()
+  })
+})
+
+describe('navigáció a „Kiindultam” után', () => {
+  it('a jelzés után 15 percig vár a „Navigáció indítása” — indítás vagy bezárás után eltűnik', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) })
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined, removeItem: () => undefined })
+    expect(navPromptPending(1000)).toBe(false)
+    requestNavPrompt(1000)
+    expect(navPromptPending(1000 + 60_000)).toBe(true)
+    expect(navPromptPending(1000 + 16 * 60_000)).toBe(false)
+    clearNavPrompt()
+    expect(navPromptPending(2000)).toBe(false)
+    vi.unstubAllGlobals()
+  })
+  it('kikapcsolt automatikus navigációnál nem kér indítást', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) })
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'alza-nav-auto' ? '0' : null), setItem: () => undefined, removeItem: () => undefined })
+    requestNavPrompt(1000)
+    expect(navPromptPending(2000)).toBe(false)
+    vi.unstubAllGlobals()
   })
 })

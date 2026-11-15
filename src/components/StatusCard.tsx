@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
+import { requestNavPrompt } from '../lib/nav'
 
 type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_path: string | null }[] }
 
@@ -171,6 +172,8 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
                 e.preventDefault()
                 const at = new Date()
                 const t = statusText(kind, at, name, route)
+                // „Kiindultam”: a koppintás a WhatsAppot nyitja — a navigációt a visszaváltás után a járat-kártya kínálja fel
+                if (kind === 'departed') requestNavPrompt()
                 openWhatsApp(t)
                 setSending(kind)
                 void record(kind, at).finally(() => setSending(null))

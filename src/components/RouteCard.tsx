@@ -8,7 +8,7 @@ import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
-import { getNavApp, navUrl, navTargetOf, openNav, launchNav, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
+import { getNavApp, navUrl, navTargetOf, openNav, launchNav, navPromptPending, clearNavPrompt, PROMPT_EVENT, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
@@ -245,6 +245,15 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   const cur = stops[idx]
   // A box adatlapja (fotó, „hol található” leírás, megjegyzés) a navigálás mellett egy koppintásra
   const [showBox, setShowBox] = useState(false)
+  // „Kiindultam” után: teljes képernyős „Navigáció indítása” (a jelzés koppintása a WhatsAppot nyitotta —
+  // a telefon egy koppintásból csak egy appot enged; visszaváltva ez az egy koppintás indítja a navigációt)
+  const [navPrompt, setNavPrompt] = useState(() => navPromptPending())
+  const closeNavPrompt = () => { clearNavPrompt(); setNavPrompt(false) }
+  useEffect(() => {
+    const h = () => setNavPrompt(navPromptPending())
+    window.addEventListener(PROMPT_EVENT, h)
+    return () => window.removeEventListener(PROMPT_EVENT, h)
+  }, [])
   // Késés: ha a terv határideje (eddig kell végezni a boxban) lejárt, a leadáskor meg kell adni az okot
   const [late, setLate] = useState<number | null>(null)
   // Több ok is jelölhető egyszerre (+ szabad szöveg)
@@ -302,8 +311,23 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFinishBox, cur?.box_id, locked, done, isLast])
+  const curNav = navTargetOf(cur?.box)
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
+            {navPrompt && !locked && cur && curNav && (
+              <div role="dialog" aria-label="Navigáció indítása" style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(5,10,20,0.94)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 18, padding: '24px 20px calc(24px + env(safe-area-inset-bottom))' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: 24 }}>Indulhat a navigáció</div>
+                  <div className="small muted" style={{ marginTop: 8 }}>{idx + 1}. cím a {stops.length}-ből</div>
+                  <div style={{ fontWeight: 800, fontSize: 18, marginTop: 4 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
+                  <div className="small muted">{cur.box.address}</div>
+                </div>
+                <button type="button" className="btn" style={{ minHeight: 110, fontSize: 22 }} onClick={() => { closeNavPrompt(); openNav(curNav, { auto: true }) }}>
+                  <Icon name="navigation" size={30} />Navigáció indítása ({NAV_LABEL[navApp]})
+                </button>
+                <button type="button" className="btn ghost" onClick={closeNavPrompt}>Most nem</button>
+              </div>
+            )}
             <div className="between">
               <div className="card-title" style={{ margin: 0 }}><Icon name="map" />{code} járat{round === 2 ? ' · 2. kör' : ''}</div>
               <span className="badge num">{plate}</span>

@@ -96,3 +96,25 @@ export function shouldNavAfterFill(after: AfterFill | null | undefined, boxId: s
   }
   return after.nav
 }
+
+// „Kiindultam” után: a koppintás a WhatsAppot nyitja (a telefon egy koppintásból csak EGY appot enged megnyitni),
+// ezért a navigáció nem indulhat ugyanabból az érintésből. Helyette megjegyezzük, hogy indulni kell: amikor a futár
+// visszavált az appba, a járat-kártya teljes képernyős „Navigáció indítása” gombot mutat — egy koppintás, és megy.
+const PROMPT_KEY = 'nav-after-depart'
+const PROMPT_FRESH_MS = 15 * 60_000
+export const PROMPT_EVENT = 'nav-prompt'
+export function requestNavPrompt(now: number = Date.now()) {
+  if (!getAutoNav()) return
+  try { sessionStorage.setItem(PROMPT_KEY, String(now)) } catch { /* nem kritikus */ }
+  // ha a járat-kártya már látszik (pl. ismételt jelzés), azonnal értesül
+  try { window.dispatchEvent(new Event(PROMPT_EVENT)) } catch { /* nincs ablak (teszt) */ }
+}
+export function navPromptPending(now: number = Date.now()): boolean {
+  try {
+    const t = Number(sessionStorage.getItem(PROMPT_KEY) ?? 0)
+    return t > 0 && now - t >= 0 && now - t < PROMPT_FRESH_MS
+  } catch { return false }
+}
+export function clearNavPrompt() {
+  try { sessionStorage.removeItem(PROMPT_KEY) } catch { /* nem kritikus */ }
+}
