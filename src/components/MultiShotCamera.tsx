@@ -5,7 +5,6 @@ import Icon from './Icon'
 import { getCameraStream } from '../lib/camera'
 import { TEST_MODE } from '../lib/testMode'
 import TestCameraPick from './TestCameraPick'
-import { importFile, MAX_UPLOAD_MB } from '../lib/mediaImport'
 
 // Egy videó legfeljebb ennyi másodperc (kb. 15 MB) — hosszabbhoz több rövid felvétel készíthető
 const MAX_VIDEO_S = 60
@@ -17,13 +16,11 @@ type Shot = { blob: Blob; url: string; poster?: Blob; video?: boolean; seconds?:
 // képeket a sorba, a „Küldés” egy koppintás — a szülő ezen a koppintáson
 // belül nyitja a megosztás-menüt (a böngésző csak érintésre engedi).
 // video: videó is felvehető (visszáru-bizonyíték) — a piros gomb indítja és állítja le.
-// upload: kész felvétel is feltölthető a telefonról (több kép és videó egyszerre) — akkor is, ha a kamera nem indul.
 export default function MultiShotCamera({
   title,
   sendLabel = 'Küldés',
   hint = 'Készíts egy vagy több képet, majd koppints a Küldésre.',
   video = false,
-  upload = false,
   onSend,
   onCancel,
 }: {
@@ -32,7 +29,6 @@ export default function MultiShotCamera({
   // mit fotózzon (a kamera tetején, amíg nincs kép)
   hint?: string
   video?: boolean
-  upload?: boolean
   // posters: videónál a felvétel egy képkockája (a galéria bélyegképéhez), képnél undefined
   onSend: (blobs: Blob[], posters: (Blob | undefined)[]) => void
   onCancel: () => void
@@ -54,27 +50,6 @@ export default function MultiShotCamera({
   // ha a videó nem indul ezen a készüléken, a fotózás megy tovább — csak a piros gomb tűnik el
   const [videoOff, setVideoOff] = useState<string | null>(null)
   const canRecord = video && typeof MediaRecorder !== 'undefined' && !videoOff
-  // feltöltés a telefonról: a választott fájlok előkészítése (kép tömörítve, videó bélyegképpel)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [importing, setImporting] = useState(false)
-  const [importNote, setImportNote] = useState<string | null>(null)
-  async function addFiles(list: FileList | null) {
-    const files = Array.from(list ?? [])
-    if (files.length === 0) return
-    setImporting(true); setImportNote(null)
-    const problems: string[] = []
-    try {
-      for (const f of files) {
-        const r = await importFile(f)
-        if ('error' in r) { problems.push(r.error); continue }
-        const preview = r.video ? r.poster : r.blob
-        setShots((prev) => [...prev, { blob: r.blob, url: preview ? URL.createObjectURL(preview) : '', poster: r.poster, video: r.video, seconds: r.seconds }])
-      }
-    } finally {
-      setImporting(false)
-      setImportNote(problems.length ? problems.join(' ') : null)
-    }
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -176,9 +151,25 @@ export default function MultiShotCamera({
   const photos = shots.filter((s) => !s.video).length, videos = shots.length - photos
   const countText = [photos ? `${photos} kép` : '', videos ? `${videos} videó` : ''].filter(Boolean).join(', ')
 
-  // a felvételek / feltöltött fájlok bélyegképei (törölhetők) — kamera-hiba esetén is látszanak
-  const thumbs = (
-    <>
+  return (
+    <div className="camera-overlay">
+      <div className="camera-head">
+        <span>{title}{countText ? ` · ${countText}` : ''}</span>
+        {import.meta.env.DEV && TEST_MODE && <TestCameraPick />}
+        <button className="btn ghost sm auto" onClick={onCancel}>Mégse</button>
+      </div>
+      {error ? (
+        <div className="camera-body"><div className="alert error">{error}</div></div>
+      ) : (
+        <div className="camera-body">
+          <video ref={videoRef} playsInline muted className="camera-video" />
+          {recording && (
+            <div style={{ position: 'absolute', top: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 3 }}>
+              <span className="num" style={{ background: 'rgba(176,0,32,0.9)', color: '#fff', padding: '6px 12px', borderRadius: 999, fontWeight: 800 }}>● Felvétel {fmtClock(elapsed)} / {fmtClock(MAX_VIDEO_S)}</span>
+            </div>
+          )}
+          {shots.length > 0 && (
+            <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, display: 'flex', gap: 6, overflowX: 'auto', zIndex: 2 }}>
               {shots.map((s, i) => (
                 <div key={`${s.url}-${i}`} style={{ position: 'relative', flexShrink: 0 }}>
                   {s.url
@@ -191,32 +182,6 @@ export default function MultiShotCamera({
                   </button>
                 </div>
               ))}
-    </>
-  )
-
-  return (
-    <div className="camera-overlay">
-      <div className="camera-head">
-        <span>{title}{countText ? ` · ${countText}` : ''}</span>
-        {import.meta.env.DEV && TEST_MODE && <TestCameraPick />}
-        <button className="btn ghost sm auto" onClick={onCancel}>Mégse</button>
-      </div>
-      {error ? (
-        <div className="camera-body" style={{ flexDirection: 'column', gap: 12 }}>
-          <div className="alert error">{error}{upload ? ' Kész felvételt lent a „Feltöltés a telefonról” gombbal tudsz hozzáadni.' : ''}</div>
-          {shots.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', padding: '6px 12px' }}>{thumbs}</div>}
-        </div>
-      ) : (
-        <div className="camera-body">
-          <video ref={videoRef} playsInline muted className="camera-video" />
-          {recording && (
-            <div style={{ position: 'absolute', top: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 3 }}>
-              <span className="num" style={{ background: 'rgba(176,0,32,0.9)', color: '#fff', padding: '6px 12px', borderRadius: 999, fontWeight: 800 }}>● Felvétel {fmtClock(elapsed)} / {fmtClock(MAX_VIDEO_S)}</span>
-            </div>
-          )}
-          {shots.length > 0 && (
-            <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, display: 'flex', gap: 6, overflowX: 'auto', zIndex: 2 }}>
-              {thumbs}
             </div>
           )}
           {videoOff && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(176,0,32,0.85)', color: '#fff', padding: '6px 8px', borderRadius: 8, zIndex: 3 }}>{videoOff}</p>}
@@ -232,28 +197,11 @@ export default function MultiShotCamera({
             <span style={{ width: recording ? 20 : 36, height: recording ? 20 : 36, borderRadius: recording ? 4 : 18, background: '#e53935', display: 'block' }} />
           </button>
         )}
-        <button type="button" className="btn" disabled={shots.length === 0 || recording || importing} onClick={() => onSend(shots.map((s) => s.blob), shots.map((s) => s.poster))} style={{ minHeight: 56 }}>
+        <button type="button" className="btn" disabled={shots.length === 0 || recording} onClick={() => onSend(shots.map((s) => s.blob), shots.map((s) => s.poster))} style={{ minHeight: 56 }}>
           <Icon name="send" />{sendLabel}{shots.length ? ` (${shots.length})` : ''}
         </button>
       </div>
-      {(canRecord || upload) && (
-        <div className="stack" style={{ gap: 6, alignItems: 'center', background: 'rgba(0,0,0,0.6)', padding: '0 16px calc(10px + env(safe-area-inset-bottom))', marginTop: -20 }}>
-          {canRecord && <div className="tiny" style={{ textAlign: 'center', color: '#ccc' }}>fehér gomb: fotó · piros gomb: videó (max. 1 perc)</div>}
-          {upload && (
-            <>
-              <input ref={fileRef} type="file" accept="image/*,video/*" multiple style={{ display: 'none' }}
-                onChange={(e) => { const l = e.target.files; void addFiles(l).finally(() => { if (fileRef.current) fileRef.current.value = '' }) }} />
-              <button type="button" className="btn ghost sm" disabled={recording || importing} onClick={() => fileRef.current?.click()}
-                style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.6)', width: '100%', maxWidth: 420 }}>
-                <Icon name="upload" size={16} />{importing ? 'Előkészítés…' : 'Feltöltés a telefonról (képek, videó)'}
-              </button>
-              {importNote
-                ? <div className="tiny" role="alert" style={{ textAlign: 'center', color: '#ffb4ab' }}>{importNote}</div>
-                : <div className="tiny" style={{ textAlign: 'center', color: '#aaa' }}>Több kép és videó is kijelölhető egyszerre · videó legfeljebb {MAX_UPLOAD_MB} MB</div>}
-            </>
-          )}
-        </div>
-      )}
+      {canRecord && <div className="tiny" style={{ textAlign: 'center', color: '#ccc', background: 'rgba(0,0,0,0.6)', paddingBottom: 'calc(8px + env(safe-area-inset-bottom))', marginTop: -20 }}>fehér gomb: fotó · piros gomb: videó (max. 1 perc)</div>}
     </div>
   )
 }
