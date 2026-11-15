@@ -103,7 +103,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return
       setSession(data.session)
-      if (data.session?.user) await loadProfile(data.session.user.id)
+      const uid = data.session?.user?.id
+      if (uid) {
+        // Gyors indulás: a telefonon tárolt SAJÁT (aktív) profillal azonnal megjelenik az app, a friss profil a
+        // háttérben érkezik. Gyenge térerőn eddig egy teljes hálózati kör telt el, mire bármi látszott.
+        // (Az adatokat a szerver szabályai védik; ha a fiók közben megváltozott, a friss profil átveszi.)
+        let cached: Profile | null = null
+        try {
+          const raw = localStorage.getItem('alza-profile-cache')
+          const p = raw ? (JSON.parse(raw) as Profile) : null
+          if (p && p.id === uid && p.status === 'active') cached = p
+        } catch { /* sérült cache: marad a hálózati út */ }
+        if (cached) {
+          setProfile(cached)
+          setLoading(false)
+          void loadProfile(uid)
+          return
+        }
+        await loadProfile(uid)
+      }
       setLoading(false)
     })
 

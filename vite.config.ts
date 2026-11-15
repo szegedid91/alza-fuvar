@@ -79,6 +79,21 @@ export default defineConfig(({ mode }) => ({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // A külső könyvtárak külön, ritkán változó csomagba kerülnek: egy élesítés után a telefonok csak az
+        // app saját (megváltozott) kódját töltik le újra, nem a teljes ~0,5 MB-ot. A QR-olvasó könyvtára
+        // (zxing) szintén külön csomag, így az sem függ az app kódjának változásától.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined
+          if (/node_modules\/(@zxing)\//.test(id)) return 'zxing'
+          if (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|@remix-run|@tanstack|@supabase|idb|tslib|cookie|set-cookie-parser)\//.test(id)) return 'vendor'
+          return undefined
+        },
+      },
+    },
+  },
   server: { host: true, port: 5173 },
   // Teszteléshez: a preview-t alagúton (trycloudflare) is elérjük telefonról
   preview: { host: true, port: 4173, allowedHosts: true },

@@ -38,7 +38,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       hasLoadedRef.current = false
       return
     }
-    if (!hasLoadedRef.current) setLoading(true)
+    // a lista alkalmazása: az aktuális munkaterület a tároltból, különben a profilé / az első
+    const apply = (list: Workspace[]) => {
+      setWorkspaces(list)
+      const stored = localStorage.getItem(STORAGE_KEY)
+      const valid = stored && list.some((w) => w.id === stored) ? stored : null
+      const fallback = profileWorkspaceId && list.some((w) => w.id === profileWorkspaceId)
+        ? profileWorkspaceId
+        : list[0]?.id ?? null
+      setCurrentId(valid ?? fallback)
+    }
+    if (!hasLoadedRef.current) {
+      // Gyors indulás: az utoljára ismert listával azonnal elindulnak a lekérdezések (a tárolt adatból rajzol az app),
+      // a friss lista a háttérben érkezik — eddig minden lekérdezés erre a kérésre várt
+      let seeded = false
+      try {
+        const raw = localStorage.getItem('alza-workspaces-cache')
+        const cached = raw ? (JSON.parse(raw) as Workspace[]) : null
+        if (Array.isArray(cached) && cached.length > 0) { apply(cached); hasLoadedRef.current = true; setLoading(false); seeded = true }
+      } catch { /* sérült cache */ }
+      if (!seeded) setLoading(true)
+    }
     // Az RLS gondoskodik róla, hogy csak az elérhető workspace-ek jöjjenek vissza
     const { data, error } = await supabase.from('workspaces').select('*').order('name')
     let list = data ?? []
@@ -53,14 +73,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } else {
       try { localStorage.setItem('alza-workspaces-cache', JSON.stringify(list)) } catch { /* betelt tárhely */ }
     }
-    setWorkspaces(list)
-
-    const stored = localStorage.getItem(STORAGE_KEY)
-    const valid = stored && list.some((w) => w.id === stored) ? stored : null
-    const fallback = profileWorkspaceId && list.some((w) => w.id === profileWorkspaceId)
-      ? profileWorkspaceId
-      : list[0]?.id ?? null
-    setCurrentId(valid ?? fallback)
+    apply(list)
     hasLoadedRef.current = true
     setLoading(false)
   }, [profileId, profileStatus, profileWorkspaceId])

@@ -488,7 +488,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
 // alatta külön kereső más (nem a járathoz tartozó) boxhoz — kódra vagy névre.
 function MissedAdd({ sheetBoxIds, onAdd, busy, onClose }: { sheetBoxIds: (string | null)[]; onAdd: (box: AlzaBox | { code: string }) => void; busy: boolean; onClose: () => void }) {
   const { data: myShifts } = useMyRoutesToday()
-  const { data: stopsByRoute } = useRouteStops()
+  const { data: stopsByRoute } = useRouteStops(myShifts ? myShifts.map((sh) => sh.route_id) : null)
   const { data: routes } = useRoutes()
   const shifts = myShifts ?? []
   const missed = useMemo(() => missedStops(shifts.map((sh) => stopsByRoute?.[sh.route_id] ?? []), sheetBoxIds), [shifts, stopsByRoute, sheetBoxIds])

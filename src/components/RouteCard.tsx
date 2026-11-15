@@ -39,7 +39,6 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const date = useWorkDay()
   const depot = depotOf(currentWorkspace)
   const { data: routes } = useRoutes()
-  const { data: stopsByRoute } = useRouteStops()
   const navApp: NavApp = getNavApp()
   const { data: today } = useToday()
   const needsBoxSheet = !!today?.car?.category?.box_sheet
@@ -54,6 +53,8 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const [openList, setOpenList] = useState(false)
 
   const { data: myShifts } = useMyRoutesToday()
+  // csak a saját mai járataim megállói (nem az egész munkaterületé)
+  const { data: stopsByRoute } = useRouteStops(myShifts ? myShifts.map((sh) => sh.route_id) : null)
   // a körök állapota a mai jelzésekből: a lezárt kör összecsukva, a következő előkészítve
   const { data: todayStatus } = useTodayStatusEvents()
   const { data: serverRuns } = useQuery({
