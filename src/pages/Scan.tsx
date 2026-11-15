@@ -323,14 +323,6 @@ export default function Scan() {
     }
   }
 
-  if (scanning) {
-    return (
-      <Suspense fallback={<div className="camera-overlay"><div className="camera-body"><div className="spinner" /></div></div>}>
-        <QrScanner onResult={handleScan} onCancel={() => setScanning(false)} />
-      </Suspense>
-    )
-  }
-
   const checkedIn = !!today?.checkin
 
   // Kézi autóválasztás panel — becsekkolásnál és napközbeni cserénél is ugyanaz
@@ -341,6 +333,16 @@ export default function Scan() {
     if (c) setManualCarId(c.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [manualOpen])
+
+  // FONTOS: ez a korai visszatérés csak az összes hook UTÁN állhat (különben a QR-olvasó megnyitása összeomlasztja az oldalt)
+  if (scanning) {
+    return (
+      <Suspense fallback={<div className="camera-overlay"><div className="camera-body"><div className="spinner" /></div></div>}>
+        <QrScanner onResult={handleScan} onCancel={() => setScanning(false)} />
+      </Suspense>
+    )
+  }
+
   const manualPanel = (
     <div className="stack" style={checkedIn ? undefined : { borderTop: '1px solid var(--border)', paddingTop: 10 }}>
       <div className="tiny muted">
