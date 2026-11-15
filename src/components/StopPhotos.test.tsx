@@ -150,3 +150,38 @@ describe('StopPhotos', () => {
     expect(host.textContent).toContain('Kijelző-üzenet a megjegyzésbe írva: A fiók nem nyílik')
   })
 })
+
+describe('StopPhotos — kitöltő mód (a box előtt)', () => {
+  // a fenti beforeEach a normál módot rendereli — itt újrarendereljük kitöltő módban
+  const onSent = vi.fn()
+  beforeEach(async () => {
+    onSent.mockReset()
+    await act(async () => root.unmount())
+    root = createRoot(host)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await act(async () => {
+      root.render(<QueryClientProvider client={qc}><StopPhotos fill stop={stop} boxLabel="AB1234 · Teszt box" courierName="Teszt Elek" onPatch={onPatch} onSent={onSent} /></QueryClientProvider>)
+    })
+    await settle()
+  })
+
+  it('egy nagy „Fotó a kijelzőről” gomb van, és nincs külön kiolvasás / küldés gomb', async () => {
+    const btns = [...host.querySelectorAll('button')].map((b) => b.textContent ?? '')
+    expect(btns.some((t) => t.includes('Fotó a kijelzőről'))).toBe(true)
+    expect(btns.some((t) => t.includes('Kiolvasás (AI)'))).toBe(false)
+    expect(btns.some((t) => t.includes('Küldés a csoportba'))).toBe(false)
+  })
+
+  it('a fotó elkészülte után a kiolvasás MAGÁTÓL elindul, és beírja a számokat', async () => {
+    invoke.mockResolvedValue({ data: { result: { placed: 21, nf: 2, codes: [] } }, error: null })
+    const big = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('Fotó a kijelzőről'))
+    await click(big!)
+    await click(camera())
+    await settle(); await settle()
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect((invoke.mock.calls[0] as [string])[0]).toBe('read-box-photo')
+    expect(inserted).toHaveLength(1)
+    expect(onPatch).toHaveBeenCalledWith({ placed: 21, nf: 2 })
+  })
+})
+
