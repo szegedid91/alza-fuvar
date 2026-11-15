@@ -509,9 +509,10 @@ export default function Scan() {
           <p className="tiny muted" style={{ margin: 0 }}>Ha tévedés, olvasd be a beosztott autót. Ha a vezető mást mondott, mehetsz erre — a beosztás nem változik, a vezetők az Áttekintésben látják az eltérést.</p>
           <div className="btn-grid">
             <button className="btn ghost" disabled={busy} onClick={() => setPendingMismatch(null)}>Mégse</button>
-            <ConfirmButton className="btn danger-outline" confirmLabel="Igen, biztos erre" disabled={busy} onConfirm={() => void proceedMismatch()}>
+            {/* ez a kártya maga a megerősítés — egy koppintás elég */}
+            <button type="button" className="btn danger-outline" disabled={busy} onClick={() => void proceedMismatch()}>
               {busy ? 'Feldolgozás…' : 'Mégis erre az autóra'}
-            </ConfirmButton>
+            </button>
           </div>
         </div>
       )}
