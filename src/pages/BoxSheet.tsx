@@ -415,7 +415,11 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
 
       {dayEndVisible && (
       <div className="card stack" style={{ gap: 8 }}>
-        <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
+        <div className="between" style={{ gap: 8 }}>
+          <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
+          {/* az áttekintésben ez a rész csak kérésre nyílik — ugyanígy vissza is zárható (a beírt adat mentve marad) */}
+          {overview && <button type="button" className="btn ghost sm auto" onClick={() => setShowDayEnd(false)}><Icon name="chevron-up" size={14} />Bezárás</button>}
+        </div>
         <div className="tiny muted">Ezeket a nap legvégén, a raktárba visszaérve töltsd ki, az egész napra összesítve.</div>
         <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" />Raktári problémák</div>
         <div className="grid-2">
@@ -460,6 +464,12 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         )}
         {managerView && <div className="tiny muted">Menedzserként szerkeszted {name ?? 'a munkatárs'} lapját — a módosítás a naplóba kerül.</div>}
       </div>
+      )}
+      {/* a hosszú rész alján is: ne kelljen visszagörgetni a bezáráshoz */}
+      {overview && showDayEnd && (
+        <button type="button" className="btn ghost sm" onClick={() => { setShowDayEnd(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
+          <Icon name="chevron-up" size={14} />Nap végi rész bezárása
+        </button>
       )}
     </>
   )
