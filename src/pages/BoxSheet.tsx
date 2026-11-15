@@ -154,6 +154,10 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
 
 type SheetRow = BoxSheet & { car: { plate: string } | null }
 
+// A nap végi raktári mezők (raktári problémák, raktárban leadott) és a „Komplikációk” kártya EGYELŐRE
+// nem látszik — sem a futárnál, sem a vezetői nézetben. Az adat és az oszlopok megmaradnak; visszakapcsolás: true.
+const DAY_END_FIELDS: boolean = false
+
 export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null }) {
   const qc = useQueryClient()
   const { profile } = useAuth()
@@ -294,10 +298,9 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   // Végzés idő szerkesztése (egy soros kijelzés, koppintásra mező)
   const [editEnd, setEditEnd] = useState(false)
   // A futár saját lapja a járat-kártyán kívülről megnyitva: ÁTTEKINTÉS — minden box összecsukva, a szerkesztéshez
-  // ki kell nyitni egyet; a kézi box-felvétel és a nap végi (raktári) mezők csak kérésre látszanak
+  // ki kell nyitni egyet; a kézi box-felvétel csak kérésre látszik
   const overview = !managerView && !prefillBoxId
   const [showAdd, setShowAdd] = useState(false)
-  const [showDayEnd, setShowDayEnd] = useState(false)
   const [addedNow, setAddedNow] = useState(false)
   useEffect(() => {
     if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
@@ -318,7 +321,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const totals = stopTotals(stops)
   const submitted = sheet.status === 'submitted'
   const saving = updateSheet.isPending || updateStop.isPending || addStop.isPending || removeStop.isPending
-  const dayEndVisible = !prefillBoxId && (!overview || showDayEnd)
+  const dayEndVisible = !prefillBoxId
   const TOTALS = stops.length > 0 && !prefillBoxId ? (
     <div className="card stack" style={{ gap: 6 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />Összesen</div>
@@ -407,19 +410,9 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
 
       {!overview && TOTALS}
 
-      {overview && !showDayEnd && (
-        <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowDayEnd(true)}>
-          <Icon name="chevron-down" size={12} /> Raktári probléma vagy komplikáció volt? Megnyitás
-        </button>
-      )}
-
-      {dayEndVisible && (
+      {DAY_END_FIELDS && dayEndVisible && (
       <div className="card stack" style={{ gap: 8 }}>
-        <div className="between" style={{ gap: 8 }}>
-          <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
-          {/* az áttekintésben ez a rész csak kérésre nyílik — ugyanígy vissza is zárható (a beírt adat mentve marad) */}
-          {overview && <button type="button" className="btn ghost sm auto" onClick={() => setShowDayEnd(false)}><Icon name="chevron-up" size={14} />Bezárás</button>}
-        </div>
+        <div className="tiny muted" style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Nap vége — raktárba visszaérve</div>
         <div className="tiny muted">Ezeket a nap legvégén, a raktárba visszaérve töltsd ki, az egész napra összesítve.</div>
         <div className="card-title" style={{ margin: 0 }}><Icon name="alert-triangle" />Raktári problémák</div>
         <div className="grid-2">
@@ -434,7 +427,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
       </div>
       )}
 
-      {dayEndVisible && (
+      {DAY_END_FIELDS && dayEndVisible && (
       <div className="card stack" style={{ gap: 8 }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="wrench" />Komplikációk</div>
         <div className="grid-2">
@@ -464,12 +457,6 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         )}
         {managerView && <div className="tiny muted">Menedzserként szerkeszted {name ?? 'a munkatárs'} lapját — a módosítás a naplóba kerül.</div>}
       </div>
-      )}
-      {/* a hosszú rész alján is: ne kelljen visszagörgetni a bezáráshoz */}
-      {overview && showDayEnd && (
-        <button type="button" className="btn ghost sm" onClick={() => { setShowDayEnd(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}>
-          <Icon name="chevron-up" size={14} />Nap végi rész bezárása
-        </button>
       )}
     </>
   )

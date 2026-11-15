@@ -316,7 +316,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   <div style={{ fontWeight: 800, fontSize: 17 }}><Icon name="truck" /> Kész — irány a raktár!</div>
                   <div className="tiny muted">{hasNextRound
                     ? `Mind a ${stops.length} cím leadva. A raktárban: „Megérkeztem”, aztán „Elszámoltam” (ha most adod le a visszárut), majd „Kiindultam” a ${round + 1}. körre — ez a kör akkor összecsukódik.`
-                    : `Mind a ${stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap nap végi része, végül „Autó lerakva”.`}</div>
+                    : `Mind a ${stops.length} cím leadva. A raktárban: „Elszámoltam” a visszáruk leadásakor, majd a Box-lap lezárása, végül „Autó lerakva”.`}</div>
                 </div>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 18 }}><Icon name="warehouse" size={18} /> {depot.name}</div>
