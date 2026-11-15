@@ -355,7 +355,7 @@ export default function Members() {
       const { error } = await supabase.rpc('set_user_status', { target_id: id, p_status: status })
       if (error) throw error
     },
-    onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }) },
+    onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }); void qc.invalidateQueries({ queryKey: ['ws-members'] }) },
     onError: (e) => setActionError('Az állapot mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
@@ -364,7 +364,7 @@ export default function Members() {
       const { error } = await supabase.rpc('set_user_role', { target_id: id, p_role: role } as never)
       if (error) throw error
     },
-    onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }) },
+    onSuccess: () => { setActionError(null); void qc.invalidateQueries({ queryKey: ['members'] }); void qc.invalidateQueries({ queryKey: ['ws-members'] }) },
     onError: (e) => setActionError('A szerep mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 

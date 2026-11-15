@@ -84,6 +84,21 @@ export default function WeekTable() {
       return (data ?? []) as Shift[]
     },
   })
+  // A hét beosztásában szereplő, de már nem választható emberek (letiltva / áthelyezve): a nevük látsszon a cellában,
+  // ne üres helyként — a soruk attól még él (bér, export, heti értesítés)
+  const memberIdSet = useMemo(() => new Set((members ?? []).map((m) => m.id)), [members])
+  const goneIds = useMemo(() => {
+    if (!members) return [] as string[]
+    const ids = new Set<string>()
+    for (const sh of shifts ?? []) for (const id of [sh.driver_id, sh.loader_id, sh.trainee_id]) if (id && !memberIdSet.has(id)) ids.add(id)
+    return [...ids].sort()
+  }, [members, memberIdSet, shifts])
+  const { data: goneNames } = useQuery({
+    queryKey: ['member-names', goneIds.join(',')],
+    enabled: goneIds.length > 0,
+    staleTime: 10 * 60_000,
+    queryFn: () => resolveNames(goneIds),
+  })
 
   // Napközbeni autócserék a héten: user+nap szerinti idővonalak, ahol volt váltás
   const { data: weekSwitches } = useQuery({
@@ -560,6 +575,7 @@ export default function WeekTable() {
                                         compact
                                         value={val}
                                         options={memberOptions}
+                                        fallbackLabel={val && members && !memberIdSet.has(val) ? `${goneNames?.[val] ?? 'Ismeretlen'} — letiltva` : undefined}
                                         placeholder={FIELD_PH[field]}
                                         disabled={busy || isArchived(carId)}
                                         danger={dup}

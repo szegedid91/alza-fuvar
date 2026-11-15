@@ -19,6 +19,10 @@ import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
 
+// A régi (2026-11-09 előtti) összevont „sérült” mező: ÉK / NHB / törölt együtt
+const LEGACY_SHORT = 'ÉK/NHB/tör. (régi)'
+const legacyOf = (stops: { damaged?: number | null }[]): number => stops.reduce((a, st) => a + Number(st.damaged ?? 0), 0)
+
 // Vezetői nézet: a hónap Box-lapjai (ki, mikor, melyik autóval, hány box,
 // mennyi csomag / hiány / visszáru), lap-részletek táblázatban, keresés box-kódra
 // ("ezt a boxot ki vitte, mikor, mi volt vele") és Excel export.
@@ -65,6 +69,9 @@ export default function BoxSheets() {
   const sheets = data ?? []
   const allStops = useMemo(() => sheets.flatMap((s) => s.stops.map((st) => ({ ...st, _sheet: s }))), [sheets])
   const totals = useMemo(() => stopTotals(allStops), [allStops])
+  // Régi (2026-11-09 előtti) lapokon az ÉK / NHB / törölt egy összevont „sérült” mezőben volt — ezt az új mezők
+  // nem tartalmazzák, ezért külön oszlopként mutatjuk, ha a hónapban van ilyen adat
+  const legacyTotal = useMemo(() => allStops.reduce((a, st) => a + Number(st.damaged ?? 0), 0), [allStops])
 
   const codeHits = useMemo(() => {
     const q = normalize(codeQ).trim()
@@ -85,6 +92,7 @@ export default function BoxSheets() {
       'Indulás': hhmm(st._sheet.start_time), 'Végzés': hhmm(st._sheet.end_time),
       '#': st.seq, 'Box kód': st.box_code ?? '', 'Box': st.box_name ?? '',
       ...Object.fromEntries(STOP_FIELDS.map((f) => [f.short, st[f.key]])),
+      ...(legacyTotal > 0 ? { [LEGACY_SHORT]: Number(st.damaged ?? 0) } : {}),
       'Megjegyzés': st.note ?? '',
     }))
     await exportRowsToXlsx(`box-megallok-${ym}.xlsx`, 'Megállók', rows)
@@ -96,6 +104,7 @@ export default function BoxSheets() {
         'Dátum': s.work_date, 'Név': s._name ?? '', 'Autó': s.car?.plate ?? '', 'Állapot': s.status === 'submitted' ? 'lezárva' : 'piszkozat',
         'Indulás': hhmm(s.start_time), 'Végzés': hhmm(s.end_time), 'Megállók': s.stops.length,
         ...Object.fromEntries(STOP_FIELDS.map((f) => [`Σ ${f.short}`, t[f.key]])),
+        ...(legacyTotal > 0 ? { [`Σ ${LEGACY_SHORT}`]: legacyOf(s.stops) } : {}),
         ...Object.fromEntries(WH_FIELDS.map((f) => [f.label, s[f.key]])), 'Raktári megjegyzés': s.wh_note ?? '',
         ...Object.fromEntries(COMP_FIELDS.map((f) => [f.label, s[f.key]])), 'Egyéb komplikáció': s.comp_note ?? '',
         ...Object.fromEntries(RET_FIELDS.map((f) => [`Leadott ${f.label}`, s[f.key]])),
@@ -135,6 +144,12 @@ export default function BoxSheets() {
                   <span className="num" style={{ color: f.key !== 'placed' && totals[f.key] > 0 ? 'var(--warning)' : undefined }}>{totals[f.key]}</span>
                 </div>
               ))}
+              {legacyTotal > 0 && (
+                <div className="between" title="Régi összevont mező: érvénytelen kód / ne helyezd be / törölt">
+                  <span className="tiny muted">Σ {LEGACY_SHORT}</span>
+                  <span className="num" style={{ color: 'var(--warning)' }}>{legacyTotal}</span>
+                </div>
+              )}
             </div>
             {sheets.length > 0 && (
               <div className="row" style={{ gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
@@ -210,6 +225,7 @@ export default function BoxSheets() {
 
 function SheetDetail({ sheet: s, lateEdits = [], names = {} }: { sheet: SheetRow; lateEdits?: LateEdit[]; names?: Record<string, string | null> }) {
   const t = stopTotals(s.stops)
+  const legacy = legacyOf(s.stops)
   const whItems = WH_FIELDS.filter((f) => s[f.key] > 0).map((f) => `${f.label}: ${s[f.key]}`)
   const compItems = COMP_FIELDS.filter((f) => s[f.key] > 0).map((f) => `${f.short}: ${s[f.key]}`)
   const retItems = RET_FIELDS.map((f) => `${f.label}: ${s[f.key]}`)
@@ -226,6 +242,7 @@ function SheetDetail({ sheet: s, lateEdits = [], names = {} }: { sheet: SheetRow
               <tr>
                 <th style={cell}>#</th><th style={{ ...cell, textAlign: 'left' }}>Box</th>
                 {STOP_FIELDS.map((f) => <th key={f.key} style={numCell} title={f.label}>{f.short}</th>)}
+                {legacy > 0 && <th style={numCell} title="Régi összevont mező: érvénytelen kód / ne helyezd be / törölt">{LEGACY_SHORT}</th>}
                 <th style={{ ...cell, textAlign: 'left' }}>Megj.</th>
               </tr>
             </thead>
@@ -237,6 +254,7 @@ function SheetDetail({ sheet: s, lateEdits = [], names = {} }: { sheet: SheetRow
                   {STOP_FIELDS.map((f) => (
                     <td key={f.key} style={{ ...numCell, color: f.key !== 'placed' && st[f.key] > 0 ? 'var(--warning)' : st[f.key] === 0 ? 'var(--text-dim)' : undefined, fontWeight: st[f.key] > 0 ? 700 : 400 }}>{st[f.key]}</td>
                   ))}
+                  {legacy > 0 && <td style={{ ...numCell, color: Number(st.damaged ?? 0) > 0 ? 'var(--warning)' : 'var(--text-dim)', fontWeight: Number(st.damaged ?? 0) > 0 ? 700 : 400 }}>{Number(st.damaged ?? 0)}</td>}
                   <td style={{ ...cell, whiteSpace: 'normal', minWidth: 120 }}>{st.note ?? ''}</td>
                 </tr>
               ))}
@@ -245,6 +263,7 @@ function SheetDetail({ sheet: s, lateEdits = [], names = {} }: { sheet: SheetRow
               <tr style={{ fontWeight: 800 }}>
                 <td style={cell}></td><td style={cell}>Összesen</td>
                 {STOP_FIELDS.map((f) => <td key={f.key} style={numCell}>{t[f.key]}</td>)}
+                {legacy > 0 && <td style={numCell}>{legacy}</td>}
                 <td style={cell}></td>
               </tr>
             </tfoot>

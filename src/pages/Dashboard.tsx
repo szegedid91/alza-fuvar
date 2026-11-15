@@ -333,9 +333,14 @@ export default function Dashboard() {
       if ((issues?.length ?? 0) > 0) flags.push({ kind: 'issue', text: `Nyitott autó-hiba: ${issues!.length} db` })
       // beosztva de nincs becsekkolva
       // (a 2. kör ugyanazzal az emberrel nem jelzi kétszer)
+      // EMBERENKÉNT nézzük: ha a rakodó becsekkolt, de a sofőr nem jött, a sofőr hiányzik — és aki a beosztottól
+      // eltérő autóra csekkolt be, az megjelent (azt külön jelzés mutatja), nem hiányzó
+      const checkedUsers = new Set((checkins ?? []).map((c) => c.user_id))
       const noshowSeen = new Set<string>()
-      for (const sh of shifts ?? []) if (!checkedCarIds.has(sh.car_id)) {
-        const who = [sh.driver_id, sh.loader_id, sh.trainee_id].filter((x): x is string => !!x).map((id) => names[id] ?? '?').join(' + ')
+      for (const sh of shifts ?? []) {
+        const missing = [sh.driver_id, sh.loader_id, sh.trainee_id].filter((x): x is string => !!x && !checkedUsers.has(x))
+        if (missing.length === 0) continue
+        const who = missing.map((id) => names[id] ?? '?').join(' + ')
         const key = `${sh.car_id}|${who}`
         if (noshowSeen.has(key)) continue
         noshowSeen.add(key)

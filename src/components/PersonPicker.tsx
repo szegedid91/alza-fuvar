@@ -6,10 +6,13 @@ export interface PickerOption { id: string; label: string }
 // koppintásra választ, × törli. A lista fixen pozicionált, így a
 // vízszintesen görgethető táblázat sem vágja le.
 export default function PersonPicker({
-  value, options, placeholder, onChange, disabled, compact, danger, title,
+  value, options, placeholder, onChange, disabled, compact, danger, title, fallbackLabel,
 }: {
   value: string
   options: PickerOption[]
+  // ha a kiválasztott személy már nincs a választhatók között (letiltották, áthelyezték): ezzel a névvel látszik,
+  // nem üres cellaként — a beosztása ugyanis attól még él (bér, export, értesítés)
+  fallbackLabel?: string
   placeholder: string
   onChange: (id: string) => void
   disabled?: boolean
@@ -71,7 +74,7 @@ export default function PersonPicker({
         ref={inputRef}
         className="input"
         style={{ ...inputStyle, borderColor: danger ? 'var(--danger)' : undefined }}
-        value={open ? q : (selected?.label ?? '')}
+        value={open ? q : (selected?.label ?? (value ? fallbackLabel ?? '' : ''))}
         placeholder={placeholder}
         title={title}
         disabled={disabled}

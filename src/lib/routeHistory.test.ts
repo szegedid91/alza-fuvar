@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffUploads, groupUploads, planKmFor, type PlanVersion } from './routeHistory'
+import { diffUploads, groupUploads, planKmFor, withCarriedRoutes, type PlanVersion } from './routeHistory'
 
 const v = (id: string, code: string, at: string, codes: string[], source = 'a.xlsx', start: string | null = '05:30:00', eta?: Record<string, string>): PlanVersion => ({
   id, route_id: null, code, source, imported_at: at, imported_by: null, planned_start: start, planned_end: null,
@@ -54,5 +54,25 @@ describe('planKmFor', () => {
     expect(planKmFor(plan([5, null]), ['b0', 'b1'])).toEqual({ status: 'none' })
     expect(planKmFor(plan([5, 1], null), ['b0', 'b1'])).toEqual({ status: 'none' })
     expect(planKmFor(null, ['b0'])).toEqual({ status: 'none' })
+  })
+})
+
+describe('withCarriedRoutes — a feltöltésből kimaradt járat nem „megszűnt”', () => {
+  it('ha csak a G járat változik az újrafeltöltésnél, az I és az R változatlan marad', () => {
+    const versions = [
+      v('1', 'G', '2026-11-10T08:00:00Z', ['a', 'b']), v('2', 'I', '2026-11-10T08:00:10Z', ['c']), v('3', 'R', '2026-11-10T08:00:20Z', ['d', 'e']),
+      v('4', 'G', '2026-11-13T09:00:00Z', ['a', 'b', 'f']), // csak a G kapott új verziót
+    ]
+    const uploads = withCarriedRoutes(groupUploads(versions))
+    expect(uploads[1].routes.map((r) => r.code)).toEqual(['G', 'I', 'R'])
+    const d = diffUploads(uploads[0], uploads[1])
+    expect(d.routes.map((r) => [r.code, r.status])).toEqual([['G', 'changed'], ['I', 'same'], ['R', 'same']])
+    expect(d.totals.boxes).toBe(6)
+    expect(d.totals.prevBoxes).toBe(5)
+  })
+  it('carry nélkül ugyanez „megszűnt”-nek látszana (ez volt a hiba)', () => {
+    const versions = [v('1', 'G', '2026-11-10T08:00:00Z', ['a']), v('2', 'I', '2026-11-10T08:00:10Z', ['c']), v('4', 'G', '2026-11-13T09:00:00Z', ['a', 'f'])]
+    const raw = groupUploads(versions)
+    expect(diffUploads(raw[0], raw[1]).routes.find((r) => r.code === 'I')?.status).toBe('removed')
   })
 })

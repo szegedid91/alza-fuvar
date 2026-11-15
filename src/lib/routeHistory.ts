@@ -16,6 +16,17 @@ export function groupUploads(versions: PlanVersion[], windowMs = 10 * 60_000): U
   return out
 }
 
+// Egy feltöltés nem mindig tartalmaz minden járatot: ha ugyanazt a fájlt töltik fel újra és csak egy járat változott
+// (a többi verziója helyben frissül), vagy a fájlban csak egy járat van, a többi járat NEM szűnt meg — az előző
+// állapotával él tovább. Ezért minden feltöltéshez hozzávesszük az addig ismert, de most nem érintett járatokat.
+export function withCarriedRoutes(uploads: Upload[]): Upload[] {
+  const state = new Map<string, PlanVersion>()
+  return uploads.map((u) => {
+    for (const r of u.routes) state.set(r.code, r)
+    return { ...u, routes: [...state.values()].sort((a, b) => a.code.localeCompare(b.code)) }
+  })
+}
+
 const stopKey = (s: VersionStop) => s.code ?? s.box_id ?? '?'
 // A jegyzékből időközben törölt box pillanatképében csak azonosító maradt — olvasható címke helyette
 export const boxLabel = (k: string | null): string => (!k ? '?' : /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(k) ? 'törölt box' : k)

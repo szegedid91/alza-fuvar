@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { resolveNames } from '../lib/names'
 import { formatDateTime } from '../lib/labels'
-import { boxLabel, diffUploads, groupUploads, hm, type PlanVersion, type Upload, type UploadDiff } from '../lib/routeHistory'
+import { boxLabel, diffUploads, groupUploads, withCarriedRoutes, hm, type PlanVersion, type Upload, type UploadDiff } from '../lib/routeHistory'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { errMsg } from '../lib/errors'
@@ -27,7 +27,8 @@ export default function RouteChanges() {
       return { versions, names }
     },
   })
-  const uploads = useMemo(() => groupUploads(data?.versions ?? []), [data])
+  // a feltöltésből kimaradt, változatlan járatok az előző állapotukkal számítanak (nem „megszűnt”)
+  const uploads = useMemo(() => withCarriedRoutes(groupUploads(data?.versions ?? [])), [data])
   const diffs = useMemo(() => uploads.map((u, i) => diffUploads(i > 0 ? uploads[i - 1] : null, u)), [uploads])
   const routeCodes = useMemo(() => [...new Set(uploads.flatMap((u) => u.routes.map((r) => r.code)))].sort(), [uploads])
   // Km járatonként: CSAK a betöltött tervfájl (az Alza táblázata) közúti km-e — légvonalat nem számolunk.
