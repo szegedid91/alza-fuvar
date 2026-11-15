@@ -22,6 +22,7 @@ import { supabase } from '../lib/supabase'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 import WaiverRequest from '../components/WaiverRequest'
 import { useFuelGate } from '../hooks/useDayEnd'
+import { DestNavPrompt } from '../components/NavPromptOverlay'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string; group?: string; badge?: number }
 
@@ -132,6 +133,8 @@ export default function Home() {
           <div className="tiny muted">Amíg ez nincs meg, csak a Beosztás és az Autó-hiba érhető el.</div>
         </div>
       )}
+      {/* „Járat kész” után: teljes képernyős „Navigáció indítása” a raktárba (a jelzés koppintása a WhatsAppot nyitotta) */}
+      {isCrew && !!today?.checkin && !today.checkin.checked_out_at && <DestNavPrompt />}
       {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} onRoute={departed && (myRoutes?.length ?? 0) > 0} />}

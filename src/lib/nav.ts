@@ -85,35 +85,66 @@ export function openNav(target: NavTarget | null | undefined, deps: LaunchDeps &
 // A Box-lap „Kész, következő box” gombjához: a járat-kártya adja át, hova kell utána navigálni.
 // askLate: ha a box határideje lejárt és még nincs megadott késés-ok, a járat-kártya előbb az okot kéri —
 // akkor a navigáció az ok mentésekor indul (ott is koppintás van), nem itt.
-export type AfterFill = { boxId: string; nav: NavTarget | null; deadline: string | null; carryKey: string }
+// routeCode + depot: az utolsó boxnál a Box-lap gombja maga a „Járat kész” — ehhez kell a járat kódja (az üzenetbe)
+// és a raktár (a navigáció célja)
+export type AfterFill = { boxId: string; nav: NavTarget | null; deadline: string | null; carryKey: string; routeCode?: string | null; depot?: { lat: number; lng: number; title: string; address: string | null } | null }
 
-export function shouldNavAfterFill(after: AfterFill | null | undefined, boxId: string | null, deps: { lateMin?: (deadline: string | null) => number | null; hasCarry?: (key: string) => boolean } = {}): NavTarget | null {
-  if (!after || !after.nav || !boxId || after.boxId !== boxId) return null
+type LateDeps = { lateMin?: (deadline: string | null) => number | null; hasCarry?: (key: string) => boolean }
+
+// Kérdezni fog-e a járat-kártya késés-okot ennél a boxnál (lejárt a határidő, és még nincs megadott ok a körre)?
+export function willAskLate(after: AfterFill, deps: LateDeps = {}): boolean {
   const late = deps.lateMin?.(after.deadline) ?? null
-  if (late != null && late > 0) {
-    const hasCarry = deps.hasCarry ?? ((key: string) => { try { return (JSON.parse(sessionStorage.getItem(key) ?? '[]') as unknown[]).length > 0 } catch { return false } })
-    if (!hasCarry(after.carryKey)) return null
-  }
+  if (late == null || late <= 0) return false
+  const hasCarry = deps.hasCarry ?? ((key: string) => { try { return (JSON.parse(sessionStorage.getItem(key) ?? '[]') as unknown[]).length > 0 } catch { return false } })
+  return !hasCarry(after.carryKey)
+}
+
+export function shouldNavAfterFill(after: AfterFill | null | undefined, boxId: string | null, deps: LateDeps = {}): NavTarget | null {
+  if (!after || !after.nav || !boxId || after.boxId !== boxId) return null
+  if (willAskLate(after, deps)) return null
   return after.nav
 }
 
-// „Kiindultam” után: a koppintás a WhatsAppot nyitja (a telefon egy koppintásból csak EGY appot enged megnyitni),
-// ezért a navigáció nem indulhat ugyanabból az érintésből. Helyette megjegyezzük, hogy indulni kell: amikor a futár
-// visszavált az appba, a járat-kártya teljes képernyős „Navigáció indítása” gombot mutat — egy koppintás, és megy.
+// Az utolsó boxnál: lehet-e a Box-lap gombja maga a „Járat kész” (megvan a járat-kártya átadott adata, és nem kell
+// előbb késés-okot adni — akkor a járat-kártyán, az ok megadása után zárul a járat)
+export function canFinishRouteFromSheet(after: AfterFill | null | undefined, boxId: string | null, deps: LateDeps = {}): boolean {
+  return !!after && !!boxId && after.boxId === boxId && !willAskLate(after, deps)
+}
+
+// A jelzések („Kiindultam”, „Járat kész”) koppintása a WhatsAppot nyitja — a telefon egy koppintásból csak EGY appot
+// enged megnyitni, ezért a navigáció nem indulhat ugyanabból az érintésből. Helyette megjegyezzük, hogy indulni kell:
+// amikor a futár visszavált az appba, teljes képernyős „Navigáció indítása” gomb várja — egy koppintás, és megy.
+//  • cél nélkül (Kiindultam): a járat aktuális címe — a járat-kártya mutatja
+//  • megadott céllal (Járat kész): a raktár — a kezdőlap mutatja (a járat-kártya addigra eltűnik)
+export type PromptDest = { lat: number; lng: number; title: string; address: string | null }
 const PROMPT_KEY = 'nav-after-depart'
 const PROMPT_FRESH_MS = 15 * 60_000
 export const PROMPT_EVENT = 'nav-prompt'
-export function requestNavPrompt(now: number = Date.now()) {
+
+export function requestNavPrompt(dest: PromptDest | null = null, now: number = Date.now()) {
   if (!getAutoNav()) return
-  try { sessionStorage.setItem(PROMPT_KEY, String(now)) } catch { /* nem kritikus */ }
-  // ha a járat-kártya már látszik (pl. ismételt jelzés), azonnal értesül
+  try { sessionStorage.setItem(PROMPT_KEY, JSON.stringify({ t: now, dest })) } catch { /* nem kritikus */ }
+  // ha a kártya már látszik (pl. ismételt jelzés), azonnal értesül
   try { window.dispatchEvent(new Event(PROMPT_EVENT)) } catch { /* nincs ablak (teszt) */ }
 }
-export function navPromptPending(now: number = Date.now()): boolean {
+function readPrompt(now: number): { dest: PromptDest | null } | null {
   try {
-    const t = Number(sessionStorage.getItem(PROMPT_KEY) ?? 0)
-    return t > 0 && now - t >= 0 && now - t < PROMPT_FRESH_MS
-  } catch { return false }
+    const raw = sessionStorage.getItem(PROMPT_KEY)
+    if (!raw) return null
+    const v = JSON.parse(raw) as { t?: number; dest?: PromptDest | null } | number
+    const t = typeof v === 'number' ? v : Number(v?.t ?? 0)
+    if (!(t > 0) || now - t < 0 || now - t >= PROMPT_FRESH_MS) return null
+    return { dest: typeof v === 'number' ? null : v.dest ?? null }
+  } catch { return null }
+}
+// a járat aktuális címéhez vár indítás („Kiindultam” után)
+export function navPromptPending(now: number = Date.now()): boolean {
+  const p = readPrompt(now)
+  return !!p && !p.dest
+}
+// megadott célhoz (raktár) vár indítás („Járat kész” után)
+export function navPromptDest(now: number = Date.now()): PromptDest | null {
+  return readPrompt(now)?.dest ?? null
 }
 export function clearNavPrompt() {
   try { sessionStorage.removeItem(PROMPT_KEY) } catch { /* nem kritikus */ }

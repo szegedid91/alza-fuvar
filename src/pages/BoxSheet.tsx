@@ -27,7 +27,8 @@ import { errMsg } from '../lib/errors'
 import { submitNow } from '../lib/outbox'
 import { useQueued } from '../hooks/useOutbox'
 import { isStopFilled, mergeQueuedStops } from '../lib/queuedMerge'
-import { openNav, shouldNavAfterFill, type AfterFill } from '../lib/nav'
+import { openNav, shouldNavAfterFill, canFinishRouteFromSheet, requestNavPrompt, type AfterFill } from '../lib/nav'
+import { openWhatsApp, statusText } from '../lib/groupMessage'
 import { lateMinutes } from '../lib/routePlan'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { useRouteStops } from '../hooks/useRouteStops'
@@ -583,6 +584,9 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
   const last = !!seqLabel && n === of
   const name = stop.box_name ?? box?.name ?? ''
   const placed = STOP_FIELDS.find((f) => f.key === 'placed')!
+  // az utolsó boxnál a fő gomb „Járat kész” (ha késés-okot kell adni, az előbb a járat-kártyán történik)
+  const lateDeps = { lateMin: (d: string | null) => lateMinutes(d, 1) }
+  const routeFinish = last && canFinishRouteFromSheet(after, stop.box_id, lateDeps)
 
   async function send() {
     setSharing(true)
@@ -643,12 +647,21 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
       ) : (
         <>
           <button type="button" className="btn" style={{ minHeight: 60, fontSize: 17 }} disabled={!filled} onClick={() => {
+            // Utolsó box: ez a gomb maga a „Járat kész” — a WhatsApp a kész üzenettel nyílik (a koppintáson belül),
+            // a járat-kártya lezárja a járatot és rögzíti a jelzést, visszaváltva pedig a raktárba indul a navigáció
+            if (routeFinish && after) {
+              const at = new Date()
+              navigate('/', { state: { finishBox: stop.box_id, routeDoneAt: at.toISOString() } })
+              if (after.depot) requestNavPrompt(after.depot)
+              openWhatsApp(statusText('done', at, courierName, after.routeCode ?? null))
+              return
+            }
             // a navigáció a koppintáson belül nyílik (különben a telefon rákérdezne); a box lezárását a járat-kártya végzi
-            const nav = last ? null : shouldNavAfterFill(after, stop.box_id, { lateMin: (d) => lateMinutes(d, 1) })
+            const nav = last ? null : shouldNavAfterFill(after, stop.box_id, lateDeps)
             navigate('/', { state: { finishBox: stop.box_id } })
             openNav(nav)
           }}>
-            <Icon name={last ? 'flag' : 'check'} />{last ? 'Kész — vissza a járathoz' : 'Kész, következő box'}
+            <Icon name={last ? 'flag' : 'check'} />{routeFinish ? 'Járat kész' : last ? 'Kész — vissza a járathoz' : 'Kész, következő box'}
           </button>
           {!filled && <div className="tiny muted" style={{ textAlign: 'center' }}>Írd be a behelyezett darabszámot.</div>}
           <button type="button" className="link-btn tiny" style={{ alignSelf: 'center' }} disabled={sharing} onClick={() => void send()}>újraküldés a csoportba</button>

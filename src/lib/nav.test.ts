@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { clearNavPrompt, launchNav, navPromptPending, navSchemeUrl, navTargetOf, navUrl, openNav, requestNavPrompt, shouldNavAfterFill, type AfterFill } from './nav'
+import { canFinishRouteFromSheet, clearNavPrompt, launchNav, navPromptDest, navPromptPending, navSchemeUrl, navTargetOf, navUrl, openNav, requestNavPrompt, shouldNavAfterFill, type AfterFill } from './nav'
 
 describe('navigáció koordinátára', () => {
   it('a cél mindig a koordináta, és a navigáció rögtön indul', () => {
@@ -62,7 +62,7 @@ describe('navigáció a „Kiindultam” után', () => {
     vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) })
     vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined, removeItem: () => undefined })
     expect(navPromptPending(1000)).toBe(false)
-    requestNavPrompt(1000)
+    requestNavPrompt(null, 1000)
     expect(navPromptPending(1000 + 60_000)).toBe(true)
     expect(navPromptPending(1000 + 16 * 60_000)).toBe(false)
     clearNavPrompt()
@@ -73,8 +73,32 @@ describe('navigáció a „Kiindultam” után', () => {
     const store = new Map<string, string>()
     vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) })
     vi.stubGlobal('localStorage', { getItem: (k: string) => (k === 'alza-nav-auto' ? '0' : null), setItem: () => undefined, removeItem: () => undefined })
-    requestNavPrompt(1000)
+    requestNavPrompt(null, 1000)
     expect(navPromptPending(2000)).toBe(false)
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('„Járat kész” a Box-lapról', () => {
+  const after: AfterFill = { boxId: 'b9', nav: null, deadline: '10:00', carryKey: 'late-carry:R:1', routeCode: 'R', depot: { lat: 47.48, lng: 19.19, title: 'Raktár', address: 'Budapest' } }
+  it('az utolsó boxnál a lap gombja zárhatja a járatot, ha nem kell előbb késés-ok', () => {
+    expect(canFinishRouteFromSheet(after, 'b9', { lateMin: () => null })).toBe(true)
+    expect(canFinishRouteFromSheet(after, 'b9', { lateMin: () => 20, hasCarry: () => true })).toBe(true)
+    expect(canFinishRouteFromSheet(after, 'b9', { lateMin: () => 20, hasCarry: () => false })).toBe(false)
+    expect(canFinishRouteFromSheet(after, 'másik', { lateMin: () => null })).toBe(false)
+    expect(canFinishRouteFromSheet(null, 'b9')).toBe(false)
+  })
+  it('a raktárhoz kért indítás külön van a járat címéhez kérttől', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) })
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined, removeItem: () => undefined })
+    requestNavPrompt(after.depot, 1000)
+    expect(navPromptDest(2000)).toEqual({ lat: 47.48, lng: 19.19, title: 'Raktár', address: 'Budapest' })
+    expect(navPromptPending(2000)).toBe(false)
+    expect(navPromptDest(1000 + 16 * 60_000)).toBeNull()
+    requestNavPrompt(null, 3000)
+    expect(navPromptPending(4000)).toBe(true)
+    expect(navPromptDest(4000)).toBeNull()
     vi.unstubAllGlobals()
   })
 })

@@ -8,13 +8,14 @@ import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
-import { getNavApp, navUrl, navTargetOf, openNav, launchNav, navPromptPending, clearNavPrompt, PROMPT_EVENT, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
+import { getNavApp, navUrl, navTargetOf, openNav, launchNav, navPromptPending, clearNavPrompt, requestNavPrompt, PROMPT_EVENT, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
 import { Link, useLocation, useNavigate } from 'react-router'
 import Icon from './Icon'
 import BoxCard from './BoxCard'
+import NavPromptOverlay from './NavPromptOverlay'
 import { errMsg } from '../lib/errors'
 import { recordStatusEvent, useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
@@ -47,6 +48,8 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const location = useLocation()
   // a Box-lap „Kész, következő” gombjáról érkezve: ezt a boxot kell lezárni és továbblépni (a lap ott már ki volt töltve)
   const finishBox = (location.state as { finishBox?: string } | null)?.finishBox ?? null
+  // az utolsó boxnál a Box-lap gombja maga a „Járat kész” volt (a WhatsApp ott már megnyílt): itt csak a lezárás és a rögzítés jön
+  const routeDoneAt = (location.state as { routeDoneAt?: string } | null)?.routeDoneAt ?? null
   const [openList, setOpenList] = useState(false)
 
   const { data: myShifts } = useMyRoutesToday()
@@ -191,12 +194,17 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
         // szöveggel nyílik (a koppintáson belül), a jelzés rögzül (idő, GPS)
         // A WhatsApp a koppintáson belül nyílik (különben a böngésző blokkolja); a jelzés rögzítése
         // a leadás sikeres mentése után történik (LOG-06) — ha a mentés elhasal, nincs „kész” esemény.
-        const onRouteDone = () => {
+        // pre: a jelzés a Box-lapon már elment (WhatsApp megnyitva, raktár-navigáció kérve) — itt csak a rögzítés, azzal az idővel
+        const onRouteDone = (pre?: Date) => {
           if (!currentWorkspaceId || !profile) return
-          const at = new Date()
-          const name = profile.full_name || profile.email || 'Munkatárs'
-          const text = statusText('done', at, name, codeOf(sh.route_id))
-          openWhatsApp(text) // ugyanazon a lapon: visszaváltáskor az app van elöl, nem egy üres fül
+          const at = pre ?? new Date()
+          if (!pre) {
+            const name = profile.full_name || profile.email || 'Munkatárs'
+            const text = statusText('done', at, name, codeOf(sh.route_id))
+            // visszaváltáskor: „Navigáció indítása” a raktárba (egy koppintásból csak egy app nyílhat)
+            requestNavPrompt({ lat: depot.lat, lng: depot.lng, title: depot.name, address: depot.address })
+            openWhatsApp(text) // ugyanazon a lapon: visszaváltáskor az app van elöl, nem egy üres fül
+          }
           return () => {
             void recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: sh.car_id, kind: 'done', at, geofence: currentWorkspace })
               .then(() => qc.invalidateQueries({ queryKey: ['status-events'] }))
@@ -208,7 +216,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
             plannedStart={routes?.find((r) => r.id === sh.route_id)?.planned_start ?? null}
             go={go} onRouteDone={onRouteDone} navApp={navApp} openList={openList} setOpenList={setOpenList} depot={depot}
             sheetFilled={!!stops[idx] && (filledBoxes.includes(stops[idx].box_id) || stops[idx].box_id === finishBox)}
-            autoFinishBox={finishBox} onAutoFinishHandled={() => navigate('/', { replace: true, state: null })}
+            autoFinishBox={finishBox} autoDoneAt={routeDoneAt} onAutoFinishHandled={() => navigate('/', { replace: true, state: null })}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
             // a Box-lap megkapja, hova kell utána navigálni (a „Kész, következő box” gombja a koppintáson belül indítja)
             onFillSheet={needsBoxSheet ? (after) => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}`, { state: { after } }) : undefined} />
@@ -222,7 +230,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
 const LATE_REASONS = ['Kamion késett a raktárba', 'Előző túra nem zárult le időben, késői indulás', 'Dugó / forgalom / útlezárás', 'Box hiba (nem nyílt, tele, kijelző)', 'Sok csomag, hosszabb töltés']
 
 // A járat-kártya megjelenése (egy járat egy körön)
-function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet, autoFinishBox = null, onAutoFinishHandled }: {
+function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = false, hasNextRound = false, plannedStart = null, go, onRouteDone, navApp, openList, setOpenList, depot, sheetFilled = true, onFillSheet, autoFinishBox = null, autoDoneAt = null, onAutoFinishHandled }: {
   code: string; round: number; plate: string; stops: RouteStop[]; idx: number; busy?: boolean
   // a betöltött terv: tervezett indulás (ebből derül ki, melyik körre szól), a fájl neve és a betöltés ideje
   plannedStart?: string | null
@@ -230,7 +238,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   hasNextRound?: boolean
   // az utolsó box leadásakor: „Járat kész” — a WhatsApp azonnal nyílik, a visszaadott
   // függvény a sikeres mentés után rögzíti a jelzést
-  onRouteDone?: () => (() => void) | undefined
+  onRouteDone?: (pre?: Date) => (() => void) | undefined
   // locked: még nem küldte el a „Kiindultam”-ot — a leadás gombjai inaktívak
   locked?: boolean
   go: (index: number, late?: { minutes: number; reason: string }, afterSaved?: () => void) => void; navApp: NavApp; openList: boolean; setOpenList: (f: (o: boolean) => boolean) => void
@@ -240,6 +248,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   sheetFilled?: boolean; onFillSheet?: (after: AfterFill | null) => void
   // a Box-lapról „Kész, következő”-vel érkezve: ezt a boxot magától lezárja és továbblép (az utolsó boxnál nem — ott a „Járat kész” a futáré)
   autoFinishBox?: string | null; onAutoFinishHandled?: () => void
+  // az utolsó boxnál a Box-lap gombja „Járat kész” volt: ezzel az idővel zárul a járat (a WhatsApp ott már megnyílt)
+  autoDoneAt?: string | null
 }) {
   const done = idx >= stops.length && stops.length > 0
   const cur = stops[idx]
@@ -274,19 +284,22 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // Automatikus navigáció: a „Kész, következő” a következő box GPS-koordinátájára nyitja és indítja a navigációt
   // (a Profilban kapcsolható). Az utolsó boxnál nincs — ott a „Járat kész” üzenete megy a csoportba.
   const nextNav = !isLast ? navTargetOf(stops[idx + 1]?.box) : null
-  const afterFill: AfterFill | null = cur ? { boxId: cur.box_id, nav: nextNav, deadline: curDeadline, carryKey } : null
+  const afterFill: AfterFill | null = cur ? { boxId: cur.box_id, nav: nextNav, deadline: curDeadline, carryKey, routeCode: code, depot: { lat: depot.lat, lng: depot.lng, title: depot.name, address: depot.address } } : null
+  // ha a „Járat kész” a Box-lapon már elment, a lezárásnál nem nyitjuk újra a WhatsAppot — csak rögzítünk
+  const preDone = useRef<Date | null>(null)
+  const routeDone = () => (isLast ? onRouteDone?.(preDone.current ?? undefined) : undefined)
   // fromTap: a futár koppintott (akkor nyitható a navigáció); a Box-lapról érkező automatikus lezárásnál
   // a Box-lap gombja már megnyitotta
   const finish = (fromTap = true) => {
     if (lateNow != null && lateNow > 0) {
       // Késés okát körönként egyszer kérdezzük: amíg a futár késésben van, az előzőleg megadott ok megy tovább
-      if (carry.length) { if (fromTap) openNav(nextNav); go(idx + 1, { minutes: lateNow, reason: carry.join('; ') }, isLast ? onRouteDone?.() : undefined); return }
+      if (carry.length) { if (fromTap) openNav(nextNav); go(idx + 1, { minutes: lateNow, reason: carry.join('; ') }, routeDone()); return }
       setLate(lateNow); setReasons(carry); return
     }
     // időben leadva: a késés behozva, az átvitt okok törlődnek
     if (carry.length) saveCarry([])
     if (fromTap) openNav(nextNav)
-    go(idx + 1, undefined, isLast ? onRouteDone?.() : undefined)
+    go(idx + 1, undefined, routeDone())
   }
   const toggleReason = (r: string) => setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
   const reasonAll = [...reasons, ...(reasonText.trim() ? [reasonText.trim()] : [])].join('; ')
@@ -295,38 +308,30 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
     // a szabad szöveges ok is továbbmegy a kör következő késő boxaira
     saveCarry(reasonAll.split('; ').filter(Boolean))
     openNav(nextNav)
-    go(idx + 1, { minutes: late, reason: reasonAll }, isLast ? onRouteDone?.() : undefined)
+    go(idx + 1, { minutes: late, reason: reasonAll }, routeDone())
   }
   // A Box-lap „Kész, következő” gombja után: ugyanaz történik, mintha itt nyomta volna meg — egyszer
   const autoDone = useRef<string | null>(null)
   useEffect(() => {
-    if (!autoFinishBox || !cur || cur.box_id !== autoFinishBox || locked || done || isLast || autoDone.current === autoFinishBox) return
+    if (!autoFinishBox || !cur || cur.box_id !== autoFinishBox || locked || done || autoDone.current === autoFinishBox) return
+    // az utolsó boxot csak akkor zárjuk magától, ha a Box-lap gombja „Járat kész” volt (különben a „Járat kész” a futáré)
+    if (isLast && !autoDoneAt) return
     // a felcsatolás UTÁN indítjuk (nem az effektben közvetlenül): így a mentés állapota biztosan visszaér a kártyára
     const t = setTimeout(() => {
       if (autoDone.current === autoFinishBox) return
       autoDone.current = autoFinishBox
+      if (isLast && autoDoneAt) preDone.current = new Date(autoDoneAt)
       finish(false)
       onAutoFinishHandled?.()
     }, 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFinishBox, cur?.box_id, locked, done, isLast])
+  }, [autoFinishBox, cur?.box_id, locked, done, isLast, autoDoneAt])
   const curNav = navTargetOf(cur?.box)
   return (
           <div className="card stack" style={{ gap: 10, borderColor: 'var(--primary)' }}>
             {navPrompt && !locked && cur && curNav && (
-              <div role="dialog" aria-label="Navigáció indítása" style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(5,10,20,0.94)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 18, padding: '24px 20px calc(24px + env(safe-area-inset-bottom))' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontWeight: 800, fontSize: 24 }}>Indulhat a navigáció</div>
-                  <div className="small muted" style={{ marginTop: 8 }}>{idx + 1}. cím a {stops.length}-ből</div>
-                  <div style={{ fontWeight: 800, fontSize: 18, marginTop: 4 }}>{cur.box.code ? `${cur.box.code} · ` : ''}{cur.box.name}</div>
-                  <div className="small muted">{cur.box.address}</div>
-                </div>
-                <button type="button" className="btn" style={{ minHeight: 110, fontSize: 22 }} onClick={() => { closeNavPrompt(); openNav(curNav, { auto: true }) }}>
-                  <Icon name="navigation" size={30} />Navigáció indítása ({NAV_LABEL[navApp]})
-                </button>
-                <button type="button" className="btn ghost" onClick={closeNavPrompt}>Most nem</button>
-              </div>
+              <NavPromptOverlay sub={`${idx + 1}. cím a ${stops.length}-ből`} title={`${cur.box.code ? `${cur.box.code} · ` : ''}${cur.box.name}`} address={cur.box.address} target={curNav} onClose={closeNavPrompt} />
             )}
             <div className="between">
               <div className="card-title" style={{ margin: 0 }}><Icon name="map" />{code} járat{round === 2 ? ' · 2. kör' : ''}</div>
