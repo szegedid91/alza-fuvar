@@ -103,9 +103,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (p.action === 'delete') {
-    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name').eq('id', p.invite_id ?? '').maybeSingle()
+    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name, role').eq('id', p.invite_id ?? '').maybeSingle()
     if (!inv) return json({ error: 'A meghívó nem található' }, 404)
     if (!wsIds.has(inv.workspace_id) && caller.role !== 'admin') return json({ error: 'Nincs jogosultság' }, 403)
+    // SEC: admin-meghívót csak admin kezelhet (a meghívó azonosítója maga a beváltó kulcs)
+    if (inv.role === 'admin' && caller.role !== 'admin') return json({ error: 'Admin-meghívót csak admin kezelhet' }, 403)
     let removedAccount = false
     if (inv.placeholder_id && !inv.used_at) {
       const { data: ph } = await admin.from('profiles').select('status').eq('id', inv.placeholder_id).maybeSingle()
@@ -129,9 +131,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (p.action === 'renew' || p.action === 'send_email') {
-    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name, email, expires_at').eq('id', p.invite_id ?? '').maybeSingle()
+    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name, email, expires_at, role').eq('id', p.invite_id ?? '').maybeSingle()
     if (!inv) return json({ error: 'A meghívó nem található' }, 404)
     if (!wsIds.has(inv.workspace_id) && caller.role !== 'admin') return json({ error: 'Nincs jogosultság' }, 403)
+    // SEC: admin-meghívót csak admin újíthat meg vagy küldhet ki
+    if (inv.role === 'admin' && caller.role !== 'admin') return json({ error: 'Admin-meghívót csak admin kezelhet' }, 403)
     if (inv.used_at) return json({ error: 'Ezt a meghívót már felhasználták — nincs mit megújítani vagy elküldeni' }, 409)
 
     // lejárt (vagy hamarosan lejáró) meghívó: új érvényesség, hogy a kiküldött link biztosan működjön
