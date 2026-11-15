@@ -219,11 +219,8 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
       )}
       {ai && (
         <div className="tiny" style={{ padding: '6px 8px', borderRadius: 8, background: 'var(--primary-ghost)' }}>
-          <strong>AI olvasat</strong>{typeof ai.confidence === 'number' ? ` · biztonság ${Math.round(ai.confidence * 100)}%` : ''}{ai.screen ? ` · „${ai.screen}”` : ''}
-          {ai.codes?.length ? <div className="muted">Kódok: {ai.codes.slice(0, 12).join(', ')}{ai.codes.length > 12 ? '…' : ''}</div> : null}
-          {ai.note && <div className="muted">{ai.note}</div>}
-          {ai.unmapped && ai.unmapped.length > 0 && <div className="muted">Kijelző-üzenet a megjegyzésbe írva: {ai.unmapped.join(' · ')}</div>}
-          <div className="muted">{fill ? 'Nézd át a számokat, és javítsd, ha kell.' : 'A mezőket a kiolvasás előtöltötte — nézd át, és javítsd, ha a kép alapján mást látsz.'}</div>
+          {/* Magyarázat nélkül: csak annyi, hogy gépi olvasat, és át kell nézni (a kijelző-üzenet a megjegyzésben úgyis látszik) */}
+          <strong>AI olvasat</strong> — nem 100%, ellenőrizd a számokat.
         </div>
       )}
       {(saved?.length ?? 0) > 0 && (

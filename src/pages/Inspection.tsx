@@ -310,15 +310,13 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
         <p className="tiny muted" style={{ margin: 0 }}>Csak élő kamerával készíthető, galériából nem tölthető fel.</p>
       </div>
 
-      {/* Takarítás csak akkor, ha az ellenőrzés már megvan (vagy engedéllyel továbbengedve) */}
-
-      {(doneToday || waived) && <CleaningCard car={car} date={date} />}
+      {/* A takarítás NEM itt van: az ellenőrző fotóknál nem kell — külön oldalon (Gyorslinkek → Takarítás) érhető el */}
       <InspectionHistory carId={car.id} date={date} />
     </>
   )
 }
 
-// Takarítás: önálló oldalon (/takaritas) ÉS az ellenőrzés alján is elérhető.
+// Takarítás: önálló oldalon (/takaritas) érhető el — az ellenőrző fotók oldalán nincs.
 // Az autó MAI takarításait mutatja (a társét is) — párosnál így látszik, ki csinálta.
 // askPhotos: a nap végén a takarításról fotót kérünk (a rögzítés után rögtön a kamera nyílik)
 export function CleaningCard({ car, date, askPhotos = false }: { car: Car; date: string; askPhotos?: boolean }) {

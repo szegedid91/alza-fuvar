@@ -147,7 +147,9 @@ describe('StopPhotos', () => {
     await settle()
     expect(onPatch).toHaveBeenCalledWith({ placed: 12, note: 'Kijelző: A fiók nem nyílik' })
     expect(logged).toEqual([{ text: 'A fiók nem nyílik', text_key: 'a fiok nem nyilik', workspace_id: 'ws-1', stop_id: 'stop-1', box_code: 'AB1234', created_by: 'u-1' }])
-    expect(host.textContent).toContain('Kijelző-üzenet a megjegyzésbe írva: A fiók nem nyílik')
+    // a kártyán nincs magyarázat: csak a gépi olvasat ténye és az ellenőrzés kérése
+    expect(host.textContent).toContain('AI olvasat — nem 100%, ellenőrizd a számokat.')
+    expect(host.textContent).not.toContain('Kijelző-üzenet a megjegyzésbe írva')
   })
 })
 
