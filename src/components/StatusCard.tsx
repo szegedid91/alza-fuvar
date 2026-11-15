@@ -203,7 +203,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
         </button>
       )}
       {settleCamera && (
-        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Mentés" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le. A felvétel csak az appba kerül." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
+        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Kész — elszámolok" confirm={{ question: 'Minden visszahozott csomag rajta van a felvételeken?', no: 'Még fotózok / videózok', yes: 'Igen, megvan minden — elszámolok' }} hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le. A felvétel csak az appba kerül." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
       {roundsOver && (

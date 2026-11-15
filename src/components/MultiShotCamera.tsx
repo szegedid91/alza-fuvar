@@ -21,6 +21,7 @@ export default function MultiShotCamera({
   sendLabel = 'Küldés',
   hint = 'Készíts egy vagy több képet, majd koppints a Küldésre.',
   video = false,
+  confirm = null,
   onSend,
   onCancel,
 }: {
@@ -29,6 +30,9 @@ export default function MultiShotCamera({
   // mit fotózzon (a kamera tetején, amíg nincs kép)
   hint?: string
   video?: boolean
+  // confirm: a lezárás előtt megkérdezzük, megvan-e minden felvétel (pl. elszámolás: videó UTÁN még fotó is kellhet) —
+  // a futár a kamerán marad, amíg ő maga nem mondja, hogy kész
+  confirm?: { question: string; yes: string; no: string } | null
   // posters: videónál a felvétel egy képkockája (a galéria bélyegképéhez), képnél undefined
   onSend: (blobs: Blob[], posters: (Blob | undefined)[]) => void
   onCancel: () => void
@@ -50,6 +54,8 @@ export default function MultiShotCamera({
   // ha a videó nem indul ezen a készüléken, a fotózás megy tovább — csak a piros gomb tűnik el
   const [videoOff, setVideoOff] = useState<string | null>(null)
   const canRecord = video && typeof MediaRecorder !== 'undefined' && !videoOff
+  const [asking, setAsking] = useState(false)
+  const send = () => onSend(shots.map((s) => s.blob), shots.map((s) => s.poster))
 
   useEffect(() => {
     let cancelled = false
@@ -151,6 +157,24 @@ export default function MultiShotCamera({
   const photos = shots.filter((s) => !s.video).length, videos = shots.length - photos
   const countText = [photos ? `${photos} kép` : '', videos ? `${videos} videó` : ''].filter(Boolean).join(', ')
 
+  // a felvételek bélyegképei (törölhetők) — a kamerán és a lezárás előtti kérdésnél is
+  const thumbs = (
+    <>
+              {shots.map((s, i) => (
+                <div key={`${s.url}-${i}`} style={{ position: 'relative', flexShrink: 0 }}>
+                  {s.url
+                    ? <img src={s.url} alt={s.video ? `${i + 1}. videó` : `${i + 1}. kép`} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: '2px solid #fff' }} />
+                    : <div style={{ width: 64, height: 48, borderRadius: 6, border: '2px solid #fff', background: '#222' }} />}
+                  {s.video && <span className="tiny" style={{ position: 'absolute', left: 4, bottom: 4, background: 'rgba(0,0,0,0.7)', color: '#fff', borderRadius: 4, padding: '0 4px', fontWeight: 700 }}>▶ {fmtClock(s.seconds ?? 0)}</span>}
+                  <button type="button" aria-label={s.video ? 'Videó törlése' : 'Kép törlése'} onClick={() => setShots((prev) => { if (prev[i].url) URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i) })}
+                    style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, border: 'none', background: '#b00020', color: '#fff', display: 'grid', placeItems: 'center', padding: 0 }}>
+                    <Icon name="x" size={12} />
+                  </button>
+                </div>
+              ))}
+    </>
+  )
+
   return (
     <div className="camera-overlay">
       <div className="camera-head">
@@ -170,18 +194,7 @@ export default function MultiShotCamera({
           )}
           {shots.length > 0 && (
             <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, display: 'flex', gap: 6, overflowX: 'auto', zIndex: 2 }}>
-              {shots.map((s, i) => (
-                <div key={`${s.url}-${i}`} style={{ position: 'relative', flexShrink: 0 }}>
-                  {s.url
-                    ? <img src={s.url} alt={s.video ? `${i + 1}. videó` : `${i + 1}. kép`} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: '2px solid #fff' }} />
-                    : <div style={{ width: 64, height: 48, borderRadius: 6, border: '2px solid #fff', background: '#222' }} />}
-                  {s.video && <span className="tiny" style={{ position: 'absolute', left: 4, bottom: 4, background: 'rgba(0,0,0,0.7)', color: '#fff', borderRadius: 4, padding: '0 4px', fontWeight: 700 }}>▶ {fmtClock(s.seconds ?? 0)}</span>}
-                  <button type="button" aria-label={s.video ? 'Videó törlése' : 'Kép törlése'} onClick={() => setShots((prev) => { if (prev[i].url) URL.revokeObjectURL(prev[i].url); return prev.filter((_, j) => j !== i) })}
-                    style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, borderRadius: 11, border: 'none', background: '#b00020', color: '#fff', display: 'grid', placeItems: 'center', padding: 0 }}>
-                    <Icon name="x" size={12} />
-                  </button>
-                </div>
-              ))}
+              {thumbs}
             </div>
           )}
           {videoOff && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(176,0,32,0.85)', color: '#fff', padding: '6px 8px', borderRadius: 8, zIndex: 3 }}>{videoOff}</p>}
@@ -194,6 +207,22 @@ export default function MultiShotCamera({
           {shots.length === 0 && !recording && !videoOff && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '6px 8px', borderRadius: 8 }}>{hint}</p>}
         </div>
       )}
+      {/* Lezárás előtti kérdés: mi készült eddig, és megvan-e minden — „még készítek” visszavisz a kamerához */}
+      {asking && confirm && (
+        <div role="dialog" aria-label={confirm.question} style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(5,10,20,0.94)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, padding: '24px 20px calc(24px + env(safe-area-inset-bottom))' }}>
+          <div style={{ textAlign: 'center', color: '#fff' }}>
+            <div style={{ fontWeight: 800, fontSize: 20 }}>{confirm.question}</div>
+            <div className="small" style={{ marginTop: 8, color: '#cbd5e1' }}>Eddig készült: <strong style={{ color: '#fff' }}>{countText || 'semmi'}</strong></div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>{thumbs}</div>
+          <button type="button" className="btn secondary" style={{ minHeight: 64, fontSize: 17 }} onClick={() => setAsking(false)}>
+            <Icon name="camera" />{confirm.no}
+          </button>
+          <button type="button" className="btn" style={{ minHeight: 64, fontSize: 17 }} disabled={shots.length === 0} onClick={() => { setAsking(false); send() }}>
+            <Icon name="check" />{confirm.yes}
+          </button>
+        </div>
+      )}
       <div className="camera-foot" style={{ gap: 14, alignItems: 'center' }}>
         <button className="shutter" style={{ flexShrink: 0 }} onClick={() => void snap()} disabled={!ready || !!error || snapping || recording} aria-label="Fotó" />
         {canRecord && (
@@ -203,7 +232,7 @@ export default function MultiShotCamera({
             <span style={{ width: recording ? 20 : 36, height: recording ? 20 : 36, borderRadius: recording ? 4 : 18, background: '#e53935', display: 'block' }} />
           </button>
         )}
-        <button type="button" className="btn" disabled={shots.length === 0 || recording} onClick={() => onSend(shots.map((s) => s.blob), shots.map((s) => s.poster))} style={{ minHeight: 56 }}>
+        <button type="button" className="btn" disabled={shots.length === 0 || recording} onClick={() => (confirm ? setAsking(true) : send())} style={{ minHeight: 56 }}>
           <Icon name="send" />{sendLabel}{shots.length ? ` (${shots.length})` : ''}
         </button>
       </div>
