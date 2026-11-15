@@ -539,9 +539,10 @@ export default function Scan() {
           </p>
           <div className="btn-grid">
             <button className="btn ghost" disabled={busy} onClick={() => setPendingConflict(null)}>Mégse</button>
-            <ConfirmButton className="btn danger-outline" confirmLabel="Igen, biztos erre" disabled={busy} onConfirm={() => void proceedConflict()}>
+            {/* ez a kártya maga a megerősítés — egy koppintás elég */}
+            <button type="button" className="btn danger-outline" disabled={busy} onClick={() => void proceedConflict()}>
               {busy ? 'Feldolgozás…' : 'Mégis erre az autóra'}
-            </ConfirmButton>
+            </button>
           </div>
         </div>
       )}
