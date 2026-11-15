@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import { uploadPhoto, recordPhotoProof } from './photos'
 import type { Database } from './database.types'
 import { errMsg } from './errors'
+import { isRetryLater } from './outboxErrors'
 
 type TableName = keyof Database['public']['Tables']
 
@@ -131,14 +132,19 @@ export async function discardFailed(id: string): Promise<void> {
   notify()
 }
 
+// Később újrapróbálható (a tétel a sorban marad, nem számít hibás próbálkozásnak): valódi hálózati hiba, a saját
+// időkorlátunk megszakítása, VAGY átmeneti szerverhiba (5xx, 429, lejárt token). Egy programhiba vagy a Postgres
+// „statement timeout” nem ilyen — az nem akaszthatja meg örökre a sort.
 function isNetworkError(e: unknown): boolean {
-  if (!navigator.onLine) return true
-  // Csak a VALÓDI hálózati hibák (a fetch TypeError-jai ilyen szöveggel) — egy programhiba (más TypeError)
-  // nem akaszthatja meg örökre a sort; a Postgres „statement timeout” sem hálózati hiba
-  const msg = (errMsg(e, 'ismeretlen hiba')).toLowerCase()
-  if (msg.includes('statement timeout') || msg.includes('canceling statement')) return false
-  return msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')
-    || msg.includes('network timeout') || msg.includes('load failed') || msg.includes('the internet connection') || msg.includes('err_internet') || msg.includes('err_network')
+  return isRetryLater(e, navigator.onLine)
+}
+
+// A HTTP-státusz a hibára kerül (a PostgREST hibaobjektumában nincs benne): ebből dől el, átmeneti-e
+const withStatus = <E extends object>(error: E, status: number | undefined): E => Object.assign(error, { httpStatus: status })
+// Időkorlát az adatbázis-írásra: lógó kapcsolatnál 15 mp után megszakad, és a tétel a sorban marad —
+// különben a gombok („Kiindultam”, „Kész, következő”) a böngésző percekig tartó saját időkorlátjáig némák lennének
+const writeSignal = (): AbortSignal | undefined => {
+  try { return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15_000) : undefined } catch { return undefined }
 }
 
 // LOG-14: update csak sor-szűrővel mehet — üres match az összes (RLS-en belül) saját sort írná át
@@ -162,13 +168,17 @@ async function runRecord(rec: OutboxRecord): Promise<void> {
   }
   if (rec.op === 'insert') {
     // upsert -> idempotens ismételt lejátszáskor (a PK id megegyezik)
-    const { error } = await supabase.from(rec.table as TableName).upsert(values as never, rec.onConflict ? { onConflict: rec.onConflict, ignoreDuplicates: !!rec.ignoreDuplicates } : undefined)
-    if (error) throw error
+    const sig = writeSignal()
+    const up = supabase.from(rec.table as TableName).upsert(values as never, rec.onConflict ? { onConflict: rec.onConflict, ignoreDuplicates: !!rec.ignoreDuplicates } : undefined)
+    const { error, status } = await (sig ? up.abortSignal(sig) : up)
+    if (error) throw withStatus(error, status)
   } else {
     let q = supabase.from(rec.table as TableName).update(values as never)
     for (const [k, v] of Object.entries(rec.match ?? {})) q = q.eq(k as never, v as never)
-    const { data, error } = await q.select('id')
-    if (error) throw error
+    const sig = writeSignal()
+    const sel = q.select('id')
+    const { data, error, status } = await (sig ? sel.abortSignal(sig) : sel)
+    if (error) throw withStatus(error, status)
     // 0 érintett sor = a cél sor (még) nincs a szerveren — pl. a becsekkolás
     // INSERT-je parkolt. Siker helyett hibát dobunk, különben a kijelentkezés
     // csendben elveszne.
