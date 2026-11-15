@@ -408,9 +408,7 @@ export default function Scan() {
                 <div className="tiny" style={{ color: 'var(--danger)', fontWeight: 700 }}>
                   <Icon name="alert-triangle" size={14} /> Túl sokan az autón ({openCrewCount} fő, {capacity} fős autó) — a vezetők jelzést kaptak. Aki nem ezen dolgozik, váltson autót, vagy zárja le a napját (Autó lerakva).
                 </div>
-              ) : capacity === 1
-                ? <div className="tiny muted">1 fős autó — ma egyedül dolgozol.</div>
-                : openCrewCount < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
+              ) : capacity > 1 && openCrewCount < 2 && <div className="tiny muted">A társ még nem csekkolt be.</div>}
             </div>
           </div>
           <div className="divider" />
