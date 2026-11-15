@@ -34,7 +34,9 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
   // csomagszintű eltérések (a csoportüzenetbe soronként) és a box sorszáma a járaton (n/of)
   items?: StopItemLike[]; seqLabel?: string | null
   fill?: boolean; onSent?: () => void
-}>(function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch, items = [], seqLabel = null, fill = false, onSent }, ref) {
+  // readOnly: a lezárt napon csak a mentett fotók látszanak — új fotó, kiolvasás és küldés nincs
+  readOnly?: boolean
+}>(function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch, items = [], seqLabel = null, fill = false, onSent, readOnly = false }, ref) {
   const { currentWorkspaceId } = useWorkspace()
   const { profile } = useAuth()
   const qc = useQueryClient()
@@ -173,6 +175,14 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
     if (!fill || !autoRead.current || read.isPending) return
     if (photos.some((p) => !p.path)) { autoRead.current = false; read.mutate() }
   }, [photos, fill]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (readOnly) {
+    return (saved?.length ?? 0) > 0 ? (
+      <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+        {saved!.map((p) => p.storage_path && <div key={p.id} style={{ width: 64 }}><PhotoThumb path={p.storage_path} /></div>)}
+      </div>
+    ) : <div className="tiny muted">Ehhez a boxhoz nincs fotó.</div>
+  }
 
   return (
     <div className="stack" style={{ gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>

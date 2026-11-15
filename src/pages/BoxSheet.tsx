@@ -18,7 +18,7 @@ import { resolveNames } from '../lib/names'
 import { formatDate } from '../lib/labels'
 import { toast } from '../lib/toast'
 import {
-  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO, missedStops,
+  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO, missedStops, stopMessageLines,
   type BoxSheet, type BoxStop, type AlzaBox,
 } from '../lib/boxSheet'
 import type { Car } from '../lib/checkin'
@@ -66,18 +66,25 @@ export default function BoxSheetPage() {
   return (
     <div className="stack">
       <h2>Box-lap</h2>
-      <RequireCheckin>{({ car, date }) => <InspectionGate carId={car.id} date={date}><DepartedGate><CrewSheet car={car} date={date} /></DepartedGate></InspectionGate>}</RequireCheckin>
+      {/* Autó lerakva (a nap lezárva): a mai Box-lapok már csak megtekinthetők — szerkeszteni nem lehet.
+          Korábbi nap lapja a futárnak nem érhető el: ez az oldal mindig csak a mai lapot nyitja. */}
+      <RequireCheckin>{({ car, date, checkin }) => {
+        const closed = !!checkin.checked_out_at
+        return <InspectionGate carId={car.id} date={date}><DepartedGate closed={closed}><CrewSheet car={car} date={date} closed={closed} /></DepartedGate></InspectionGate>
+      }}</RequireCheckin>
     </div>
   )
 }
 
 // A Box-lap csak a „Kiindultam” jelzés után tölthető: a lap a járat közbeni munkát rögzíti,
 // kiindulás előtt nincs mit beírni (és a lap sem jön létre idő előtt)
-function DepartedGate({ children }: { children: React.ReactNode }) {
+function DepartedGate({ children, closed = false }: { children: React.ReactNode; closed?: boolean }) {
   const { data: events, isLoading } = useTodayStatusEvents()
+  const [sp] = useSearchParams()
+  // lezárt nap: nincs kapu és nincs „javítás” megjegyzés — a lap csak megtekinthető
+  if (closed) return <>{children}</>
   if (isLoading && !events) return <Skeleton rows={3} />
   const departed = (events ?? []).some((e) => e.kind === 'departed')
-  const [sp] = useSearchParams()
   // a box előtti kitöltő képernyőn nincs megjegyzés — az csak az áttekintésnél kell
   const anyDone = (events ?? []).some((e) => e.kind === 'done') && !sp.get('box')
   if (departed) return (
@@ -95,11 +102,11 @@ function DepartedGate({ children }: { children: React.ReactNode }) {
   )
 }
 
-function CrewSheet({ car, date }: { car: Car; date: string }) {
+function CrewSheet({ car, date, closed = false }: { car: Car; date: string; closed?: boolean }) {
   const { profile } = useAuth()
   // A járat-kártyáról érkezve (?box=<id>) az aktuális box megállója automatikusan felkerül a lapra
   const [params] = useSearchParams()
-  const prefillBox = params.get('box')
+  const prefillBox = closed ? null : params.get('box')
   // a járat-kártyáról jön a box sorszáma is (n/of) — a lapon és a csoportüzenetben látszik
   const n = params.get('n'), of = params.get('of')
   const seqLabel = n && of ? `${n}/${of}` : null
@@ -117,6 +124,7 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
         .eq('workspace_id', currentWorkspaceId!).eq('user_id', profile!.id).eq('work_date', date).maybeSingle()
       if (error) throw error
       if (data) return data.id
+      if (closed) return null // lezárt napon nem hozunk létre lapot — ha nem volt, nincs mit megnézni
       const { data: ins, error: e2 } = await supabase.from('box_sheets')
         .insert({ workspace_id: currentWorkspaceId!, user_id: profile!.id, car_id: car.id, work_date: date }).select('id').single()
       if (e2) {
@@ -146,10 +154,11 @@ function CrewSheet({ car, date }: { car: Car; date: string }) {
     )
   }
   if (sheetQ.isLoading) return <Skeleton rows={5} />
+  if (closed && !sheetQ.isError && !sheetQ.data) return <div className="empty"><span className="ico"><Icon name="package" size={40} /></span>Ma nem volt kitöltött Box-lap.</div>
   if (sheetQ.isError || !sheetQ.data) {
     return <div className="alert error">Nem sikerült megnyitni a mai lapot: {errMsg(sheetQ.error, '')}</div>
   }
-  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} seqLabel={seqLabel} />
+  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} seqLabel={seqLabel} readOnly={closed} />
 }
 
 type SheetRow = BoxSheet & { car: { plate: string } | null }
@@ -158,7 +167,8 @@ type SheetRow = BoxSheet & { car: { plate: string } | null }
 // nem látszik — sem a futárnál, sem a vezetői nézetben. Az adat és az oszlopok megmaradnak; visszakapcsolás: true.
 const DAY_END_FIELDS: boolean = false
 
-export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null }) {
+// readOnly: a futár lezárt napja (autó lerakva) — a lap csak megtekinthető: nincs mező, hozzáadás, törlés, lezárás
+export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null, readOnly = false }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null; readOnly?: boolean }) {
   const qc = useQueryClient()
   const { profile } = useAuth()
   const { data: boxes } = useAlzaBoxes()
@@ -321,7 +331,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const totals = stopTotals(stops)
   const submitted = sheet.status === 'submitted'
   const saving = updateSheet.isPending || updateStop.isPending || addStop.isPending || removeStop.isPending
-  const dayEndVisible = !prefillBoxId
+  const dayEndVisible = !prefillBoxId && !readOnly
   const TOTALS = stops.length > 0 && !prefillBoxId ? (
     <div className="card stack" style={{ gap: 6 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="calculator" />Összesen</div>
@@ -382,6 +392,12 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         </Link>
       )}
 
+      {readOnly && (
+        <div className="alert info row" style={{ gap: 8, alignItems: 'flex-start' }}>
+          <Icon name="lock" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>A nap le van zárva (autó lerakva) — a mai Box-lapok már csak megtekinthetők. Ha valami hibás, szólj a vezetőnek.</span>
+        </div>
+      )}
       {overview && TOTALS}
 
       <div className="card stack" style={{ gap: 10 }}>
@@ -392,18 +408,18 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         {prefillBoxId
           ? <div className="tiny muted">Írd be a darabszámokat ehhez a boxhoz.</div>
           : overview
-            ? <div className="tiny muted">{stops.length ? 'Koppints egy boxra, ha meg akarod nézni vagy javítani.' : 'Ma még nincs kitöltött box.'}</div>
+            ? <div className="tiny muted">{stops.length ? (readOnly ? 'Koppints egy boxra a részletekhez.' : 'Koppints egy boxra, ha meg akarod nézni vagy javítani.') : 'Ma még nincs kitöltött box.'}</div>
             : <AddStop onAdd={(b) => add(b)} busy={addStop.isPending} />}
         {stops.length === 0 && !prefillBoxId && !overview && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
         {[...stops].sort((a, b) => (a.box_id === prefillBoxId ? -1 : b.box_id === prefillBoxId ? 1 : 0)).map((s) => {
           const i = stops.findIndex((x) => x.id === s.id)
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
-            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1 && (!overview || addedNow)} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null} items={itemsByStop?.[s.id]}
+            <StopRow key={s.id} stop={s} index={i + 1} isLast={!readOnly && !prefillBoxId && i === stops.length - 1 && (!overview || addedNow)} focus={focus} readOnly={readOnly} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null} items={itemsByStop?.[s.id]}
               courierName={name ?? 'Futár'} resetKey={resetTick} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
-        {overview && (showAdd
+        {overview && !readOnly && (showAdd
           ? <MissedAdd sheetBoxIds={stops.map((s) => s.box_id)} onAdd={(b) => { setAddedNow(true); add(b) }} busy={addStop.isPending} onClose={() => setShowAdd(false)} />
           : <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowAdd(true)}><Icon name="plus" size={12} /> Kimaradt egy box? Hozzáadás</button>)}
       </div>
@@ -642,9 +658,11 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
   )
 }
 
-function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null, items }: {
+function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null, items, readOnly = false }: {
   stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
   onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number; seqLabel?: string | null; items?: StopItem[]
+  // lezárt napon: kinyitva csak a számok, a fotók és a megjegyzés látszik — szerkeszteni nem lehet
+  readOnly?: boolean
 }) {
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
   // hogy 10-20 boxnál is áttekinthető maradjon a lap. Járat-módban a kijelölt box nyitva.
@@ -675,7 +693,17 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
       )}
       {!open && (items?.length ?? 0) > 0 && <div className="tiny muted">{items!.length} csomag-eltérés</div>}
       {!open && stop.note && <div className="tiny muted">{stop.note}</div>}
-      {open && (
+      {open && readOnly && (
+        <>
+          <StopPhotos readOnly stop={stop} boxLabel="" courierName={courierName} onPatch={() => undefined} />
+          <div className="stack" style={{ gap: 2 }}>
+            {stopMessageLines(stop).map((line) => <div key={line} className="small">{line}</div>)}
+          </div>
+          {(items?.length ?? 0) > 0 && <StopItems stopId={stop.id} items={items ?? []} readOnly />}
+          {stop.note && <div className="small"><span className="muted">Megjegyzés: </span>{stop.note}</div>}
+        </>
+      )}
+      {open && !readOnly && (
         <>
           {/* Fotó a box kijelzőjéről LEGFELÜL — egyből elérhető, nem kell a számok alá görgetni */}
           <StopPhotos stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${stop.box_name ?? box?.name ?? ''}`} boxAddress={box?.address ?? null} courierName={courierName} onPatch={onPatch} items={items ?? []} seqLabel={seqLabel} />
