@@ -42,6 +42,7 @@ export default function Home() {
   const lastPhase = [...(todayStatus ?? [])].reverse().find((s) => s.kind === 'arrived' || s.kind === 'departed' || s.kind === 'done')?.kind ?? null
   const arrived = lastPhase === 'arrived' || lastPhase === 'departed'
   const departed = lastPhase === 'departed'
+  const anyDone = (todayStatus ?? []).some((s) => s.kind === 'done')
   // A nap vége: minden mai kör kész, és az utolsó után megvolt az elszámolás (két körnél az első elszámolás még nem zárja a napot)
   const { data: myRoutes } = useMyRoutesToday()
   const settled = !!todayStatus && dayComplete(myRoutes?.length ?? 0, todayStatus)
@@ -132,9 +133,9 @@ export default function Home() {
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} />}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
-      {/* Amíg a járat nem látszik (Megérkeztem előtt) vagy a nap már lezárult: Mai nap lépéssor.
-          Járat közben a lépéssor eltűnik — a nap végét az elszámolás utáni „Autó lerakva” kártya zárja. */}
-      {isCrew && !inspectionLocked && !!today?.checkin && (!arrived || roundsOver || !!today.checkin.checked_out_at) && !(settled && !today.checkin.checked_out_at) && <TodayStepper />}
+      {/* „Mai nap” kártya becsekkolás után csak akkor, ha van mit mutatnia: volt már „Járat kész” (Box-lapok
+          megtekintése) vagy a nap lezárult. Előtte felesleges — a futár a jelzés-gombot és a járatot látja. */}
+      {isCrew && !inspectionLocked && !!today?.checkin && ((!arrived && anyDone) || roundsOver || !!today.checkin.checked_out_at) && !(settled && !today.checkin.checked_out_at) && <TodayStepper />}
       {/* Elszámolva, nincs több kör: már csak a takarítás (fotóval) és az autó lerakása / töltőre tétele van hátra */}
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && settled && (
         <div className="card stack" style={{ borderColor: 'var(--success)', gap: 10 }}>
