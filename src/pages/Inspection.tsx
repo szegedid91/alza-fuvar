@@ -417,7 +417,7 @@ export function CleaningCard({ car, date, askPhotos = false }: { car: Car; date:
         </div>
       ) : (
         <>
-          <p className="tiny muted" style={{ margin: 0 }}>Ha kitakarítottad az autót, jelöld be — a vezetők a naptárban látják.</p>
+          <p className="tiny muted" style={{ margin: 0 }}>Ha kitakarítottad az autót, jelöld be.</p>
           <button className="btn secondary" disabled={busy} onClick={() => void markClean()}><Icon name="sparkles" />{busy ? 'Mentés…' : 'Takarítás kész'}</button>
         </>
       )}
