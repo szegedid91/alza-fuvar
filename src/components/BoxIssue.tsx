@@ -78,7 +78,6 @@ export function BoxIssueButton({ box, stopId = null, courierName }: {
         <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={reset}>Mégse</button>
         <button type="button" className="btn sm" style={{ flex: 2 }} disabled={!kind || send.isPending || (!!sel?.urgent && shots.length === 0)} onClick={() => send.mutate()}><Icon name="send" size={14} />Bejelentés és küldés a csoportba</button>
       </div>
-      <div className="tiny muted">Az appban megmarad (boxonként számoljuk, ez az alap az Alzával), a csoportba a kész szöveg megy.{sel?.urgent ? ' Biztonsági eseménynél a vezetők azonnal értesítést kapnak.' : ''}</div>
     </div>
   )
 }
