@@ -131,7 +131,7 @@ export default function Home() {
       )}
       {/* Kiindulás után a járat felül; előtte (megérkezés után) a jelzések vannak felül */}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
-      {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} />}
+      {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} onRoute={departed && (myRoutes?.length ?? 0) > 0} />}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
       {/* „Mai nap” kártya becsekkolás után csak akkor, ha van mit mutatnia: volt már „Járat kész” (Box-lapok
           megtekintése) vagy a nap lezárult. Előtte felesleges — a futár a jelzés-gombot és a járatot látja. */}

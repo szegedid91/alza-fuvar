@@ -16,8 +16,10 @@ import Icon from './Icon'
 
 // Box-hiba bejelentés (nem nyílik a fiók, szkenner hiba, egyéb): az appban rögzül (statisztika
 // boxonként), és egy koppintással megy az Alza diszpécsernek a WhatsApp-csoportba.
-export function BoxIssueButton({ box, stopId = null, courierName }: {
+export function BoxIssueButton({ box, stopId = null, courierName, onReported }: {
   box: { id: string | null; code: string | null; name?: string | null }; stopId?: string | null; courierName: string
+  // a bejelentés után: a hívó a megálló megjegyzésébe írja (így a box kitöltöttnek számít, és a járat továbbléphet)
+  onReported?: (kindLabel: string, note: string) => void
 }) {
   const { currentWorkspaceId } = useWorkspace()
   const { profile } = useAuth()
@@ -50,6 +52,7 @@ export function BoxIssueButton({ box, stopId = null, courierName }: {
       }
       // a csoportba a kész szöveg — a WhatsApp ugyanazon a lapon nyílik
       openWhatsApp(issueMessage({ kind, boxLabel, at: new Date(), name: courierName, note }))
+      onReported?.(issueKindLabel(kind), note.trim())
       return queued
     },
     onSuccess: (queued) => {

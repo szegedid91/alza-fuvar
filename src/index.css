@@ -338,6 +338,8 @@ a { color: var(--primary); }
   padding: 10px; min-height: 40px; cursor: pointer; border-radius: var(--radius-sm); width: 100%;
 }
 .link-btn:hover { background: var(--primary-ghost); }
+/* szövegközi link: a mondat végén marad, nem tölti ki a sort */
+.link-btn.inline { display: inline; width: auto; min-height: 0; padding: 0; }
 
 /* Kezdőlap: gyorslinkek sora (a lépéssor a főszereplő, ezek másodlagosak) */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }

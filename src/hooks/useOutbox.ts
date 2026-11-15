@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { flushOutbox, outboxCounts, subscribeOutbox } from '../lib/outbox'
+import { flushOutbox, listQueued, outboxCounts, subscribeOutbox, type OutboxRecord } from '../lib/outbox'
 
 export function useOutboxStatus() {
   const [count, setCount] = useState(0)
@@ -41,4 +41,17 @@ export function useOutboxStatus() {
   }, [])
 
   return { count, failed, online }
+}
+
+// Egy tábla sorban álló (még fel nem küldött) írásai — a helyi sor minden változására frissül
+export function useQueued(table: string): OutboxRecord[] {
+  const [recs, setRecs] = useState<OutboxRecord[]>([])
+  useEffect(() => {
+    let active = true
+    const refresh = () => { void listQueued(table).then((r) => { if (active) setRecs(r) }) }
+    refresh()
+    const unsub = subscribeOutbox(refresh)
+    return () => { active = false; unsub() }
+  }, [table])
+  return recs
 }

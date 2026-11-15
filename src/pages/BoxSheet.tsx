@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -7,7 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
-import StopPhotos from '../components/StopPhotos'
+import StopPhotos, { type StopPhotosHandle } from '../components/StopPhotos'
 import StopItems, { type StopItem } from '../components/StopItems'
 import { BoxIssueButton } from '../components/BoxIssue'
 import InspectionGate from '../components/InspectionGate'
@@ -24,6 +24,9 @@ import {
 import type { Car } from '../lib/checkin'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { errMsg } from '../lib/errors'
+import { submitNow } from '../lib/outbox'
+import { useQueued } from '../hooks/useOutbox'
+import { isStopFilled, mergeQueuedStops } from '../lib/queuedMerge'
 
 // Napi Box-lap: a papír "AlzaBox szállítási lap" digitális mása. Csak a
 // Box-kategóriás (box_sheet = true) autókhoz kell — az XL-eseknek nem.
@@ -69,7 +72,9 @@ function DepartedGate({ children }: { children: React.ReactNode }) {
   const { data: events, isLoading } = useTodayStatusEvents()
   if (isLoading && !events) return <Skeleton rows={3} />
   const departed = (events ?? []).some((e) => e.kind === 'departed')
-  const anyDone = (events ?? []).some((e) => e.kind === 'done')
+  const [sp] = useSearchParams()
+  // a box előtti kitöltő képernyőn nincs megjegyzés — az csak az áttekintésnél kell
+  const anyDone = (events ?? []).some((e) => e.kind === 'done') && !sp.get('box')
   if (departed) return (
     <>
       {anyDone && <div className="tiny muted"><Icon name="pencil" size={12} style={{ verticalAlign: -2 }} /> A javításokat a vezetők látják.</div>}
@@ -201,10 +206,17 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   // A most felvett (még mentés alatt álló) megállók a komponens állapotában élnek, és a szerverről jött listához
   // fűzzük őket — így egy közben érkező frissítés (fókuszváltás, másik mentés) nem tünteti el a sort.
   const [pendingStops, setPendingStops] = useState<BoxStop[]>([])
+  // …és a helyi sorban álló (térerő nélkül még fel nem küldött) felvételek és módosítások is ráolvadnak
+  const queuedWrites = useQueued('box_sheet_stops')
+  // a most beírt értékek azonnal látszanak (nem várunk a mentés visszaigazolására) — a mentés után a szerver értéke veszi át
+  const [optimistic, setOptimistic] = useState<Record<string, Partial<BoxStop>>>({})
   const allStops = useMemo(() => {
     const server = data?.stops ?? []
-    return [...server, ...pendingStops.filter((p) => !server.some((st) => st.id === p.id))]
-  }, [data, pendingStops])
+    return mergeQueuedStops([...server, ...pendingStops.filter((p) => !server.some((st) => st.id === p.id))], queuedWrites, sheetId)
+      .map((st) => (optimistic[st.id] ? { ...st, ...optimistic[st.id] } : st))
+  }, [data, pendingStops, queuedWrites, sheetId, optimistic])
+  // amikor a helyi sor kiürül (felment, ami sorban állt), a lapot újraolvassuk a szerverről
+  useEffect(() => { void qc.invalidateQueries({ queryKey: ['box-sheet', sheetId] }) }, [queuedWrites.length, qc, sheetId])
   useEffect(() => {
     // amit a szerver már visszaadott, az nem függő többé
     if (pendingStops.length && data?.stops.some((st) => pendingStops.some((p) => p.id === st.id))) setPendingStops((prev) => prev.filter((p) => !data.stops.some((st) => st.id === p.id)))
@@ -213,14 +225,15 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const addStop = useMutation({
     mutationFn: async (v: { stop: BoxStop; hm: string }) => {
       const { stop } = v
-      const { error } = await supabase.from('box_sheet_stops')
-        .insert({ id: stop.id, sheet_id: sheetId, workspace_id: stop.workspace_id, seq: stop.seq, done_at: stop.done_at, box_id: stop.box_id, box_code: stop.box_code, box_name: stop.box_name })
-      if (error) throw error
+      // A helyi soron át megy: térerő nélkül sorba áll, és kapcsolatnál felmegy (a kliens-azonosító miatt nem duplázódik)
+      await submitNow({
+        id: stop.id, table: 'box_sheet_stops', op: 'insert', label: `Box-lap: ${stop.box_code ?? 'megálló'}`,
+        values: { id: stop.id, sheet_id: sheetId, workspace_id: stop.workspace_id, seq: stop.seq, done_at: stop.done_at, box_id: stop.box_id, box_code: stop.box_code, box_name: stop.box_name },
+      })
       // A lap „végzés” ideje = az utolsó box ideje — a háttérben mentjük, a kitöltést nem tartja fel
       // LOG-20: a megálló már mentve — a végzés-idő hibája nem „sikertelen hozzáadás”
-      void supabase.from('box_sheets').update({ end_time: v.hm }).eq('id', sheetId).then(({ error: e2 }) => {
-        if (e2) toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba'))
-      })
+      void submitNow({ id: crypto.randomUUID(), table: 'box_sheets', op: 'update', match: { id: sheetId }, values: { end_time: v.hm }, label: 'Box-lap: végzés ideje' })
+        .catch((e2) => toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba')))
     },
     onMutate: (v) => { setPendingStops((prev) => [...prev, v.stop]) },
     onError: (e, v) => { setPendingStops((prev) => prev.filter((st) => st.id !== v.stop.id)); fail(e) },
@@ -243,11 +256,25 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   }
   const updateStop = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<BoxStop> }) => {
-      if (pendingInsert.current) await pendingInsert.current // a most felvett sor előbb érjen a szerverre
-      const { error } = await supabase.from('box_sheet_stops').update(patch).eq('id', id)
-      if (error) throw error
+      if (pendingInsert.current) await pendingInsert.current // a most felvett sor előbb érjen a szerverre (vagy a sorba)
+      // térerő nélkül sorba áll — a képernyő a sorban álló értéket mutatja, a beírt szám nem vész el
+      const code = allStops.find((st) => st.id === id)?.box_code
+      await submitNow({ id: crypto.randomUUID(), table: 'box_sheet_stops', op: 'update', match: { id }, values: patch as Record<string, unknown>, label: `Box-lap: ${code ?? 'megálló'} adatai` })
     },
-    onSuccess: invalidate, onError: fail,
+    onMutate: ({ id, patch }) => { setOptimistic((o) => ({ ...o, [id]: { ...o[id], ...patch } })) },
+    onError: fail,
+    onSettled: async (_d, _e, { id, patch }) => {
+      // előbb a lap frissül a szerverről, csak utána engedjük el a helyi értéket (közben ne ugorjon vissza a régi szám)
+      await qc.invalidateQueries({ queryKey: ['box-sheet', sheetId] }).catch(() => undefined)
+      setOptimistic((o) => {
+        const cur: Record<string, unknown> = { ...(o[id] ?? {}) }
+        for (const [k, v] of Object.entries(patch)) if (cur[k] === v) delete cur[k]
+        const next = { ...o }
+        if (Object.keys(cur).length) next[id] = cur as Partial<BoxStop>; else delete next[id]
+        return next
+      })
+      invalidate()
+    },
   })
   const removeStop = useMutation({
     mutationFn: async (id: string) => {
@@ -300,6 +327,16 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
           </div>
         </div>
   ) : null
+
+  // A futár a box előtt áll: csak az aktuális box, egy képernyőn, egy fő gombbal
+  if (prefillBoxId && !managerView) {
+    const cur = stops.find((st) => st.box_id === prefillBoxId)
+    if (!cur) return <Skeleton rows={4} />
+    return (
+      <FillStop stop={cur} box={cur.box_id ? boxById.get(cur.box_id) ?? null : null} courierName={name ?? 'Futár'} resetKey={resetTick}
+        seqLabel={seqLabel} items={itemsByStop?.[cur.id]} onPatch={(patch) => updateStop.mutate({ id: cur.id, patch })} />
+    )
+  }
 
   return (
     <>
@@ -462,6 +499,98 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
+// A box előtti kitöltő képernyő: fotó a kijelzőről (magától kiolvas) → „Behelyezett” → küldés a csoportba → kész.
+// Az eltérések (a többi számláló, csomag-eltérés, megjegyzés) egy gomb mögött vannak — a legtöbb boxnál nem kellenek.
+function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = null, items }: {
+  stop: BoxStop; box: AlzaBox | null; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
+  resetKey?: number; seqLabel?: string | null; items?: StopItem[]
+}) {
+  const navigate = useNavigate()
+  const photosRef = useRef<StopPhotosHandle>(null)
+  // „elküldve a csoportba” — a készüléken jegyezzük (a fotók „küldve” jelölése mellett), hogy visszatérve is a „Kész” látsszon
+  const sentKey = `box-sent:${stop.id}`
+  const [sent, setSent] = useState(() => { try { return localStorage.getItem(sentKey) === '1' } catch { return false } })
+  const markSent = () => { setSent(true); try { localStorage.setItem(sentKey, '1') } catch { /* nem kritikus */ } }
+  const [sharing, setSharing] = useState(false)
+  const extraFields = STOP_FIELDS.filter((f) => f.key !== 'placed')
+  const extrasUsed = extraFields.some((f) => stop[f.key] > 0) || (items?.length ?? 0) > 0 || !!stop.note?.trim()
+  const [more, setMore] = useState(extrasUsed)
+  useEffect(() => { if (extrasUsed) setMore(true) }, [extrasUsed])
+  const filled = isStopFilled(stop)
+  const [n, of] = (seqLabel ?? '').split('/')
+  const last = !!seqLabel && n === of
+  const name = stop.box_name ?? box?.name ?? ''
+  const placed = STOP_FIELDS.find((f) => f.key === 'placed')!
+
+  async function send() {
+    setSharing(true)
+    try { if ((await photosRef.current?.share()) === 'shared') markSent() } catch { /* a megosztás hibáját a fotó-rész jelzi */ } finally { setSharing(false) }
+  }
+  // Box-hiba: a bejelentés a megjegyzésbe kerül (így a box kitöltöttnek számít), és az üzenete már ment a csoportba
+  function issueReported(kindLabel: string, note: string) {
+    const tag = `Box-hiba: ${kindLabel}${note ? ` — ${note}` : ''}`
+    if (!(stop.note ?? '').includes(tag)) onPatch({ note: [stop.note?.trim(), tag].filter(Boolean).join(' · ') })
+    markSent()
+  }
+
+  return (
+    <div className="card stack" style={{ gap: 12, borderColor: 'var(--primary)' }}>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: 18 }}>
+          {seqLabel && <span className="badge primary num" style={{ marginRight: 6, verticalAlign: 'middle' }}>{seqLabel}</span>}
+          {stop.box_code ? `${stop.box_code} · ` : ''}{name}
+        </div>
+        {box?.address && <div className="small muted">{box.address}</div>}
+      </div>
+
+      <StopPhotos ref={photosRef} fill stop={stop} boxLabel={`${stop.box_code ? stop.box_code + ' · ' : ''}${name}`} boxAddress={box?.address ?? null}
+        courierName={courierName} onPatch={onPatch} items={items ?? []} seqLabel={seqLabel} onSent={markSent} />
+
+      <NumField big label="Behelyezett csomag (db)" value={stop.placed} resetKey={resetKey} onCommit={(v) => onPatch({ [placed.key]: v })} highlight />
+
+      {!more ? (
+        <button type="button" className="btn ghost" onClick={() => setMore(true)}>
+          <Icon name="alert-triangle" size={16} />Volt eltérés? (hiány, NF, sérült csomag…)
+        </button>
+      ) : (
+        <div className="stack" style={{ gap: 8, padding: 10, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
+          <div className="between">
+            <span className="small" style={{ fontWeight: 700 }}><Icon name="alert-triangle" size={14} /> Eltérések</span>
+            {!extrasUsed && <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={() => setMore(false)}>bezárás</button>}
+          </div>
+          <div className="grid-2">
+            {extraFields.map((f) => <NumField key={f.key} label={f.label} value={stop[f.key]} resetKey={resetKey} onCommit={(v) => onPatch({ [f.key]: v })} />)}
+          </div>
+          <StopItems stopId={stop.id} items={items ?? []} />
+          <TextField label="Megjegyzés" value={stop.note ?? ''} placeholder="pl. +1 talált csomag" onCommit={(v) => onPatch({ note: v || null })} />
+        </div>
+      )}
+
+      <BoxIssueButton box={{ id: stop.box_id, code: stop.box_code, name: name || null }} stopId={stop.id} courierName={courierName} onReported={issueReported} />
+
+      {/* A fő gomb: előbb küldés a csoportba, utána kész */}
+      {!sent ? (
+        <>
+          <button type="button" className="btn" style={{ minHeight: 60, fontSize: 17 }} disabled={!filled || sharing} onClick={() => void send()}>
+            <Icon name="send" />{sharing ? 'Megosztás…' : 'Küldés a csoportba'}
+          </button>
+          {!filled
+            ? <div className="tiny muted" style={{ textAlign: 'center' }}>Előbb fotózd le a kijelzőt, vagy írd be a behelyezett darabszámot.</div>
+            : <button type="button" className="link-btn tiny" style={{ alignSelf: 'center' }} onClick={markSent}>tovább küldés nélkül</button>}
+        </>
+      ) : (
+        <>
+          <button type="button" className="btn" style={{ minHeight: 60, fontSize: 17 }} disabled={!filled} onClick={() => navigate('/', { state: { finishBox: stop.box_id } })}>
+            <Icon name={last ? 'flag' : 'check'} />{last ? 'Kész — vissza a járathoz' : 'Kész, következő box'}
+          </button>
+          {!filled && <div className="tiny muted" style={{ textAlign: 'center' }}>Írd be a behelyezett darabszámot.</div>}
+          <button type="button" className="link-btn tiny" style={{ alignSelf: 'center' }} disabled={sharing} onClick={() => void send()}>újraküldés a csoportba</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null, items }: {
   stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
   onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number; seqLabel?: string | null; items?: StopItem[]
@@ -523,7 +652,7 @@ function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch
 
 // Számmező: szerkesztés közben helyi szöveg, elhagyáskor (blur) ment — így egy
 // koppintás-sorozat nem indít mentést minden karakterre.
-function NumField({ label, value, onCommit, highlight = false, autoFocus = false, resetKey = 0 }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean; autoFocus?: boolean; resetKey?: number }) {
+function NumField({ label, value, onCommit, highlight = false, autoFocus = false, resetKey = 0, big = false }: { label: string; value: number; onCommit: (v: number) => void; highlight?: boolean; autoFocus?: boolean; resetKey?: number; big?: boolean }) {
   const [txt, setTxt] = useState(String(value))
   // resetKey: sikertelen mentés után a beírt (nem mentett) szám helyett a szerver értéke látszik (LOG-21)
   useEffect(() => { setTxt(String(value)) }, [value, resetKey])
@@ -531,7 +660,7 @@ function NumField({ label, value, onCommit, highlight = false, autoFocus = false
     <div className="field">
       <label>{label}</label>
       <input className="input num" inputMode="numeric" pattern="[0-9]*" value={txt} autoFocus={autoFocus}
-        style={highlight ? { borderColor: 'var(--primary)' } : undefined}
+        style={{ ...(highlight ? { borderColor: 'var(--primary)' } : {}), ...(big ? { fontSize: 28, fontWeight: 800, minHeight: 64, textAlign: 'center' } : {}) }}
         onFocus={(e) => e.target.select()}
         onChange={(e) => setTxt(e.target.value.replace(/[^\d]/g, '').slice(0, 5))}
         onBlur={() => {

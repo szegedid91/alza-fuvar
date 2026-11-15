@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -7,7 +7,7 @@ import { cleanUnmapped, mergeStopNote, unmappedKey } from '../lib/boxUnmapped'
 import { signedUrl } from '../lib/photos'
 import { submitNow } from '../lib/outbox'
 import { itemLines, type StopItemLike } from '../lib/boxItems'
-import { sharePhotos, canShareFiles } from '../lib/groupMessage'
+import { sharePhotos, canShareFiles, openWhatsApp } from '../lib/groupMessage'
 import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
 import { MAX_STOP_PHOTOS, aiPhotoPaths, photoLabel } from '../lib/stopPhotos'
@@ -18,16 +18,23 @@ import Icon from './Icon'
 import { errMsg } from '../lib/errors'
 
 type Shot = CapturedPhoto & { path?: string }
+type SavedPhoto = { id: string; storage_path: string | null; ai_result: unknown; sent_at: string | null; created_at: string }
 type AiResult = Partial<Record<StopNumKey, number | null>> & { codes?: string[]; screen?: string | null; confidence?: number | null; note?: string | null; unmapped?: string[] }
 
 // A box kijelzőjének fotói az appban: a kép az adatbázisba kerül, az AI kiolvassa a
 // számokat (előtölti a mezőket — a futár ellenőrzi), és ugyanaz a kép egy koppintással
 // a WhatsApp-csoportba megy a kész szöveggel.
-export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch, items = [], seqLabel = null }: {
+export type ShareResult = 'shared' | 'cancelled' | 'unsupported'
+export interface StopPhotosHandle { share: () => Promise<ShareResult> }
+
+// fill: a futár a box előtt áll — a fotó után a kiolvasás magától indul, a „Küldés a csoportba” a képernyő
+// fő gombja (a szülő hívja a share()-t), itt nincs külön gombsor és hosszú magyarázat.
+const StopPhotos = forwardRef<StopPhotosHandle, {
   stop: BoxStop; boxLabel: string; boxAddress?: string | null; courierName: string; onPatch: (patch: Partial<BoxStop>) => void
   // csomagszintű eltérések (a csoportüzenetbe soronként) és a box sorszáma a járaton (n/of)
   items?: StopItemLike[]; seqLabel?: string | null
-}) {
+  fill?: boolean; onSent?: () => void
+}>(function StopPhotos({ stop, boxLabel, boxAddress, courierName, onPatch, items = [], seqLabel = null, fill = false, onSent }, ref) {
   const { currentWorkspaceId } = useWorkspace()
   const { profile } = useAuth()
   const qc = useQueryClient()
@@ -43,11 +50,13 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
   const [savedBlobs, setSavedBlobs] = useState<Record<string, Blob>>({})
   const { data: saved } = useQuery({
     queryKey: ['stop-photos', stop.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<SavedPhoto[]> => {
       const { data, error } = await supabase.from('box_sheet_stop_photos').select('id, storage_path, ai_result, sent_at, created_at').eq('stop_id', stop.id).order('created_at')
       if (error) throw error
-      return data ?? []
+      return (data ?? []) as SavedPhoto[]
     },
+    // induló érték: nincs kép (azonnal elavult, kapcsolatnál frissül) — térerő nélkül se „töltsön” a képernyő
+    initialData: [] as SavedPhoto[], initialDataUpdatedAt: 0,
   })
 
   useEffect(() => {
@@ -141,20 +150,40 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
       if (stop.note) lines.push(`Megjegyzés: ${stop.note}`)
       const text = lines.join('\n')
       const blobs = [...taken.map((p) => p.blob), ...savedPaths.filter((sp) => !taken.some((p) => p.path === sp)).map((sp) => savedBlobs[sp]).filter((b): b is Blob => !!b)]
+      // fotó nélkül (vagy ha a készülék nem tud képet átadni): a kész szöveg megy a WhatsAppba
+      if (blobs.length === 0 || !shareOk) { openWhatsApp(text); return 'shared' as ShareResult }
       const res = await sharePhotos(blobs, text, `box-${stop.box_code ?? 'foto'}`)
-      if (res === 'shared') await supabase.from('box_sheet_stop_photos').update({ sent_at: new Date().toISOString() }).eq('stop_id', stop.id).is('sent_at', null)
+      if (res === 'unsupported') { openWhatsApp(text); return 'shared' as ShareResult }
+      // a „küldve” jelölés nem tarthatja fel a futárt (térerő nélkül később úgyis látszik a fotó)
+      if (res === 'shared') void supabase.from('box_sheet_stop_photos').update({ sent_at: new Date().toISOString() }).eq('stop_id', stop.id).is('sent_at', null).then(() => qc.invalidateQueries({ queryKey: ['stop-photos', stop.id] }))
       return res
     },
     onSuccess: (res) => {
-      if (res === 'shared') { toast.success('Megosztva — a WhatsAppban válaszd a csoportot és küldd el.'); void qc.invalidateQueries({ queryKey: ['stop-photos', stop.id] }) }
-      else if (res === 'cancelled') toast.info('A megosztás megszakadt — a kép az appban megvan, újra megoszthatod.')
-      else toast.info('Ezen a készüléken a kép nem adható át a WhatsAppnak — a kép az appban rögzült.')
+      if (res === 'shared') { toast.success('A WhatsAppban válaszd a csoportot és küldd el.'); onSent?.() }
+      else if (res === 'cancelled') toast.info('A megosztás megszakadt — újra megpróbálhatod.')
     },
   })
+  useImperativeHandle(ref, () => ({ share: () => share.mutateAsync() }))
+  // ha a fotók közt van már elküldött, a megálló „küldve” (újranyitáskor is)
+  const anySent = (saved ?? []).some((p) => !!p.sent_at)
+  useEffect(() => { if (anySent) onSent?.() }, [anySent]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Kitöltő módban a kiolvasás a fotó elkészülte után magától indul (nem kell külön gomb)
+  const autoRead = useRef(false)
+  useEffect(() => {
+    if (!fill || !autoRead.current || read.isPending) return
+    if (photos.some((p) => !p.path)) { autoRead.current = false; read.mutate() }
+  }, [photos, fill]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="stack" style={{ gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-      <div className="small" style={{ fontWeight: 700 }}><Icon name="camera" size={16} style={{ verticalAlign: -3 }} /> Fotó a box kijelzőjéről</div>
+      {!fill && <div className="small" style={{ fontWeight: 700 }}><Icon name="camera" size={16} style={{ verticalAlign: -3 }} /> Fotó a box kijelzőjéről</div>}
+      {/* kitöltő módban, amíg nincs fotó: egy nagy gomb — egy koppintás a kamera */}
+      {fill && photos.length === 0 && savedPaths.length === 0 && (
+        <button type="button" className="btn" style={{ minHeight: 64, fontSize: 17 }} onClick={() => setCamOpen(true)}>
+          <Icon name="camera" size={24} />Fotó a kijelzőről
+        </button>
+      )}
+      {(!fill || photos.length > 0 || savedPaths.length > 0) && (
       <div className="grid-3" style={{ gap: 6 }}>
         {photos.map((p, i) => (
           <PhotoSlot key={i} label={photoLabel(i)} photo={p} onCapture={(cp) => { setAi(null); setPhotos((prev) => prev.map((x, j) => (j === i ? cp : x))) }} />
@@ -162,20 +191,23 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
         {photos.length < MAX_STOP_PHOTOS && (
           <button type="button" className="thumb thumb-empty" style={{ cursor: 'pointer', color: photos.length ? 'var(--primary)' : undefined }} onClick={() => setCamOpen(true)}>
             <div style={{ textAlign: 'center' }}>
-              <Icon name={photos.length ? 'plus' : 'camera'} size={photos.length ? 24 : 28} />
-              <div className="tiny" style={{ marginTop: photos.length ? 0 : 4 }}>{photos.length ? 'még egy fotó' : photoLabel(0)}</div>
+              <Icon name={photos.length || fill ? 'plus' : 'camera'} size={photos.length || fill ? 24 : 28} />
+              <div className="tiny" style={{ marginTop: photos.length || fill ? 0 : 4 }}>{photos.length || fill ? 'még egy fotó' : photoLabel(0)}</div>
             </div>
           </button>
         )}
       </div>
+      )}
       {camOpen && (
         <CameraCapture
           title={photoLabel(photos.length)}
           onCancel={() => setCamOpen(false)}
-          onCapture={(blob, previewUrl) => { setAi(null); setPhotos((prev) => [...prev, { blob, previewUrl }]); setCamOpen(false) }}
+          onCapture={(blob, previewUrl) => { setAi(null); autoRead.current = true; setPhotos((prev) => [...prev, { blob, previewUrl }]); setCamOpen(false) }}
         />
       )}
-      {hasAny && (
+      {fill && read.isPending && <div className="small row" style={{ gap: 8 }}><div className="spinner" style={{ width: 18, height: 18 }} />Kiolvasás a fotóról…</div>}
+      {fill && hasAny && !read.isPending && !ai && <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => read.mutate()}><Icon name="sparkles" size={12} /> Kiolvasás újra a fotóról</button>}
+      {!fill && hasAny && (
         <div className="row" style={{ gap: 6 }}>
           <button type="button" className="btn sm" style={{ flex: 1 }} disabled={read.isPending} onClick={() => read.mutate()}>
             <Icon name="sparkles" size={14} />{read.isPending ? 'Kiolvasás…' : 'Kiolvasás (AI)'}
@@ -191,7 +223,7 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
           {ai.codes?.length ? <div className="muted">Kódok: {ai.codes.slice(0, 12).join(', ')}{ai.codes.length > 12 ? '…' : ''}</div> : null}
           {ai.note && <div className="muted">{ai.note}</div>}
           {ai.unmapped && ai.unmapped.length > 0 && <div className="muted">Kijelző-üzenet a megjegyzésbe írva: {ai.unmapped.join(' · ')}</div>}
-          <div className="muted">A mezőket a kiolvasás előtöltötte — nézd át, és javítsd, ha a kép alapján mást látsz.</div>
+          <div className="muted">{fill ? 'Nézd át a számokat, és javítsd, ha kell.' : 'A mezőket a kiolvasás előtöltötte — nézd át, és javítsd, ha a kép alapján mást látsz.'}</div>
         </div>
       )}
       {(saved?.length ?? 0) > 0 && (
@@ -204,7 +236,8 @@ export default function StopPhotos({ stop, boxLabel, boxAddress, courierName, on
           ))}
         </div>
       )}
-      <div className="tiny muted">A kép az appban marad; a „Küldés a csoportba” a WhatsAppba küldi a szöveggel.</div>
+      {!fill && <div className="tiny muted">A kép az appban marad; a „Küldés a csoportba” a WhatsAppba küldi a szöveggel.</div>}
     </div>
   )
-}
+})
+export default StopPhotos

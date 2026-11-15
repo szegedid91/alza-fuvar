@@ -25,6 +25,9 @@ export interface OutboxRecord {
   op: 'insert' | 'update'
   values: Record<string, unknown>
   match?: Record<string, unknown>
+  // beszúrásnál: ha a sor egy egyedi kulcs szerint már létezhet (pl. járat-állás), ezen ütközve frissít / kihagy
+  onConflict?: string
+  ignoreDuplicates?: boolean
   photo?: OutboxPhoto
   label: string // emberi címke a UI-hoz
   attempts: number
@@ -95,6 +98,16 @@ export async function outboxCounts(): Promise<OutboxCounts> {
   return { pending: all.length - failed, failed }
 }
 
+// A még fel nem küldött (nem parkolt) tételek időrendben — a képernyő ezekkel egészíti ki a szerver adatait,
+// hogy térerő nélkül is látsszon, amit a futár beírt
+export async function listQueued(table?: string): Promise<OutboxRecord[]> {
+  try {
+    const all = await (await db()).getAll('outbox')
+    return all.filter((r) => r.attempts < MAX_ATTEMPTS && (!table || r.table === table))
+      .sort((a, b) => a.createdAt - b.createdAt || (a.seq ?? 0) - (b.seq ?? 0))
+  } catch { return [] } // ha a helyi tár nem olvasható, nincs mit ráolvasztani
+}
+
 // Parkolt tételek listája / újrapróbálása / eldobása (a jelvény mögötti kezelőfelülethez)
 export async function listFailed(): Promise<OutboxRecord[]> {
   const all = await (await db()).getAll('outbox')
@@ -149,7 +162,7 @@ async function runRecord(rec: OutboxRecord): Promise<void> {
   }
   if (rec.op === 'insert') {
     // upsert -> idempotens ismételt lejátszáskor (a PK id megegyezik)
-    const { error } = await supabase.from(rec.table as TableName).upsert(values as never)
+    const { error } = await supabase.from(rec.table as TableName).upsert(values as never, rec.onConflict ? { onConflict: rec.onConflict, ignoreDuplicates: !!rec.ignoreDuplicates } : undefined)
     if (error) throw error
   } else {
     let q = supabase.from(rec.table as TableName).update(values as never)

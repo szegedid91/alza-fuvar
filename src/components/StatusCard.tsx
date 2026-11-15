@@ -9,7 +9,7 @@ import { toast } from '../lib/toast'
 import { groupTarget, statusText, sharePhotos, canShareFiles, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
 import MultiShotCamera from './MultiShotCamera'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
@@ -20,7 +20,8 @@ type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_pa
 // koppintásra (az app rögzíti — idő, GPS, autó — a vezetők látják; a WhatsApp a
 // kész üzenettel nyílik). A box-hibák fotóval a Box-lapon mennek.
 // roundsOver: minden mai kör „Járat kész” — a „Kiindultam” inaktív, a következő lépés az „Elszámoltam”
-export default function StatusCard({ roundsOver = false }: { roundsOver?: boolean } = {}) {
+// onRoute: a futár épp a járaton van, a járat-kártya vezeti boxról boxra — a „Járat kész” az utolsó box gombja, itt nincs kiemelve
+export default function StatusCard({ roundsOver = false, onRoute = false }: { roundsOver?: boolean; onRoute?: boolean } = {}) {
   const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const { data: today } = useToday()
@@ -134,9 +135,13 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
   const settledAfterDone = (() => { const d = lastOf('done'); const s = lastOf('settled'); return !!s && (!d || s.at > d.at) })()
   const nextKind: StatusKind | null = roundsOver
     ? (settledAfterDone ? null : 'settled')
-    : lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? 'done' : 'arrived'
+    : lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? (onRoute ? null : 'done') : 'arrived'
   // az utolsó kör után már nincs kiindulás és járat kész — ezek inaktívak
   const inactive = (kind: StatusKind) => roundsOver && (kind === 'departed' || kind === 'done')
+  // Járat közben a „Járat kész” és a „Megérkeztem” megszakítaná a járatot — ezek két koppintásra mennek (véletlen érintés ellen)
+  const needsConfirm = (kind: StatusKind) => onRoute && (kind === 'done' || kind === 'arrived')
+  const [armed, setArmed] = useState<StatusKind | null>(null)
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(null), 4000); return () => clearTimeout(t) }, [armed])
 
   return (
     <div className="card stack" style={{ gap: 10 }}>
@@ -170,6 +175,8 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
               onClick={(e) => {
                 // LOG-37: amíg az előző koppintás rögzítése fut, a második nem rögzít újra
                 if (sending || inactive(kind)) { e.preventDefault(); return }
+                if (needsConfirm(kind) && armed !== kind) { e.preventDefault(); setArmed(kind); return }
+                setArmed(null)
                 // a WhatsApp a koppintáson belül nyílik, de nem új fülön: visszaváltáskor az app legyen elöl
                 e.preventDefault()
                 const at = new Date()
@@ -179,8 +186,8 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
                 void record(kind, at).finally(() => setSending(null))
               }}>
               <Icon name={meta.icon} size={big ? 24 : 14} />
-              <span style={{ fontWeight: 800 }}>{meta.label}</span>
-              {!big && <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>}
+              <span style={{ fontWeight: 800, color: armed === kind ? 'var(--danger)' : undefined }}>{armed === kind ? `Biztos? ${meta.label}` : meta.label}</span>
+              {!big && armed !== kind && <span className="tiny" style={{ opacity: 0.85 }}>{last ? hhmm(last.at) : '—'}</span>}
             </a>
           )
         }
