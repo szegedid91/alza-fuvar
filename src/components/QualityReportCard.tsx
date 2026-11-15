@@ -45,7 +45,7 @@ export default function QualityReportCard() {
         const [evRes, shRes] = await Promise.all([
           supabase.from('status_events').select('user_id, kind, at, note').eq('workspace_id', ws).in('user_id', users)
             .in('kind', ['departed', 'done', 'settled', 'issue']).gte('at', from).lt('at', to).order('at').limit(2000),
-          supabase.from('box_sheets').select('id, user_id, created_at, end_time, comp_bu, comp_szh, comp_hb, comp_r, comp_note, wh_crates_no_label, wh_packages_no_label, wh_pallet_items, wh_note, stops:box_sheet_stops(sheet_id, done_at, created_at, box_code, box_name, note, missorted, nf, oversize, shortage, returned, damaged, left_on_car)')
+          supabase.from('box_sheets').select('id, user_id, created_at, end_time, comp_bu, comp_szh, comp_hb, comp_r, comp_note, wh_crates_no_label, wh_packages_no_label, wh_pallet_items, wh_note, stops:box_sheet_stops(sheet_id, done_at, created_at, box_code, box_name, note, missorted, nf, oversize, shortage, returned, damaged, invalid_code, do_not_place, cancelled, left_on_car)')
             .eq('workspace_id', ws).in('user_id', users).gte('work_date', eve).lte('work_date', addDays(day, 1)),
         ])
         if (evRes.error) throw evRes.error

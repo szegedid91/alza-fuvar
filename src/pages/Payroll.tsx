@@ -151,7 +151,9 @@ export default function Payroll() {
         items.get(a.user_id)!.push({ date: a.type === 'advance' ? a.paid_on ?? a.work_date : a.work_date, amount: Number(a.amount), reason: a.reason ?? null })
       }
       const rows: PayrollRow[] = ((profiles ?? []) as unknown as (Tables<'profiles'> & { workspace: { name: string } | null })[])
-        .filter((p) => isCrewRole(p.role) && (p.status === 'active' || (daysByUser.get(p.id)?.size ?? 0) > 0 || (futureByUser.get(p.id)?.size ?? 0) > 0))
+        // A hónap TÉNYEI döntenek, nem a mai szerep: akinek van fizetett / tervezett napja vagy előlege, levonása,
+        // az szerepel akkor is, ha azóta vezető lett vagy le lett tiltva. Nulla soros csak az aktív munkatárs.
+        .filter((p) => (daysByUser.get(p.id)?.size ?? 0) > 0 || (futureByUser.get(p.id)?.size ?? 0) > 0 || (advByUser.get(p.id) ?? 0) !== 0 || (dedByUser.get(p.id) ?? 0) !== 0 || (isCrewRole(p.role) && p.status === 'active'))
         .map((p) => {
           const dayMap = daysByUser.get(p.id) ?? new Map<string, string>()
           let driverDays = 0

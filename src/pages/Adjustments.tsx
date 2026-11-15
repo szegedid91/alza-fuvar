@@ -102,7 +102,7 @@ export default function Adjustments() {
       coveredDates: a.covered_dates ?? [], reason: a.reason, paidBy: a.by,
     })
   }
-  const { data: monthRows } = useQuery({
+  const { data: monthRows, isError: monthRowsError } = useQuery({
     queryKey: ['adjustments', 'month', currentWorkspaceId, userId, ym],
     enabled: !!currentWorkspaceId && !!userId,
     queryFn: async () => {
@@ -146,7 +146,9 @@ export default function Adjustments() {
       return { date: d, rate: p.rate, label: p.label, checkedIn: checked.has(d) }
     })
   }, [monthData, basis, userId])
-  const coverage = worked ? advanceCoverage(worked, monthRows ?? []) : null
+  // a már kiadott előlegek listája NÉLKÜL nincs fedezet-számítás (üres listával 0% kifizetettnek látszana,
+  // és a korlát fölötti előleg is menthető lenne)
+  const coverage = worked && monthRows ? advanceCoverage(worked, monthRows) : null
   const dayWord = basis === 'schedule' ? 'beosztott' : 'ledolgozott'
   const noCheckin = basis === 'schedule' ? (worked ?? []).filter((w) => !w.checkedIn).length : 0
 
@@ -261,7 +263,8 @@ export default function Adjustments() {
                 : 'Azok a napok, amikre be volt osztva (a mai napig) — akkor is, ha nem csekkolt be.'}
             </div>
             {workedError && <div className="alert error">A napok nem tölthetők be — előleg most nem rögzíthető.</div>}
-            {!workedError && !coverage && <div className="tiny muted">Betöltés…</div>}
+            {monthRowsError && <div className="alert error">A hónap eddigi előlegeit nem sikerült betölteni — addig nem rögzíthető új előleg. Frissítsd az oldalt.</div>}
+            {!workedError && !monthRowsError && !coverage && <div className="tiny muted">Betöltés…</div>}
             {coverage && coverage.workedCount === 0 && <div className="tiny muted">{basis === 'schedule' ? 'Ebben a hónapban a mai napig nincs beosztott napja.' : 'Ebben a hónapban még nincs ledolgozott (becsekkolt) napja.'}</div>}
             {coverage && noCheckin > 0 && <div className="alert info">{noCheckin} beosztott napon nem csekkolt be (a gombon „nincs csekk”). A bérszámítás a becsekkolt napokat fizeti — ezekre a napokra adott előleg csak akkor térül meg, ha a nap a bérbe is bekerül.</div>}
             {coverage && coverage.workedCount > 0 && (

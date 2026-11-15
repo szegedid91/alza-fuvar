@@ -47,7 +47,7 @@ export default function Reports() {
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption, odometer_km')
+        fetchAll((f, t) => supabase.from('fuel_logs').select('car_id, liters, amount, consumption, odometer_km, km_warning')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('car_inspections').select('user_id, car_id')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -131,7 +131,8 @@ export default function Reports() {
       // Autónként: üzemanyag + karbantartás (ami bármit csinált a hónapban)
       const carRows: CarRow[] = cars.map((c) => {
         const logs = (fuel ?? []).filter((f) => f.car_id === c.id)
-        const kms = logs.map((f) => Number(f.odometer_km)).filter((n) => n > 0)
+        // a „nem nagyobb a korábbinál” figyelmeztetésű (elgépelt) állás kimarad a havi km-ből
+        const kms = logs.filter((f) => !f.km_warning).map((f) => Number(f.odometer_km)).filter((n) => n > 0)
         const cons = logs.map((f) => Number(f.consumption)).filter((n) => n > 0)
         const m = perCar.get(c.id) ?? { inspections: 0, cleanings: 0, issues: 0, openIssues: 0, incidents: 0 }
         return {
