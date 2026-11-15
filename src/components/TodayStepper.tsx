@@ -7,7 +7,10 @@ import Icon, { type IconName } from './Icon'
 import ParkCarButton, { useSettledToday } from './ParkCarButton'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
-import { allRoundsDone } from '../lib/rounds'
+import { allRoundsDone, roundStates } from '../lib/rounds'
+import { useRoutes } from '../hooks/useRoutes'
+import { useCleaningToday, useFuelToday } from '../hooks/useDayEnd'
+import { cleaningLine, fuelLine, roundLines, type DayLine } from '../lib/dayEnd'
 
 // "Mai nap" lépéssor a munkatárs kezdőlapján: hol tart a nap, és egy gombbal
 // a KÖVETKEZŐ lépésre visz. A sofőr napja lineáris (becsekk → ellenőrzés →
@@ -67,6 +70,12 @@ export default function TodayStepper() {
     },
   })
 
+  // a lezárt nap összefoglalójához: a körök járatai, a takarítás és (nem elektromos autónál) a tankolás
+  const { data: routes } = useRoutes()
+  const closedDay = !!checkin?.checked_out_at
+  const { data: cleaning } = useCleaningToday(closedDay ? car?.id : null, date)
+  const { data: fuel } = useFuelToday(closedDay ? car?.id : null, date, closedDay && !!car && car.fuel_type !== 'electric')
+
   if (isLoading) return null
 
   const checkedOut = !!checkin?.checked_out_at
@@ -93,10 +102,25 @@ export default function TodayStepper() {
     {
       // Nap vége = elszámolás után az autó lerakva (elektromosnál töltőre téve) — nincs külön kijelentkezés
       key: 'parked', icon: electric ? 'zap' : 'flag', title: electric ? 'Autó lerakva, töltőn' : 'Autó lerakva', to: '/', cta: electric ? 'Autó lerakva, töltőre téve' : 'Autó lerakva',
-      detail: checkedOut ? `Nap lezárva ${hhmm(checkin!.checked_out_at!)}` : settledAt ? `Elszámoltál ${hhmm(settledAt)} — ${electric ? 'töltőre, és koppints' : 'rakd le, és koppints'}` : 'Az „Elszámoltam” jelzés után, az autó leadásakor',
+      detail: checkedOut ? `Nap lezárva ${hhmm(checkin!.checked_out_at!)} — kijelentkeztél az autóról` : settledAt ? `Elszámoltál ${hhmm(settledAt)} — ${electric ? 'töltőre, és koppints' : 'rakd le, és koppints'}` : 'Az „Elszámoltam” jelzés után, az autó leadásakor',
       state: checkedOut ? 'done' : 'todo',
     },
   ]
+
+  // Lezárt nap: összefoglaló — melyik kör melyik járat volt, volt-e takarítás, (dízelnél) volt-e tankolás
+  if (checkedOut) {
+    const line = (key: string, icon: IconName, l: DayLine): Step => ({ key, icon, title: l.title, detail: l.detail, state: l.done ? 'done' : 'skip', to: '/', cta: '' })
+    const rounds = roundLines((myRoutes ?? []).map((sh) => ({ round: sh.round, code: routes?.find((r) => r.id === sh.route_id)?.code ?? null })), roundStates(myRoutes?.length ?? 0, todayEvents ?? []), hhmm)
+    const summary: Step[] = [
+      ...rounds.map((l, i) => line(`round-${i}`, 'map', l)),
+      line('cleaning', 'sparkles', cleaningLine(cleaning, hhmm)),
+      ...(electric ? [] : [line('fuel', 'fuel', fuelLine(fuel, hhmm))]),
+    ]
+    // sorrend: körök → Box-lapok → takarítás → tankolás → autó lerakva
+    const boxIdx = steps.findIndex((s) => s.key === 'boxsheet')
+    steps.splice(boxIdx >= 0 ? boxIdx : steps.length - 1, 0, ...summary.filter((s) => s.key.startsWith('round-')))
+    steps.splice(steps.length - 1, 0, ...summary.filter((s) => !s.key.startsWith('round-')))
+  }
 
   // A következő lépés: az első, ami nincs kész és nem "kihagyható"
   // (kötelező ellenőrzés mindent megelőz)

@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 import WaiverRequest from '../components/WaiverRequest'
+import { useFuelGate } from '../hooks/useDayEnd'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string; group?: string; badge?: number }
 
@@ -64,6 +65,8 @@ export default function Home() {
   // alsó menüben is ott van (beolvasás, autó-hiba, beosztás), azt nem ismételjük
   // Tankolás csak nem elektromos autónál (az autónál állítható a hajtás)
   const electric = today?.car?.fuel_type === 'electric'
+  // nap vége: dízel / benzines autónál tankolás (blokkal) az autó lerakása előtt
+  const fuelGate = useFuelGate(today?.car ?? null, today?.date ?? '')
   // Autó-ellenőrzés gyorslink nincs: a fotósor a becsekkolás / autócsere után automatikusan jön
   const crewLinks: HubItem[] = [
     ...(electric ? [] : [{ to: '/tankolas', icon: 'fuel', title: 'Tankolás', desc: '' } as HubItem]),
@@ -140,11 +143,38 @@ export default function Home() {
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && settled && (
         <div className="card stack" style={{ borderColor: 'var(--success)', gap: 10 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="flag" />Nap vége</div>
-          <div className="small">Elszámoltál, a mai körök megvannak. Két dolog maradt:</div>
+          <div className="small">Elszámoltál, a mai körök megvannak. {fuelGate.needed ? 'Három' : 'Két'} dolog maradt:</div>
           <div className="small" style={{ fontWeight: 700 }}>1. Takarítottad az autót?</div>
           {today.car && <CleaningCard car={today.car} date={today.date} askPhotos />}
           <div className="tiny muted">Ha nem takarítottál, ezt hagyd ki.</div>
-          <div className="small" style={{ fontWeight: 700 }}>2. {today.car?.fuel_type === 'electric' ? 'Autó lerakva, töltőre téve' : 'Autó lerakva'}</div>
+          {/* Dízel / benzines autó: az autó lerakása előtt tankolás, a blokk fotójával */}
+          {fuelGate.needed && (
+            <>
+              <div className="small" style={{ fontWeight: 700 }}>2. Autó megtankolva</div>
+              {fuelGate.done ? (
+                <div className="between" style={{ gap: 8 }}>
+                  <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                    <span className="badge success"><Icon name="check" />Kész</span>
+                    <span className="small">Megtankolva, a blokk feltöltve</span>
+                  </span>
+                  <Link to="/tankolas?napvege=1" className="link-btn tiny" style={{ textDecoration: 'none', flexShrink: 0 }}>még egy</Link>
+                </div>
+              ) : (
+                <>
+                  <Link to="/tankolas?napvege=1" className="btn secondary" style={{ textDecoration: 'none' }}><Icon name="fuel" />Tankolás — blokk fotózása</Link>
+                  {fuelGate.skipped
+                    ? <div className="tiny muted">Jelezted, hogy ma nem tankoltál. <button type="button" className="link-btn inline tiny" onClick={() => fuelGate.setSkipped(false)}>visszavonás</button></div>
+                    : (
+                      <div className="row" style={{ gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                        <span className="tiny muted">Tankold meg az autót, és fotózd le a blokkot.</span>
+                        <ConfirmButton className="link-btn tiny" confirmLabel="Biztos? Nem tankoltam" onConfirm={() => fuelGate.setSkipped(true)}>Ma nem tankoltam</ConfirmButton>
+                      </div>
+                    )}
+                </>
+              )}
+            </>
+          )}
+          <div className="small" style={{ fontWeight: 700 }}>{fuelGate.needed ? '3' : '2'}. {today.car?.fuel_type === 'electric' ? 'Autó lerakva, töltőre téve' : 'Autó lerakva'}</div>
           <ParkCarButton />
         </div>
       )}

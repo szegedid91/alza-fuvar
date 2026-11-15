@@ -7,6 +7,7 @@ import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { dayComplete } from '../lib/rounds'
+import { useFuelGate } from '../hooks/useDayEnd'
 import { toast } from '../lib/toast'
 import { errMsg } from '../lib/errors'
 import ConfirmButton from './ConfirmButton'
@@ -15,7 +16,7 @@ import Icon from './Icon'
 // A nap vége: „Autó lerakva” (elektromosnál: „és töltőre téve”). Csak az
 // „Elszámoltam” jelzés UTÁN aktív — ez zárja le a napot (a becsekkolás
 // checked_out_at-ja, idővel, GPS-szel, geofence-jelzéssel). Külön
-// „Kijelentkezés” gomb nincs: vagy így ér véget a nap, vagy autócserével
+// „Kijelentkezés” gomb nincs: az autó lerakása EGYBEN a kijelentkezés az autóról. Vagy így ér véget a nap, vagy autócserével
 // (a Beolvasás oldalon), vagy napközben mások ülnek át az ő autójára.
 // Elszámolva = a nap kész: minden kör „Járat kész”, és az UTOLSÓ után is megvolt az elszámolás
 // (két körnél az első kör elszámolása még nem zárja a napot — addig nincs „Autó lerakva”)
@@ -39,6 +40,8 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
   const checkin = today?.checkin ?? null
   const electric = today?.car?.fuel_type === 'electric'
   const label = electric ? 'Autó lerakva, töltőre téve' : 'Autó lerakva'
+  // dízel / benzines autónál előbb a tankolás (blokk fotóval), vagy a „ma nem tankoltam” jelzés
+  const fuelGate = useFuelGate(today?.car ?? null, today?.date ?? '')
 
   async function park() {
     if (!checkin) return
@@ -52,7 +55,7 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
         values: { checked_out_at: new Date().toISOString(), out_gps_lat: gps.lat, out_gps_lng: gps.lng, out_outside_geofence: outside },
       })
       setParked(checkin.id)
-      toast.success(electric ? 'Nap lezárva — autó lerakva, töltőn. Szép munka!' : 'Nap lezárva — autó lerakva. Szép munka!')
+      toast.success(electric ? 'Nap lezárva — autó lerakva, töltőn. Kijelentkeztél az autóról. Szép munka!' : 'Nap lezárva — autó lerakva. Kijelentkeztél az autóról. Szép munka!')
       await qc.invalidateQueries({ queryKey: ['today'] })
     } catch (e) {
       toast.error('Nem sikerült lezárni a napot: ' + errMsg(e, 'ismeretlen hiba'))
@@ -62,17 +65,19 @@ export default function ParkCarButton({ className = 'btn' }: { className?: strin
   }
 
   if (!checkin || checkin.checked_out_at || parked === checkin.id) return null
-  const ready = !!settledAt
+  const settledOk = !!settledAt
+  const ready = settledOk && fuelGate.ok
   return (
     <div className="stack" style={{ gap: 6 }}>
-      <ConfirmButton className={className} confirmLabel={electric ? 'Biztos? Lerakva és töltőn' : 'Biztos? Lerakva'} disabled={!ready || busy || isLoading} onConfirm={() => void park()}
+      <ConfirmButton className={className} confirmLabel={electric ? 'Biztos? Lerakva és töltőn' : 'Biztos? Lerakva'} disabled={!ready || busy || isLoading || fuelGate.isLoading} onConfirm={() => void park()}
         style={ready ? undefined : { opacity: 0.55 }}>
         <Icon name={electric ? 'zap' : 'flag'} />{busy ? 'Mentés…' : label}
       </ConfirmButton>
       <div className="tiny muted" style={{ textAlign: 'center' }}>
         {ready
-          ? (electric ? 'Elszámoltál. Tedd töltőre az autót, és koppints — ezzel zárul a nap.' : 'Elszámoltál. Rakd le az autót, és koppints — ezzel zárul a nap.')
-          : 'Előbb az „Elszámoltam” jelzés a csoportba — utána aktív.'}
+          ? (electric ? 'Tedd töltőre az autót, és koppints — ezzel zárul a nap, és kijelentkezel az autóról.' : 'Rakd le az autót, és koppints — ezzel zárul a nap, és kijelentkezel az autóról.')
+          : !settledOk ? 'Előbb az „Elszámoltam” jelzés a csoportba — utána aktív.'
+            : 'Előbb a tankolás (blokk fotóval) — utána aktív.'}
       </div>
     </div>
   )

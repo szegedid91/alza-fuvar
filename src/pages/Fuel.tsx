@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import RequireCheckin from '../components/RequireCheckin'
 import InspectionGate from '../components/InspectionGate'
@@ -44,6 +45,9 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  // a nap végi „Autó megtankolva” lépésből érkezve: mentés után vissza a kezdőlapra (jön az autó lerakása)
+  const fromDayEnd = useSearchParams()[0].get('napvege') === '1'
 
   const [photo, setPhoto] = useState<CapturedPhoto | null>(null)
   const [ocr, setOcr] = useState<{ running: boolean; raw: OcrParsed; error?: string } | null>(null)
@@ -134,6 +138,11 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
       setPhoto(null); setOcr(null); setLocation(''); setAmount(''); setLiters(''); setOdometer(''); setVerified(false)
       await qc.invalidateQueries({ queryKey: ['fuel-history', car.id] })
       await qc.invalidateQueries({ queryKey: ['fuel-avg', car.id] })
+      await qc.invalidateQueries({ queryKey: ['fuel-today', car.id] })
+      if (fromDayEnd) {
+        if (backwards) toast.info('Tankolás mentve. Figyelem: a km-óra érték nem nagyobb egy korábbinál!')
+        navigate('/')
+      }
     } catch (e) {
       setMsg('Hiba: ' + (errMsg(e, 'ismeretlen')))
     } finally {
