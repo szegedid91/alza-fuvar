@@ -16,6 +16,7 @@ export interface OutboxPhoto {
   id: string
   column: string // melyik oszlopba kerüljön a feltöltött storage path
   blob: Blob
+  poster?: Blob // videónál: képkocka a bélyegképhez
 }
 
 export interface OutboxRecord {
@@ -137,7 +138,7 @@ async function runRecord(rec: OutboxRecord): Promise<void> {
   const values = { ...rec.values }
   if (rec.photo) {
     if (!rec.photo.blob) throw new Error('A fotó adata elveszett a helyi tárból — készítsd el újra')
-    const path = await uploadPhoto(rec.photo.workspaceId, rec.photo.folder, rec.photo.id, rec.photo.blob)
+    const path = await uploadPhoto(rec.photo.workspaceId, rec.photo.folder, rec.photo.id, rec.photo.blob, rec.photo.poster)
     values[rec.photo.column] = path
     // Fotó-hitelesség: hash rögzítése (hiba esetén nem blokkolja a mentést)
     try {

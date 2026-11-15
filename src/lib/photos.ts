@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { compressImage } from './image'
+import { thumbPath, baseMime, mediaExt } from './media'
 
 const BUCKET = 'photos'
 
@@ -25,7 +26,7 @@ export async function recordPhotoProof(workspaceId: string, storagePath: string,
 // Bélyegkép útvonala a teljes kép mellett: {id}_t.jpg (~320 px, pár kB).
 // A vezetői galéria ezt tölti a teljes 1600 px-es kép helyett; régi
 // fotóknál nincs bélyegkép — a megjelenítő ilyenkor a teljes képre vált.
-export const thumbPath = (path: string): string => path.replace(/\.jpg$/, '_t.jpg')
+export { thumbPath, isVideoPath, baseMime, mediaExt } from './media'
 export const THUMB_MAX_DIM = 320
 
 // Feltölti a blobot a workspace-scoped útvonalra, visszaadja a storage path-t.
@@ -35,20 +36,26 @@ export async function uploadPhoto(
   folder: string,
   id: string,
   blob: Blob,
+  // videónál: a felvétel egy képkockája — ebből lesz a galéria bélyegképe
+  poster?: Blob | null,
 ): Promise<string> {
-  const path = `${workspaceId}/${folder}/${id}.jpg`
+  const ext = mediaExt(blob.type)
+  const isVideo = ext !== 'jpg'
+  const path = `${workspaceId}/${folder}/${id}.${ext}`
   // A teljes kép és a bélyegkép párhuzamosan megy fel (egy kör helyett kettő
   // egymás után — gyenge térerőnél ez volt a lassú).
   // Bélyegkép: best effort — ha nem sikerül, a teljes kép attól még megvan,
   // és a galéria arra esik vissza. (A hash-bizonyíték a TELJES képről készül.)
   const thumbUpload = (async () => {
     try {
-      const thumb = await compressImage(blob, THUMB_MAX_DIM, 0.6)
+      const source = isVideo ? poster : blob
+      if (!source) return // videó képkocka nélkül: nincs bélyegkép, a galéria jelzi, hogy videó
+      const thumb = await compressImage(source, THUMB_MAX_DIM, 0.6)
       await supabase.storage.from(BUCKET).upload(thumbPath(path), thumb, { contentType: 'image/jpeg', upsert: true })
     } catch { /* nincs bélyegkép — fallback a teljes képre */ }
   })()
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-    contentType: blob.type || 'image/jpeg',
+    contentType: baseMime(blob.type) || 'image/jpeg',
     upsert: true,
   })
   await thumbUpload

@@ -4,6 +4,7 @@
 // csoportot választja és küld. (Csoporthoz a WhatsApp linkből nem enged előre
 // kitöltött szöveget; a csoport-linkes + vágólapos mód a döntés szerint kikapcsolva.)
 import type { Tables } from './database.types'
+import { baseMime, mediaExt } from './media'
 
 export type GroupWorkspace = Pick<Tables<'workspaces'>, 'arrival_whatsapp_group' | 'arrival_whatsapp_group_name'>
 
@@ -62,7 +63,7 @@ export function canShareFiles(): boolean {
 }
 export async function sharePhotos(blobs: Blob[], text: string, baseName: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
   if (!canShareFiles() || blobs.length === 0) return 'unsupported'
-  const files = blobs.map((b, i) => new File([b], `${baseName}-${i + 1}.jpg`, { type: b.type || 'image/jpeg' }))
+  const files = blobs.map((b, i) => new File([b], `${baseName}-${i + 1}.${mediaExt(b.type)}`, { type: baseMime(b.type) || 'image/jpeg' }))
   try {
     await navigator.share({ files, text })
     return 'shared'

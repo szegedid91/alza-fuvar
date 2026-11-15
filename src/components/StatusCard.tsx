@@ -69,7 +69,7 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
   // Elszámolás fotóval: a „Küldés” koppintáson belül nyílik a megosztás-menü
   // (a böngésző csak érintésre engedi) — ezért ELŐBB a megosztás indul, és csak
   // utána, párhuzamosan a rögzítés + feltöltés
-  function sendSettle(blobs: Blob[]) {
+  function sendSettle(blobs: Blob[], posters: (Blob | undefined)[] = []) {
     if (!currentWorkspaceId || !profile) return
     const at = new Date()
     const text = statusText('settled', at, name, route)
@@ -81,12 +81,12 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
       try {
         const eventId = await record('settled', at)
         if (!eventId) return
-        for (const blob of blobs) {
+        for (const [i, blob] of blobs.entries()) {
           const photoId = crypto.randomUUID()
           await submitNow({
-            id: photoId, table: 'status_event_photos', op: 'insert', label: 'Elszámolás fotó',
+            id: photoId, table: 'status_event_photos', op: 'insert', label: blob.type.startsWith('video/') ? 'Elszámolás videó' : 'Elszámolás fotó',
             values: { id: photoId, workspace_id: currentWorkspaceId, event_id: eventId },
-            photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob },
+            photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob, poster: posters[i] },
           })
         }
         invalidate()
@@ -102,7 +102,7 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
   }
 
   // További fotók a már rögzített elszámoláshoz (pl. ha egy láda kimaradt a képről): mentés az appba, és megosztás a csoportba
-  function addSettlePhotos(blobs: Blob[]) {
+  function addSettlePhotos(blobs: Blob[], posters: (Blob | undefined)[] = []) {
     const ev = lastOf('settled')
     if (!currentWorkspaceId || !profile || !ev) return
     setMoreCamera(false)
@@ -111,15 +111,15 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
     if (shareOk) sharing = sharePhotos(blobs, text, 'elszamolas')
     void (async () => {
       try {
-        for (const blob of blobs) {
+        for (const [i, blob] of blobs.entries()) {
           const photoId = crypto.randomUUID()
           await submitNow({
-            id: photoId, table: 'status_event_photos', op: 'insert', label: 'Elszámolás fotó',
+            id: photoId, table: 'status_event_photos', op: 'insert', label: blob.type.startsWith('video/') ? 'Elszámolás videó' : 'Elszámolás fotó',
             values: { id: photoId, workspace_id: currentWorkspaceId, event_id: ev.id },
-            photo: { workspaceId: currentWorkspaceId, folder: `status/${ev.id}`, id: photoId, column: 'storage_path', blob },
+            photo: { workspaceId: currentWorkspaceId, folder: `status/${ev.id}`, id: photoId, column: 'storage_path', blob, poster: posters[i] },
           })
         }
-        toast.success(`${blobs.length} további fotó mentve az elszámoláshoz.`)
+        toast.success(`${blobs.length} további felvétel mentve az elszámoláshoz.`)
         invalidate()
       } catch (e) {
         toast.error('A fotó mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))
@@ -157,7 +157,7 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
               <button key={kind} type="button" className={big ? 'btn' : 'btn ghost sm auto'} style={big ? bigStyle : smallStyle} onClick={() => setSettleCamera(true)}>
                 <Icon name="camera" size={big ? 24 : 14} />
                 <span style={{ fontWeight: 800 }}>{meta.label}</span>
-                <span className="tiny" style={{ opacity: 0.85 }}>{!big && last ? hhmm(last.at) : 'fotóval'}</span>
+                <span className="tiny" style={{ opacity: 0.85 }}>{!big && last ? hhmm(last.at) : 'fotóval vagy videóval'}</span>
               </button>
             )
           }
@@ -195,15 +195,15 @@ export default function StatusCard({ roundsOver = false }: { roundsOver?: boolea
       })()}
 
       {moreCamera && (
-        <MultiShotCamera title="További visszáru-fotók" sendLabel="Mentés és küldés" hint="Fotózd le, ami az előző képekről kimaradt — minden visszahozott tétel látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
+        <MultiShotCamera video title="További visszáru-felvétel" sendLabel="Mentés és küldés" hint="Fotózd vagy videózd le, ami az előző felvételekről kimaradt — minden visszahozott csomag látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
       )}
       {lastOf('settled') && !moreCamera && (
         <button type="button" className="btn secondary sm" onClick={() => setMoreCamera(true)}>
-          <Icon name="camera" size={14} />További visszáru-fotó az elszámoláshoz{(lastOf('settled')?.photos?.length ?? 0) ? ` (eddig ${lastOf('settled')!.photos!.length} kép)` : ''}
+          <Icon name="camera" size={14} />További visszáru-fotó vagy videó{(lastOf('settled')?.photos?.length ?? 0) ? ` (eddig ${lastOf('settled')!.photos!.length})` : ''}
         </button>
       )}
       {settleCamera && (
-        <MultiShotCamera title="Elszámolás — visszáru fotók" sendLabel="Küldés a csoportba" hint="Fotózd le az összes visszahozott árut — több képen, hogy minden tétel látszódjon. Ez igazolja, hogy a termék visszakerült a raktárba." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
+        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Küldés a csoportba" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
       {roundsOver && (

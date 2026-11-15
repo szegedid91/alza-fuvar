@@ -9,7 +9,7 @@ import { useCars } from '../hooks/useCars'
 import { useCarCategories } from '../hooks/useCarCategories'
 import { groupByCategory } from '../lib/calendar'
 import { resolveNames } from '../lib/names'
-import { signedUrl, signedUrls, sha256Hex, thumbPath } from '../lib/photos'
+import { signedUrl, signedUrls, sha256Hex, thumbPath, isVideoPath } from '../lib/photos'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
 import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber } from '../lib/labels'
@@ -164,7 +164,8 @@ export default function PhotoReview() {
       return items.map((i) => ({
         ...i,
         url: i.path ? urls[i.path] : undefined,
-        thumb: i.path ? (urls[thumbPath(i.path)] ?? urls[i.path]) : undefined,
+        // videónál a teljes fájl nem kép: ha nincs bélyegkép, a csempe jelzi, hogy videó
+        thumb: i.path ? (urls[thumbPath(i.path)] ?? (isVideoPath(i.path) ? undefined : urls[i.path])) : undefined,
       }))
     },
   })
@@ -259,7 +260,9 @@ export default function PhotoReview() {
               <div key={it.id} className="stack" style={{ gap: 4 }}>
                 <span className="badge primary" style={{ width: 'fit-content' }}>{idx + 1}.</span>
                 {it.url
-                  ? <img
+                  ? isVideoPath(it.path)
+                    ? <video src={it.url} controls playsInline preload="metadata" style={{ width: '100%', borderRadius: 10 }} />
+                    : <img
                       src={it.url}
                       alt=""
                       style={{ width: '100%', borderRadius: 10, cursor: 'zoom-in' }}
@@ -301,7 +304,7 @@ export default function PhotoReview() {
                 style={{ cursor: !compare && it.url ? 'zoom-in' : undefined }}
                 onClick={!compare && it.url ? () => window.open(it.url, '_blank', 'noopener') : undefined}
               >
-                <PhotoThumb path={it.path} src={it.thumb ?? it.url} />
+                <PhotoThumb path={it.path} src={it.thumb ?? (isVideoPath(it.path) ? undefined : it.url)} />
               </div>
               <div style={{ marginTop: 8 }}>
                 <div className="small" style={{ fontWeight: 700 }}>{it.title}</div>
@@ -376,7 +379,7 @@ async function fetchPhotos(type: PhotoType, f: Filters, ws: string): Promise<Ite
     const names = await resolveNames(rows.map((r) => (r.event as unknown as { user_id: string } | null)?.user_id))
     return rows.map((r) => {
       const e = r.event as unknown as { user_id: string; at: string; car: { plate: string } | null } | null
-      return { id: r.id, path: r.storage_path!, title: `${e?.car?.plate ?? '—'} · visszáru (elszámolás)`, subtitle: e?.user_id ? names[e.user_id] ?? '' : '', when: formatDateTime(e?.at ?? r.created_at) }
+      return { id: r.id, path: r.storage_path!, title: `${e?.car?.plate ?? '—'} · visszáru ${isVideoPath(r.storage_path) ? 'videó' : 'fotó'} (elszámolás)`, subtitle: e?.user_id ? names[e.user_id] ?? '' : '', when: formatDateTime(e?.at ?? r.created_at) }
     })
   }
 
