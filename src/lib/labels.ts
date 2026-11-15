@@ -87,6 +87,22 @@ export function formatDateTime(d: string | Date | null | undefined): string {
   }).format(date)
 }
 
+// FORINT-összeg parsolása (bér, napidíj, előleg, levonás, tankolás összege). A forintnál a pont és a vessző
+// hármas csoportokkal EZRES-elválasztó: „25.000” = 25 000 Ft, „1,250,000” = 1 250 000 Ft — nem 25, mint a
+// literes mezőknél (parseHuNumber, LOG-01). Tizedes csak 1–2 jegyű lehet („12500,50”). Érvénytelenre NaN.
+export function parseHuf(input: string): number {
+  const t = input.replace(/[\s\u00a0\u202f]/g, '').replace(/ft\.?$/i, '').replace(/[^0-9.,-]/g, '')
+  if (!t) return NaN
+  if (/^-?\d+$/.test(t)) return parseInt(t, 10)
+  // ezres csoportok (pont VAGY vessző), opcionálisan a másik jellel írt 1–2 jegyű tizedes
+  let m = /^(-?\d{1,3}(?:\.\d{3})+)(?:,(\d{1,2}))?$/.exec(t) ?? /^(-?\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?$/.exec(t)
+  if (m) return parseFloat(m[1].replace(/[.,]/g, '') + (m[2] ? '.' + m[2] : ''))
+  // sima szám 1–2 tizedessel
+  m = /^(-?\d+)[.,](\d{1,2})$/.exec(t)
+  if (m) return parseFloat(m[1] + '.' + m[2])
+  return NaN
+}
+
 // Magyar számbevitel parsolása. Kezeli a szóköz/nem-törő-szóköz ezres-elválasztót,
 // a vessző tizedesjelet és a pontozott ezres-csoportokat.
 // "1 234,5" -> 1234.5 · "1.234,56" -> 1234.56 · "1.234" -> 1234 · "12.5" -> 12.5

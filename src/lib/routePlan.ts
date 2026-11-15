@@ -144,7 +144,11 @@ export function lateMinutes(deadline: string | null | undefined, round = 1, now 
   const dl = deadlineMin(deadline, round)
   if (dl == null) return null
   const n = now < 240 ? now + 1440 : now
-  return n - dl
+  // A két idő külön eltolása a 04:00-s határ két oldalán ±1 napot tévedne (határidő 05:00, most 03:00 → +22 óra
+  // „késés”). Ezért a különbséget hozzuk a ±12 órás sávba: ennél nagyobb késés / előny a járaton nem fordul elő.
+  let d = (((n - dl) % 1440) + 1440) % 1440
+  if (d > 720) d -= 1440
+  return d
 }
 
 // Melyik körre szól a betöltött terv: a tervezett indulás dönti el — 03:00 és 14:59 közötti indulás a

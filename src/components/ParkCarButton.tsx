@@ -23,8 +23,8 @@ import Icon from './Icon'
 export function useSettledToday(): { data: string | null; isLoading: boolean } {
   const { data: events, isLoading } = useTodayStatusEvents()
   const { data: myRoutes } = useMyRoutesToday()
-  if (!events) return { data: null, isLoading }
-  const done = dayComplete(myRoutes?.length ?? 0, events)
+  if (!events || !myRoutes) return { data: null, isLoading: isLoading || !myRoutes }
+  const done = dayComplete(myRoutes.length, events)
   const last = [...events].reverse().find((e) => e.kind === 'settled')?.at ?? null
   return { data: done ? last : null, isLoading: false }
 }

@@ -12,7 +12,7 @@ import { getCurrentPosition } from '../lib/geo'
 import { ocrFuelReceipt, type OcrParsed } from '../lib/ocr'
 import { previousFuelForCar, hasLaterOrEqualKm, computeConsumption, carAverageConsumption } from '../lib/fuel'
 import type { Car } from '../lib/checkin'
-import { formatDate, formatHuf, parseHuNumber, todayISO } from '../lib/labels'
+import { formatDate, formatHuf, parseHuNumber, parseHuf, todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import Icon from '../components/Icon'
 import { errMsg } from '../lib/errors'
@@ -87,7 +87,8 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
     // csak érvényes ISO dátumot töltünk a date-mezőbe (az OCR bármit adhat)
     if (isValidISODate(res.parsed.date)) setFuelDate(res.parsed.date)
     // magyar vesszős alak a mezőbe, hogy a parser egyértelműen tizedesnek vegye (LOG-01)
-    if (res.parsed.amount != null) setAmount(String(res.parsed.amount).replace('.', ','))
+    // forint: egész összeg (a fillér a blokkon is kerekítve van) — így a mező értelmezése egyértelmű
+    if (res.parsed.amount != null) setAmount(String(Math.round(res.parsed.amount)))
     if (res.parsed.liters != null) setLiters(String(res.parsed.liters).replace('.', ','))
   }
 
@@ -100,7 +101,7 @@ function FuelInner({ car, date }: { car: Car; date: string }) {
       // Magyar formátumok ("123 456", "45,6", "25 000") helyes parsolása
       const km = parseHuNumber(odometer)
       const litersNum = parseHuNumber(liters)
-      const amountNum = parseHuNumber(amount)
+      const amountNum = parseHuf(amount) // forint: „25.000” = 25 000 Ft (a liter marad tizedes-pontos)
       if (!Number.isFinite(km) || !Number.isFinite(litersNum) || !Number.isFinite(amountNum)) {
         setMsg('Hiba: érvénytelen számérték (km / liter / összeg).')
         setBusy(false)

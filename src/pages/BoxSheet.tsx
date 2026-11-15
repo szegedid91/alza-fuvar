@@ -256,7 +256,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
         .catch((e2) => toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba')))
     },
     onMutate: (v) => { setPendingStops((prev) => [...prev, v.stop]) },
-    onError: (e, v) => { setPendingStops((prev) => prev.filter((st) => st.id !== v.stop.id)); fail(e) },
+    onError: (e, v) => { setPendingStops((prev) => prev.filter((st) => st.id !== v.stop.id)); prefilledRef.current = null; fail(e) },
     onSettled: invalidate,
   })
   const add = (box: AlzaBox | { code: string }) => {

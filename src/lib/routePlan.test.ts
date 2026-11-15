@@ -15,6 +15,13 @@ describe('lateMinutes — késés a határidőhöz képest (LOG-02)', () => {
     // 00:10-kor egy 22:00-s határidő 130 perce lejárt
     expect(lateMinutes('22:00', 1, timeToMin('00:10')!)).toBe(130)
   })
+  it('a 04:00-s határ két oldalán sem téved egy napot', () => {
+    // határidő 05:00, most 03:00: még 2 óra van (korábban +1320 perc „késés” jött ki)
+    expect(lateMinutes('05:00', 1, timeToMin('03:00')!)).toBe(-120)
+    // határidő 03:30, most 04:30: 1 óra késés (korábban −1380 perc, a késés nem látszott)
+    expect(lateMinutes('03:30', 1, timeToMin('04:30')!)).toBe(60)
+    expect(lateMinutes('04:15', 1, timeToMin('03:40')!)).toBe(-35)
+  })
   it('hiányzó határidő → null', () => {
     expect(lateMinutes(null, 1, 700)).toBeNull()
   })

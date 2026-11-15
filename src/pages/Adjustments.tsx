@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
-import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuNumber, isCrewRole } from '../lib/labels'
+import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuf, isCrewRole } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { sumAdvances, monthRange, currentYm, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, type AdvanceBasis } from '../lib/payroll'
 import { readPayBasis, savePayBasis } from '../lib/payBasis'
@@ -177,7 +177,7 @@ export default function Adjustments() {
 
   const add = useMutation({
     mutationFn: async () => {
-      const amt = parseHuNumber(amount)
+      const amt = parseHuf(amount) // forint: „50.000” = 50 000 Ft
       // Negatív előleg/levonás fordítva hatna a bérre — csak pozitív összeg mehet
       if (!Number.isFinite(amt) || amt <= 0) throw new Error('Érvénytelen összeg — pozitív számot adj meg.')
       // LOG-24: üres vagy jövőbeli dátum nem mehet (jövő hónapba könyvelt előleg)

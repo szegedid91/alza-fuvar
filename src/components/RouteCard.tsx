@@ -272,7 +272,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // Átvitel: az előző késő boxnál megadott okok (pl. „Kamion késett”) a következő késő boxoknál
   // előre be vannak jelölve, amíg a futár be nem hozza a késést (egy box időben → törlődik).
   // sessionStorage: újratöltés / oldalváltás után is megmarad a napon belül.
-  const carryKey = `late-carry:${code}:${round}`
+  // a naphoz kötve: a tegnapi késés-ok ne ragadjon rá a mai első késő boxra
+  const carryKey = `late-carry:${todayISO()}:${code}:${round}`
   const [carry, setCarry] = useState<string[]>(() => { try { return JSON.parse(sessionStorage.getItem(carryKey) ?? '[]') as string[] } catch { return [] } })
   const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])
@@ -291,6 +292,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // fromTap: a futár koppintott (akkor nyitható a navigáció); a Box-lapról érkező automatikus lezárásnál
   // a Box-lap gombja már megnyitotta
   const finish = (fromTap = true) => {
+    // a késést a koppintás pillanatában számoljuk (a kártya utolsó kirajzolása percekkel korábbi lehet)
+    const lateNow = lateMinutes(curDeadline, 1)
     if (lateNow != null && lateNow > 0) {
       // Késés okát körönként egyszer kérdezzük: amíg a futár késésben van, az előzőleg megadott ok megy tovább
       if (carry.length) { if (fromTap) openNav(nextNav); go(idx + 1, { minutes: lateNow, reason: carry.join('; ') }, routeDone()); return }

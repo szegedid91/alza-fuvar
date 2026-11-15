@@ -128,7 +128,8 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
     ? (settledAfterDone ? null : 'settled')
     : lastPhase === 'arrived' ? 'departed' : lastPhase === 'departed' ? (onRoute ? null : 'done') : 'arrived'
   // az utolsó kör után már nincs kiindulás és járat kész — ezek inaktívak
-  const inactive = (kind: StatusKind) => roundsOver && (kind === 'departed' || kind === 'done')
+  // a „Járat kész” csak „Kiindultam” UTÁN aktív: kiindulás előtt vagy kész után megnyomva lezárná a (következő) kört
+  const inactive = (kind: StatusKind) => (roundsOver && (kind === 'departed' || kind === 'done')) || (kind === 'done' && lastPhase !== 'departed')
   // Járat közben a „Járat kész” és a „Megérkeztem” megszakítaná a járatot — ezek két koppintásra mennek (véletlen érintés ellen)
   const needsConfirm = (kind: StatusKind) => onRoute && (kind === 'done' || kind === 'arrived')
   const [armed, setArmed] = useState<StatusKind | null>(null)

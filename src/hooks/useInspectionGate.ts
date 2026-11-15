@@ -45,7 +45,9 @@ export function useInspectionGate(carId: string | undefined, date: string): Insp
     blocked,
     waived,
     waivedAt: t?.checkin?.inspection_waived_at ?? null,
-    error: todayQ.isError,
+    // csak akkor hiba, ha NINCS adat: ha a tárolt állapot megvan (pl. az ellenőrzés kész), egy sikertelen
+    // újraolvasás gyenge térerőnél ne zárja ki a futárt a Box-lapról a box előtt
+    error: todayQ.isError && !todayQ.data,
     retry: () => { void todayQ.refetch() },
     reasons: reasonsQ.data?.required ? reasonsQ.data.reasons : [],
     lastDriverName: reasonsQ.data?.lastDriverName,

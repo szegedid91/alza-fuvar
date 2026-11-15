@@ -56,3 +56,17 @@ describe('allRoundsDone — az utolsó kör kész: nincs több kiindulás', () =
     expect(allRoundsDone(0, [ev('done', '09:00')])).toBe(false)
   })
 })
+
+describe('ismételt „Járat kész” (köztük kiindulás nélkül)', () => {
+  it('nem zárja le a második kört: a két kész egynek számít', () => {
+    const e = [ev('departed', '05:30'), ev('done', '09:00'), ev('done', '09:01')]
+    expect(allRoundsDone(2, e)).toBe(false)
+    expect(roundStates(2, e).map((s) => !!s.doneAt)).toEqual([true, false])
+    expect(dayComplete(2, [...e, ev('settled', '09:30')])).toBe(false)
+  })
+  it('kiindulás után a következő kész már a második köré', () => {
+    const e = [ev('departed', '05:30'), ev('done', '09:00'), ev('done', '09:01'), ev('departed', '10:00'), ev('done', '14:00')]
+    expect(allRoundsDone(2, e)).toBe(true)
+    expect(roundStates(2, e)[1].doneAt).toContain('14:00')
+  })
+})

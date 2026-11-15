@@ -47,9 +47,10 @@ export default function Home() {
   const anyDone = (todayStatus ?? []).some((s) => s.kind === 'done')
   // A nap vége: minden mai kör kész, és az utolsó után megvolt az elszámolás (két körnél az első elszámolás még nem zárja a napot)
   const { data: myRoutes } = useMyRoutesToday()
-  const settled = !!todayStatus && dayComplete(myRoutes?.length ?? 0, todayStatus)
+  // amíg a mai járatok nem töltődtek be, nem döntünk (0 körrel az első elszámolás lezártnak mutatná a napot)
+  const settled = !!todayStatus && !!myRoutes && dayComplete(myRoutes.length, todayStatus)
   // Az utolsó kör is kész: nincs több járat-kártya és kiindulás, a raktári rész (elszámolás, nap vége) jön
-  const roundsOver = !!todayStatus && allRoundsDone(myRoutes?.length ?? 0, todayStatus)
+  const roundsOver = !!todayStatus && !!myRoutes && allRoundsDone(myRoutes.length, todayStatus)
   // Zár: van mai becsekkolás, de nincs kész ellenőrzés és nincs vezetői engedély
   const inspectionLocked = isCrew && !!today?.checkin && !today.inspectionDone && !today.checkin.inspection_waived_at
 

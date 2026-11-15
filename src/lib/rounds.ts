@@ -11,7 +11,15 @@ export interface RoundState {
 export function roundStates(roundCount: number, events: RoundEvent[]): RoundState[] {
   const sorted = [...events].sort((a, b) => a.at.localeCompare(b.at))
   const ats = (kind: string) => sorted.filter((e) => e.kind === kind).map((e) => e.at)
-  const dones = ats('done'); const settles = ats('settled'); const departs = ats('departed')
+  const settles = ats('settled'); const departs = ats('departed')
+  // Egy „Járat kész” csak akkor nyit új kört, ha az előző kész óta volt „Kiindultam”: az ismételt (véletlen,
+  // vagy térerő nélkül kétszer megnyomott) kész-jelzés ne zárja le a következő kört is
+  const dones: string[] = []
+  let canCount = true
+  for (const e of sorted) {
+    if (e.kind === 'departed') canCount = true
+    else if (e.kind === 'done' && canCount) { dones.push(e.at); canCount = false }
+  }
   const out: RoundState[] = []
   let currentSeen = false
   for (let i = 0; i < roundCount; i++) {

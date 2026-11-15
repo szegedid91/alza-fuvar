@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseHuNumber, formatHours, isCrewRole, todayISO, localISODate } from './labels'
+import { parseHuNumber, parseHuf, formatHours, isCrewRole, todayISO, localISODate } from './labels'
 
 describe('parseHuNumber — magyar számbevitel', () => {
   it('ezres szóköz + vessző tizedes', () => {
@@ -26,6 +26,34 @@ describe('parseHuNumber — magyar számbevitel', () => {
   })
   it('pénznem-jelet és szöveget eldob', () => {
     expect(parseHuNumber('12 500 Ft')).toBe(12500)
+  })
+})
+
+describe('parseHuf — forint-összeg', () => {
+  it('a pont és a vessző hármas csoportokkal ezres-elválasztó', () => {
+    expect(parseHuf('25.000')).toBe(25000)
+    expect(parseHuf('50.000')).toBe(50000)
+    expect(parseHuf('25,000')).toBe(25000)
+    expect(parseHuf('1.250.000')).toBe(1250000)
+    expect(parseHuf('1,250,000')).toBe(1250000)
+  })
+  it('szóközös és sima alak, pénznemmel is', () => {
+    expect(parseHuf('25 000')).toBe(25000)
+    expect(parseHuf('25\u00a0000 Ft')).toBe(25000)
+    expect(parseHuf('25000')).toBe(25000)
+    expect(parseHuf('-5000')).toBe(-5000)
+  })
+  it('tizedes csak 1–2 jegyű lehet', () => {
+    expect(parseHuf('12500,50')).toBe(12500.5)
+    expect(parseHuf('12.500,5')).toBe(12500.5)
+    expect(parseHuf('12,500.50')).toBe(12500.5)
+    expect(parseHuf('99.9')).toBe(99.9)
+  })
+  it('érvénytelen vagy félreérthető → NaN', () => {
+    expect(Number.isNaN(parseHuf(''))).toBe(true)
+    expect(Number.isNaN(parseHuf('abc'))).toBe(true)
+    expect(Number.isNaN(parseHuf('25.0000'))).toBe(true)
+    expect(Number.isNaN(parseHuf('1.2.3'))).toBe(true)
   })
 })
 

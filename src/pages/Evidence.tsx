@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { supabase } from '../lib/supabase'
 import { submitNow } from '../lib/outbox'
-import { evidenceCategoryLabel, formatDateTime, formatHuf, todayISO, parseHuNumber, isCrewRole } from '../lib/labels'
+import { evidenceCategoryLabel, formatDateTime, formatHuf, todayISO, parseHuf, isCrewRole } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import type { Enums } from '../lib/database.types'
 import PhotoThumb from '../components/PhotoThumb'
@@ -38,7 +38,7 @@ function DeductionFromEvidence({ evidenceId, categoryLabel, existing, names, onC
 
   async function create() {
     if (!currentWorkspaceId || !profile || !userId || !amount) return
-    const amt = parseHuNumber(amount)
+    const amt = parseHuf(amount) // forint: „50.000” = 50 000 Ft
     // Negatív "levonás" növelné a fizetést — csak pozitív összeg mehet
     if (!Number.isFinite(amt) || amt <= 0) { setError('Érvénytelen összeg — pozitív számot adj meg.'); return }
     setBusy(true)

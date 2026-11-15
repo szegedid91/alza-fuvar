@@ -49,6 +49,7 @@ export default function MultiShotCamera({
   const posterRef = useRef<Blob | null>(null)
   const startedRef = useRef(0)
   const discardRef = useRef(false)
+  const startingRef = useRef(false)
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   // ha a videó nem indul ezen a készüléken, a fotózás megy tovább — csak a piros gomb tűnik el
@@ -119,8 +120,12 @@ export default function MultiShotCamera({
 
   async function startRecording() {
     const stream = streamRef.current, v = videoRef.current
-    if (!stream || !v || recorderRef.current) return
-    posterRef.current = await captureVideoFrame(v).catch(() => null) // az első képkocka lesz a bélyegkép
+    if (!stream || !v || recorderRef.current || startingRef.current) return
+    startingRef.current = true // a bélyegkép készítése alatt érkező második koppintás ne indítson második felvevőt
+    try {
+      posterRef.current = await captureVideoFrame(v).catch(() => null) // az első képkocka lesz a bélyegkép
+    } finally { startingRef.current = false }
+    if (recorderRef.current) return
     // a készülék által elfogadott első formátum: a támogatottnak jelzett is elhasalhat indításkor, ezért sorban próbáljuk
     const candidates = [...VIDEO_MIME_CANDIDATES.filter((m) => { try { return MediaRecorder.isTypeSupported(m) } catch { return false } }), '']
     for (const mime of candidates) {

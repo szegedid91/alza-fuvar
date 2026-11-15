@@ -174,7 +174,8 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
   useEffect(() => {
     if (!fill || !autoRead.current || read.isPending) return
     if (photos.some((p) => !p.path)) { autoRead.current = false; read.mutate() }
-  }, [photos, fill]) // eslint-disable-line react-hooks/exhaustive-deps
+    // read.isPending is függőség: a kiolvasás KÖZBEN készült (még fel nem töltött) fotó a végén sorra kerül
+  }, [photos, fill, read.isPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (readOnly) {
     return (saved?.length ?? 0) > 0 ? (

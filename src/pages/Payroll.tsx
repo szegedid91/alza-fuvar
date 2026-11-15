@@ -5,7 +5,7 @@ import { fetchAll } from '../lib/fetchAll'
 import { useAuth } from '../context/AuthContext'
 import { monthRange, currentYm, buildDayComps, payForDay, payrollDays, xlPayOf, boxPayOf, type PayrollRow, type PayRole, type AdvanceBasis } from '../lib/payroll'
 import { readPayBasis, savePayBasis } from '../lib/payBasis'
-import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuNumber, todayISO } from '../lib/labels'
+import { formatHuf, isCrewRole, formatDate, formatDateTime, parseHuf, todayISO } from '../lib/labels'
 import { exportRowsToXlsx } from '../lib/export'
 import { openPayslip } from '../lib/payslip'
 import ConfirmButton from '../components/ConfirmButton'
@@ -366,12 +366,13 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
 
   const save = useMutation({
     mutationFn: async () => {
-      const d = parseHuNumber(driver)
-      const l = parseHuNumber(loader)
-      const tr = trainee.trim() ? parseHuNumber(trainee) : 0
-      const bx = box.trim() ? parseHuNumber(box) : 0
-      const bt = boxTrainee.trim() ? parseHuNumber(boxTrainee) : 0
-      const b2 = box2.trim() ? parseHuNumber(box2) : 0
+      // forint: „25.000” = 25 000 Ft
+      const d = parseHuf(driver)
+      const l = parseHuf(loader)
+      const tr = trainee.trim() ? parseHuf(trainee) : 0
+      const bx = box.trim() ? parseHuf(box) : 0
+      const bt = boxTrainee.trim() ? parseHuf(boxTrainee) : 0
+      const b2 = box2.trim() ? parseHuf(box2) : 0
       if (!Number.isFinite(d) || !Number.isFinite(l) || !Number.isFinite(tr) || !Number.isFinite(bx) || !Number.isFinite(bt) || !Number.isFinite(b2) || d < 0 || l < 0 || tr < 0 || bx < 0 || bt < 0 || b2 < 0) {
         throw new Error('Érvénytelen összeg — írj be számot, pl. 25 000')
       }
