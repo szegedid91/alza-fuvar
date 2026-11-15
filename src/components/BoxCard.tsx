@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { formatDistance, type AlzaBox } from '../lib/boxSheet'
+import { type AlzaBox } from '../lib/boxSheet'
 import { getNavApp, navUrl, NAV_LABEL } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
@@ -11,10 +11,9 @@ import { errMsg } from '../lib/errors'
 // Egy AlzaBox "hol van?" kártyája: fotó, kód, cím, az alza.hu "hol található"
 // leírása, saját megjegyzés, egy koppintásos navigáció.
 export default function BoxCard({
-  box, distanceM, onClose, editable = false, compact = false, hideNav = false,
+  box, onClose, editable = false, compact = false, hideNav = false,
 }: {
   box: AlzaBox
-  distanceM?: number | null
   onClose?: () => void
   editable?: boolean
   compact?: boolean
@@ -45,7 +44,6 @@ export default function BoxCard({
         <div style={{ minWidth: 0 }}>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             {box.code && <span className="badge primary num">{box.code}</span>}
-            {distanceM != null && <span className="badge"><Icon name="navigation" />{formatDistance(distanceM)}</span>}
             {!box.active && <span className="badge danger">megszűnt</span>}
           </div>
           <div style={{ fontWeight: 800, fontSize: 16, marginTop: 4 }}>{box.name}</div>

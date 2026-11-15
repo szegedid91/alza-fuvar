@@ -96,6 +96,7 @@ export default function RoutePlanImport() {
       toast.success('Járatterv betöltve — a járatok a fájl szerint frissültek (ugyanannak a fájlnak az újratöltése a meglévő verziót frissíti).')
       setPreview(null)
       void qc.invalidateQueries({ queryKey: ['route-stops'] }); void qc.invalidateQueries({ queryKey: ['route-names'] })
+      void qc.invalidateQueries({ queryKey: ['route-plan-latest'] }); void qc.invalidateQueries({ queryKey: ['route-plan-versions'] })
     },
     onError: (e) => setErr('Nem sikerült betölteni: ' + (errMsg(e, 'ismeretlen hiba'))),
   })

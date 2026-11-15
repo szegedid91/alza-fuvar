@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops } from '../hooks/useRouteStops'
-import { planRelief, estimateRoute, fmtMin, nextReliefCode, type ReliefRoute, type ReliefPlan } from '../lib/relief'
+import { planRelief, estimateRoute, nextReliefCode, type ReliefRoute, type ReliefPlan } from '../lib/relief'
 import { toast } from '../lib/toast'
 import { depotOf } from '../lib/depot'
 import ConfirmButton from './ConfirmButton'
@@ -110,31 +110,29 @@ export default function ReliefCard() {
     <div className="card stack" style={{ gap: 10 }}>
       <div className="card-title" style={{ margin: 0 }}><Icon name="repeat" />Mentesítő járat</div>
       <p className="tiny muted" style={{ margin: 0 }}>
-        Ha sok a csomag: a javaslat úgy vesz le boxokat a járatokról (a korábbi mentesítőkről is), hogy az új M-járattal együtt a járatok nagyjából ugyanannyi km-t és ugyanannyi időt fussanak — mindig a leghosszabb járatról, az egymáshoz közeli címeket. A km és az idő becslés (légvonal × úttényező, 32 km/h, boxonként 7 perc), a járatok összevetésére való.
+        Ha sok a csomag: a javaslat úgy vesz le boxokat a járatokról (a korábbi mentesítőkről is), hogy az új M-járattal együtt a járatok terhelése kiegyenlítődjön — mindig a leghosszabb járatról, az egymáshoz közeli címeket. Km itt nem látszik: a pontos km mindig a betöltött tervfájlból (az Alza táblázatából) jön.
       </p>
       {model.length > 0 && (
         <div className="stack" style={{ gap: 4 }}>
           <div className="tiny muted">Pipáld ki, mely járatokról vehet le boxot a mentesítő:</div>
-          {model.map((r) => { const e = estimateRoute(r.stops, depot); const on = !excluded.has(r.id); return (
+          {model.map((r) => { const on = !excluded.has(r.id); return (
             <label key={r.id} className="between tiny" style={{ cursor: 'pointer', opacity: on ? 1 : 0.55 }}>
               <span className="row" style={{ gap: 8 }}>
                 <input type="checkbox" checked={on} onChange={() => { setPlan(null); setExcluded((p) => { const n = new Set(p); if (n.has(r.id)) n.delete(r.id); else n.add(r.id); return n }) }} />
-                <span><strong>{r.code}</strong>{r.isRelief ? <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>mentesítő</span> : null} · {e.stops} box</span>
+                <span><strong>{r.code}</strong>{r.isRelief ? <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>mentesítő</span> : null} · {r.stops.length} box</span>
               </span>
-              <span className="muted">{Math.round(e.km)} km · {fmtMin(e.minutes)}</span>
             </label>
           ) })}
           {noCoords > 0 && <div className="tiny muted">{noCoords} box koordináta nélkül — ezeket a javaslat nem tudja figyelembe venni.</div>}
         </div>
       )}
       <button type="button" className="btn sm auto" disabled={total < 2 || busy} onClick={() => { setErr(null); const pl = planRelief(selectedModel, 60, depot); setPlan(pl); if (!pl) setErr(selectedModel.length === 0 ? 'Válassz legalább egy járatot.' : 'Nincs mit kiegyenlíteni: a mentesítő nem rövidítené a leghosszabb kiválasztott járatot.') }}>
-        <Icon name="map" size={14} />Javaslat (km és idő kiegyenlítése)
+        <Icon name="map" size={14} />Javaslat (járatok kiegyenlítése)
       </button>
       {plan && (
         <div className="stack" style={{ gap: 8, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
           <div className="between">
             <span className="small" style={{ fontWeight: 700 }}>Új járat: {nextReliefCode((routes ?? []).map((r) => r.code))} · {plan.relief.length} box</span>
-            <span className="tiny muted">{Math.round(plan.reliefEst.km)} km · {fmtMin(plan.reliefEst.minutes)}</span>
           </div>
           <div className="tiny muted">A <Icon name="grip" size={12} /> fogantyúval húzva a sorrend módosítható, a × leveszi a boxot a javaslatból (marad az eredeti járatán).</div>
           {plan.relief.map((s, i) => (
@@ -157,7 +155,7 @@ export default function ReliefCard() {
           {plan.after.map((a) => { const b = plan.before.find((x) => x.id === a.id)!; return (
             <div key={a.id} className="between tiny">
               <span><strong>{a.code}</strong> · {a.est.stops} box{a.removed ? <span className="muted"> (−{a.removed})</span> : null}</span>
-              <span className="muted">{Math.round(b.est.km)} → {Math.round(a.est.km)} km · {fmtMin(b.est.minutes)} → {fmtMin(a.est.minutes)}</span>
+              <span className="muted">{b.est.stops} → {a.est.stops} box</span>
             </div>
           ) })}
           <div className="row" style={{ gap: 6 }}>

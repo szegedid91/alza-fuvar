@@ -72,3 +72,15 @@ export function diffUploads(prev: Upload | null, cur: Upload): UploadDiff {
 
 // "05:30:00" → "05:30"
 export const hm = (t: string | null): string => (t ? t.slice(0, 5) : '—')
+
+// A járat km-e a betöltött tervfájlból — csak ha a mostani boxok és sorrend egyezik a tervvel, és a terv minden
+// szakaszához van km. Légvonalat sosem számolunk: ami nincs a táblázatban, azt nem mutatjuk.
+export type PlanKm = { status: 'ok'; total: number; legs: number[]; back: number | null } | { status: 'changed' } | { status: 'none' }
+export function planKmFor(plan: PlanVersion | null, currentBoxIds: string[]): PlanKm {
+  if (!plan || plan.stops.length === 0) return { status: 'none' }
+  const same = plan.stops.length === currentBoxIds.length && plan.stops.every((s, i) => s.box_id === currentBoxIds[i])
+  if (!same) return { status: 'changed' }
+  const legs = plan.stops.map((s) => s.dist_km)
+  if (plan.plan_km == null || legs.some((k) => k == null)) return { status: 'none' }
+  return { status: 'ok', total: Number(plan.plan_km), legs: legs.map((k) => Number(k)), back: plan.back_km != null ? Number(plan.back_km) : null }
+}

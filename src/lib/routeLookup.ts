@@ -21,28 +21,3 @@ export function findBoxInRoutes(
   const ours = boxes.filter((b) => placements.has(b.id))
   return searchBoxes(ours, query, limit).map((box) => ({ box, placements: placements.get(box.id) ?? [] }))
 }
-
-// Légvonalbeli távolság a járat szakaszain: raktár → 1. box → … → utolsó box → raktár.
-// legs[i] = az i. megállóhoz vezető szakasz (0 = raktárból az elsőhöz); back = vissza a raktárba; null = nincs koordináta
-export interface RouteLegs { legs: (number | null)[]; back: number | null; total: number; missing: number }
-export function routeLegs(stops: { lat: number | null; lng: number | null }[], depot: { lat: number | null; lng: number | null } | null, dist: (a: number, b: number, c: number, d: number) => number): RouteLegs {
-  const pts: ({ lat: number; lng: number } | null)[] = stops.map((s) => (s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null))
-  const d0 = depot && depot.lat != null && depot.lng != null ? { lat: depot.lat, lng: depot.lng } : null
-  let total = 0, missing = 0
-  const leg = (a: { lat: number; lng: number } | null, b: { lat: number; lng: number } | null): number | null => {
-    if (!a || !b) { missing++; return null }
-    const m = dist(a.lat, a.lng, b.lat, b.lng); total += m; return m
-  }
-  const legs = pts.map((p, i) => leg(i === 0 ? d0 : pts[i - 1], p))
-  const back = pts.length ? leg(pts[pts.length - 1], d0) : null
-  return { legs, back, total, missing }
-}
-
-// Járat hossza a koordináta nélküli boxokat kihagyva (raktár → ismert boxok sorrendben → raktár):
-// km és hány box maradt ki — a Járat-változások összevetéséhez (régebbi pillanatképekben lehet törölt box)
-export function routeKm(stops: { lat: number | null; lng: number | null }[], depot: { lat: number | null; lng: number | null } | null, dist: (a: number, b: number, c: number, d: number) => number): { km: number; missing: number } | null {
-  const known = stops.filter((s) => s.lat != null && s.lng != null)
-  if (known.length === 0) return null
-  const legs = routeLegs(known, depot, dist)
-  return { km: legs.total / 1000, missing: stops.length - known.length }
-}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffUploads, groupUploads, type PlanVersion } from './routeHistory'
+import { diffUploads, groupUploads, planKmFor, type PlanVersion } from './routeHistory'
 
 const v = (id: string, code: string, at: string, codes: string[], source = 'a.xlsx', start: string | null = '05:30:00', eta?: Record<string, string>): PlanVersion => ({
   id, route_id: null, code, source, imported_at: at, imported_by: null, planned_start: start, planned_end: null,
@@ -35,5 +35,24 @@ describe('diffUploads', () => {
     const cur = groupUploads([v('1', 'R', '2026-10-28T13:00:00Z', ['A', 'B'], 'első')])[0]
     const d = diffUploads(null, cur)
     expect(d.routes[0].status).toBe('new'); expect(d.totals.added).toBe(2)
+  })
+})
+
+describe('planKmFor', () => {
+  const plan = (dist: (number | null)[], planKm: number | null = 10): PlanVersion => ({
+    id: 'p', route_id: 'r', code: 'R', source: 'a.xlsx', imported_at: '2026-11-13T07:00:00Z', imported_by: null, planned_start: null, planned_end: null,
+    plan_km: planKm, back_km: 4, stops: dist.map((d, i) => ({ box_id: `b${i}`, code: `AB${i}`, name: null, eta: null, etd: null, deadline: null, dist_km: d })),
+  })
+  it('a táblázat km-e, ha a boxok és a sorrend egyezik', () => {
+    expect(planKmFor(plan([5, 1]), ['b0', 'b1'])).toEqual({ status: 'ok', total: 10, legs: [5, 1], back: 4 })
+  })
+  it('kézi módosítás után nincs km (nem számolunk helyette semmit)', () => {
+    expect(planKmFor(plan([5, 1]), ['b1', 'b0'])).toEqual({ status: 'changed' })
+    expect(planKmFor(plan([5, 1]), ['b0'])).toEqual({ status: 'changed' })
+  })
+  it('ha a tervben nincs km, nincs km', () => {
+    expect(planKmFor(plan([5, null]), ['b0', 'b1'])).toEqual({ status: 'none' })
+    expect(planKmFor(plan([5, 1], null), ['b0', 'b1'])).toEqual({ status: 'none' })
+    expect(planKmFor(null, ['b0'])).toEqual({ status: 'none' })
   })
 })

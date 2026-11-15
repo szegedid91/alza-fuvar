@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import { getCurrentPosition, distanceMeters } from '../lib/geo'
-import { searchBoxes, formatDistance, type AlzaBox } from '../lib/boxSheet'
+import { searchBoxes, type AlzaBox } from '../lib/boxSheet'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { batchStartFromRows, boxSyncStatus } from '../lib/boxImport'
@@ -79,7 +79,7 @@ export default function Boxes() {
 
       {sel ? (
         <>
-          <BoxCard box={sel} distanceM={sel._dist} onClose={() => setSelected(null)} editable={isManager} />
+          <BoxCard box={sel} onClose={() => setSelected(null)} editable={isManager} />
           <button type="button" className="btn ghost" onClick={() => setSelected(null)}><Icon name="arrow-left" />Vissza a listához</button>
         </>
       ) : (
@@ -103,7 +103,6 @@ export default function Boxes() {
                       <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.address}</div>
                     </div>
                     <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-                      {b._dist != null && <span className="tiny muted num">{formatDistance(b._dist)}</span>}
                       <Icon name="chevron-right" className="muted" />
                     </div>
                   </div>
