@@ -6,17 +6,15 @@
 import type { Tables } from './database.types'
 import { baseMime, mediaExt } from './media'
 import { TEST_MODE, testLog } from './testMode'
+import { isPhone } from './device'
+
+export { isPhone }
 
 export type GroupWorkspace = Pick<Tables<'workspaces'>, 'arrival_whatsapp_group' | 'arrival_whatsapp_group_name'>
 
 export const waUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`
 // A WhatsApp app közvetlen megnyitása (séma): a lap ugyanaz marad, nem nyílik új fül
 export const whatsappSchemeUrl = (text: string) => `whatsapp://send?text=${encodeURIComponent(text)}`
-
-// Telefon-e (Android / iPhone / iPad): ott a WhatsApp app nyílik, webes tartalék-fül nem kell
-export function isPhone(ua: string = typeof navigator !== 'undefined' ? navigator.userAgent : '', touchPoints: number = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0): boolean {
-  return /Android|iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && touchPoints > 1)
-}
 
 // WhatsApp megnyitása a kész szöveggel — MINDIG a koppintáson belül kell hívni (mentés / feltöltés
 // megvárása nélkül), különben a telefon rákérdez („megnyitja másik appban?”). Előbb az app sémája

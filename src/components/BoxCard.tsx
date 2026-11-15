@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { type AlzaBox } from '../lib/boxSheet'
-import { getNavApp, navUrl, NAV_LABEL } from '../lib/nav'
+import { getNavApp, navUrl, launchNav, NAV_LABEL } from '../lib/nav'
 import { toast } from '../lib/toast'
 import Icon from './Icon'
 import BoxNotes from './BoxNotes'
@@ -100,7 +100,8 @@ export default function BoxCard({
 
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {hasGps && !hideNav && (
-          <a className="btn auto" href={navUrl(getNavApp(), box.lat!, box.lng!)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+          <a className="btn auto" href={navUrl(getNavApp(), box.lat!, box.lng!)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}
+            onClick={(e) => { if (launchNav(getNavApp(), box.lat!, box.lng!)) e.preventDefault() }}>
             <Icon name="navigation" />Navigálás ({NAV_LABEL[getNavApp()]})
           </a>
         )}

@@ -1,4 +1,5 @@
 import { TEST_MODE, testLog } from './testMode'
+import { isIOS, isPhone } from './device'
 
 // Navigációs app választás (eszközönként, a telefonon marad): Google Maps vagy Waze
 export type NavApp = 'google' | 'waze'
@@ -44,16 +45,40 @@ export function navUrl(app: NavApp, lat: number, lng: number): string {
     : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving&dir_action=navigate`
 }
 
-// Automatikus megnyitás — CSAK a koppintáson belül hívható (különben a böngésző blokkolja / rákérdez).
-// Igazat ad, ha megnyitotta. Ha az automatika ki van kapcsolva vagy nincs koordináta, nem csinál semmit.
-export function openNav(target: NavTarget | null | undefined, deps: { open?: (url: string) => void; app?: NavApp; auto?: boolean } = {}): boolean {
+// Az app SAJÁT sémája (telefonon): az app közvetlenül indul, a böngészőben nem nyílik új lap.
+// (A webes link új lapon nyílt, a telefon átadta az appnak, és a Chrome-ban ott maradt egy üres fehér lap.)
+// Waze: waze:// · Google Maps: Androidon google.navigation: (rögtön navigál), iPhone-on comgooglemaps://
+export function navSchemeUrl(app: NavApp, lat: number, lng: number, ios: boolean): string {
+  if (app === 'waze') return `waze://?ll=${lat},${lng}&navigate=yes`
+  return ios ? `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving` : `google.navigation:q=${lat},${lng}&mode=d`
+}
+
+type LaunchDeps = { phone?: boolean; ios?: boolean; go?: (url: string) => void; open?: (url: string) => void }
+
+// A navigáció elindítása — CSAK a koppintáson belül hívható (különben a telefon rákérdez).
+// Telefonon az app sémájával, ugyanazon a lapon (a mi oldalunk megmarad, nincs új lap);
+// gépen a webes térkép nyílik új lapon. Igazat ad, ha ő intézte (a hívó link ne nyisson még egyet).
+export function launchNav(app: NavApp, lat: number, lng: number, deps: LaunchDeps = {}): boolean {
+  const injected = !!(deps.go || deps.open)
+  // Gépi tesztmód (csak localhoston): a térkép nem nyílik meg — a tesztpanel megmutatja, hova indult volna
+  if (import.meta.env.DEV && TEST_MODE && !injected) { testLog('nav', `Navigáció indulna (${NAV_LABEL[app]})`, `GPS-koordináta: ${lat}, ${lng}`, navUrl(app, lat, lng)); return true }
+  if (deps.phone ?? isPhone()) {
+    const go = deps.go ?? ((u: string) => { window.location.href = u })
+    go(navSchemeUrl(app, lat, lng, deps.ios ?? isIOS()))
+    return true
+  }
+  if (!injected) return false // gépen a link maga nyílik új lapon (a hívó <a> eleme intézi)
+  ;(deps.open ?? (() => undefined))(navUrl(app, lat, lng))
+  return true
+}
+
+// Automatikus megnyitás a „Kész, következő” után. Ha az automatika ki van kapcsolva vagy nincs koordináta, nem csinál semmit.
+export function openNav(target: NavTarget | null | undefined, deps: LaunchDeps & { app?: NavApp; auto?: boolean } = {}): boolean {
   if (!target || !(deps.auto ?? getAutoNav())) return false
   const app = deps.app ?? getNavApp()
-  const url = navUrl(app, target.lat, target.lng)
-  // Gépi tesztmód (csak localhoston): a térkép nem nyílik meg — a tesztpanel megmutatja, hova indult volna
-  if (import.meta.env.DEV && TEST_MODE && !deps.open) { testLog('nav', `Navigáció indulna (${NAV_LABEL[app]})`, `GPS-koordináta: ${target.lat}, ${target.lng}`, url); return true }
-  const open = deps.open ?? ((u) => { window.open(u, '_blank', 'noopener') })
-  open(url)
+  if (launchNav(app, target.lat, target.lng, deps)) return true
+  // gépen: a webes térkép új lapon
+  window.open(navUrl(app, target.lat, target.lng), '_blank', 'noopener')
   return true
 }
 

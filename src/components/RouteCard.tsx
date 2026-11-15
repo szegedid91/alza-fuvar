@@ -8,7 +8,7 @@ import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
-import { getNavApp, navUrl, navTargetOf, openNav, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
+import { getNavApp, navUrl, navTargetOf, openNav, launchNav, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
@@ -322,7 +322,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   <div style={{ fontWeight: 800, fontSize: 18 }}><Icon name="warehouse" size={18} /> {depot.name}</div>
                   {depot.address && <div className="small muted">{depot.address}</div>}
                 </div>
-                <a className="btn" href={navUrl(navApp, depot.lat, depot.lng)} target="_blank" rel="noopener noreferrer">
+                <a className="btn" href={navUrl(navApp, depot.lat, depot.lng)} target="_blank" rel="noopener noreferrer"
+                  onClick={(e) => { if (launchNav(navApp, depot.lat, depot.lng)) e.preventDefault() }}>
                   <Icon name="navigation" />Navigálás a raktárba ({NAV_LABEL[navApp]})
                 </a>
                 <button type="button" className="btn ghost sm auto" disabled={busy || locked} onClick={() => go(stops.length - 1)}><Icon name="arrow-left" size={14} />Vissza az utolsóra</button>
@@ -347,7 +348,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                 </div>
                 <div className="row" style={{ gap: 6 }}>
                   {cur.box.lat != null && cur.box.lng != null ? (
-                    <a className="btn" style={{ flex: 2 }} href={navUrl(navApp, cur.box.lat, cur.box.lng)} target="_blank" rel="noopener noreferrer">
+                    <a className="btn" style={{ flex: 2 }} href={navUrl(navApp, cur.box.lat, cur.box.lng)} target="_blank" rel="noopener noreferrer"
+                      onClick={(e) => { if (launchNav(navApp, cur.box.lat!, cur.box.lng!)) e.preventDefault() }}>
                       <Icon name="navigation" />Navigálás ({NAV_LABEL[navApp]})
                     </a>
                   ) : <div className="tiny muted" style={{ flex: 2 }}>Ehhez a boxhoz nincs koordináta a jegyzékben.</div>}
