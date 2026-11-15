@@ -1,3 +1,5 @@
+import { TEST_MODE, testLog } from './testMode'
+
 // Navigációs app választás (eszközönként, a telefonon marad): Google Maps vagy Waze
 export type NavApp = 'google' | 'waze'
 const KEY = 'alza-nav-app'
@@ -46,8 +48,12 @@ export function navUrl(app: NavApp, lat: number, lng: number): string {
 // Igazat ad, ha megnyitotta. Ha az automatika ki van kapcsolva vagy nincs koordináta, nem csinál semmit.
 export function openNav(target: NavTarget | null | undefined, deps: { open?: (url: string) => void; app?: NavApp; auto?: boolean } = {}): boolean {
   if (!target || !(deps.auto ?? getAutoNav())) return false
-  const open = deps.open ?? ((url) => { window.open(url, '_blank', 'noopener') })
-  open(navUrl(deps.app ?? getNavApp(), target.lat, target.lng))
+  const app = deps.app ?? getNavApp()
+  const url = navUrl(app, target.lat, target.lng)
+  // Gépi tesztmód (csak localhoston): a térkép nem nyílik meg — a tesztpanel megmutatja, hova indult volna
+  if (import.meta.env.DEV && TEST_MODE && !deps.open) { testLog('nav', `Navigáció indulna (${NAV_LABEL[app]})`, `GPS-koordináta: ${target.lat}, ${target.lng}`, url); return true }
+  const open = deps.open ?? ((u) => { window.open(u, '_blank', 'noopener') })
+  open(url)
   return true
 }
 

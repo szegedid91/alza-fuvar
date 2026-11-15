@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { captureVideoFrame } from '../lib/image'
 import { baseMime, fmtClock, VIDEO_MIME_CANDIDATES } from '../lib/media'
 import Icon from './Icon'
+import { getCameraStream } from '../lib/camera'
+import { TEST_MODE } from '../lib/testMode'
+import TestCameraPick from './TestCameraPick'
 
 // Egy videó legfeljebb ennyi másodperc (kb. 15 MB) — hosszabbhoz több rövid felvétel készíthető
 const MAX_VIDEO_S = 60
@@ -53,7 +56,7 @@ export default function MultiShotCamera({
     discardRef.current = false // (fejlesztői dupla-mount után is) az új megnyitás felvételeit megtartjuk
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await getCameraStream({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         })
@@ -152,6 +155,7 @@ export default function MultiShotCamera({
     <div className="camera-overlay">
       <div className="camera-head">
         <span>{title}{countText ? ` · ${countText}` : ''}</span>
+        {import.meta.env.DEV && TEST_MODE && <TestCameraPick />}
         <button className="btn ghost sm auto" onClick={onCancel}>Mégse</button>
       </div>
       {error ? (

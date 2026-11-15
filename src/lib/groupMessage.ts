@@ -5,6 +5,7 @@
 // kitöltött szöveget; a csoport-linkes + vágólapos mód a döntés szerint kikapcsolva.)
 import type { Tables } from './database.types'
 import { baseMime, mediaExt } from './media'
+import { TEST_MODE, testLog } from './testMode'
 
 export type GroupWorkspace = Pick<Tables<'workspaces'>, 'arrival_whatsapp_group' | 'arrival_whatsapp_group_name'>
 
@@ -23,6 +24,8 @@ export function isPhone(ua: string = typeof navigator !== 'undefined' ? navigato
 // tartalék-fül: ott a WhatsApp app van, a wa.me lap csak zavarna. Gépen, ha az app nem indult el
 // (a lap látható maradt), a wa.me webes változat nyílik új fülön.
 export function openWhatsApp(text: string, deps: { go?: (url: string) => void; open?: (url: string) => void; isHidden?: () => boolean; delayMs?: number; watch?: (onLeave: () => void) => () => void; phone?: boolean } = {}): void {
+  // Gépi tesztmód (csak localhoston): a WhatsApp nem nyílik meg — a tesztpanel megmutatja, mi ment volna a csoportba
+  if (import.meta.env.DEV && TEST_MODE && !deps.go) { testLog('whatsapp', 'Ez menne a WhatsApp-csoportba', text); return }
   const go = deps.go ?? ((url) => { window.location.href = url })
   if (deps.phone ?? isPhone()) { go(whatsappSchemeUrl(text)); return }
   const open = deps.open ?? ((url) => { window.open(url, '_blank', 'noopener') })
@@ -70,6 +73,7 @@ export function canShareFiles(): boolean {
   } catch { return false }
 }
 export async function sharePhotos(blobs: Blob[], text: string, baseName: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
+  if (import.meta.env.DEV && TEST_MODE && blobs.length > 0) { testLog('share', `Ez menne a WhatsApp-csoportba (${blobs.length} fotóval)`, text); return 'shared' }
   if (!canShareFiles() || blobs.length === 0) return 'unsupported'
   const files = blobs.map((b, i) => new File([b], `${baseName}-${i + 1}.${mediaExt(b.type)}`, { type: baseMime(b.type) || 'image/jpeg' }))
   try {

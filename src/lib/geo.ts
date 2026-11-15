@@ -1,3 +1,5 @@
+import { TEST_MODE } from './testMode'
+
 export interface GeoPoint {
   lat: number | null
   lng: number | null
@@ -5,14 +7,20 @@ export interface GeoPoint {
 
 // GPS pozíció lekérése; hiba/elutasítás esetén null koordináták (nem blokkol)
 export function getCurrentPosition(timeoutMs = 8000): Promise<GeoPoint> {
+  // Gépi tesztmód (csak localhoston): a böngésző-panelben nincs GPS — ne várjunk rá 8 másodpercet minden jelzésnél
+  const test = import.meta.env.DEV && TEST_MODE
+  if (test) timeoutMs = Math.min(timeoutMs, 1200)
   return new Promise((resolve) => {
+    // tesztmódban saját óra is fut (a panel engedély-kérdése különben a végtelenségig váratna); élesben nincs
+    const guard = test ? setTimeout(() => resolve({ lat: null, lng: null }), timeoutMs + 300) : undefined
+    const done = (p: GeoPoint) => { if (guard) clearTimeout(guard); resolve(p) }
     if (!('geolocation' in navigator)) {
-      resolve({ lat: null, lng: null })
+      done({ lat: null, lng: null })
       return
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve({ lat: null, lng: null }),
+      (pos) => done({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => done({ lat: null, lng: null }),
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 30000 },
     )
   })

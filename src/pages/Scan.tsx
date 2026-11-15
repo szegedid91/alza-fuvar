@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase'
 import { todayISO, formatHours } from '../lib/labels'
 import { errMsg } from '../lib/errors'
 import { toast } from '../lib/toast'
+import { TEST_MODE } from '../lib/testMode'
 
 // A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
 const QrScanner = lazy(() => import('../components/QrScanner'))
@@ -547,6 +548,20 @@ export default function Scan() {
           <button className="btn" onClick={() => { setError(null); setScanning(true) }} disabled={busy || !cars}>
             <Icon name="qr-code" />{busy ? 'Feldolgozás…' : !cars ? 'Autók betöltése…' : 'QR beolvasása'}
           </button>
+          {/* TESZTMÓD (csak a gépen): a beosztott autó QR-kódja „beolvasva” — a böngésző-panelben nincs kamera */}
+          {import.meta.env.DEV && TEST_MODE && (() => {
+            const planned = (cars ?? []).find((c) => c.plate === today?.planned?.plate)
+            return (
+              <button className="btn ghost sm" type="button" style={{ borderColor: '#f59e0b', color: '#f59e0b' }} disabled={busy || !planned}
+                onClick={() => {
+                  if (!planned) return
+                  setError(null); setBusy(true)
+                  void startCheckIn(planned, false).catch((e) => setError(errMsg(e, 'Hiba'))).finally(() => setBusy(false))
+                }}>
+                {planned ? `Teszt: QR beolvasva — ${planned.plate}` : 'Teszt: nincs mára beosztott autó (indítsd újra a tesztnapot)'}
+              </button>
+            )
+          })()}
           {!manualOpen && (
             <button className="btn ghost sm" type="button" onClick={() => { setError(null); setManualOpen(true) }} disabled={busy}>
               Nem megy a beolvasás? Kézi választás

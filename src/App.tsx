@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, lazy } from 'react'
 import { lazyRetry } from './lib/lazyRetry'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from './context/AuthContext'
@@ -12,6 +12,9 @@ import ProfilePage from './pages/Profile'
 import ResetPassword from './pages/ResetPassword'
 import { RECOVERY_PATH } from './lib/recovery'
 import Skeleton from './components/Skeleton'
+import { TEST_MODE } from './lib/testMode'
+// Gépi tesztmód panelje: csak a fejlesztői szerveren töltődik be — az éles csomagba bele sem kerül
+const TestModePanel = import.meta.env.DEV ? lazy(() => import('./components/TestModePanel')) : null
 
 // Útvonalankénti kódfelbontás: minden oldal külön darabban töltődik, csak
 // akkor, amikor először megnyitják. A sofőr így nem hordja magával a
@@ -99,6 +102,7 @@ export default function App() {
 
   return (
     <AppShell>
+      {import.meta.env.DEV && TEST_MODE && TestModePanel && <Suspense fallback={null}><TestModePanel /></Suspense>}
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           <Route path="/" element={<Home />} />

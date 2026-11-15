@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { captureVideoFrame } from '../lib/image'
+import { getCameraStream } from '../lib/camera'
+import { TEST_MODE } from '../lib/testMode'
+import TestCameraPick from './TestCameraPick'
 
 // Élő kamera (nincs galéria). Egy képkocka elkapása JPEG blobként.
 export default function CameraCapture({
@@ -20,7 +23,7 @@ export default function CameraCapture({
     let cancelled = false
     async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const stream = await getCameraStream({
           video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         })
@@ -67,6 +70,7 @@ export default function CameraCapture({
     <div className="camera-overlay">
       <div className="camera-head">
         <span>{title}</span>
+        {import.meta.env.DEV && TEST_MODE && <TestCameraPick />}
         <button className="btn ghost sm auto" onClick={onCancel}>Mégse</button>
       </div>
       {error ? (
