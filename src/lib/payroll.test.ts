@@ -206,3 +206,24 @@ describe('xlPayOf / boxPayOf — a bér XL és AlzaBox része', () => {
     expect(xlPayOf(r) + boxPayOf(r)).toBe(256000)
   })
 })
+
+describe('buildDayComps — a beosztásra mentett Box-jelölés dönt (nem az autó mai kategóriája)', () => {
+  const xlNow = { category: { box_sheet: false } } // az autót azóta XL-be sorolták
+  const boxNow = { category: { box_sheet: true } }
+  it('régi Box-nap Box marad akkor is, ha az autó ma már XL', () => {
+    const comps = buildDayComps([
+      { driver_id: 'u1', loader_id: null, trainee_id: null, work_date: '2026-10-05', round: 1, is_box: true, car: xlNow },
+      { driver_id: 'u1', loader_id: null, trainee_id: null, work_date: '2026-10-05', round: 2, is_box: true, car: xlNow },
+    ])
+    expect(comps.get('u1|2026-10-05')).toMatchObject({ boxR1: true, boxR2: true, xlDriver: false })
+  })
+  it('régi XL-nap XL marad akkor is, ha az autó ma már Box', () => {
+    const comps = buildDayComps([{ driver_id: 'u1', loader_id: 'u2', trainee_id: null, work_date: '2026-10-06', round: 1, is_box: false, car: boxNow }])
+    expect(comps.get('u1|2026-10-06')).toMatchObject({ xlDriver: true, boxR1: false })
+    expect(comps.get('u2|2026-10-06')).toMatchObject({ xlLoader: true })
+  })
+  it('jelölés nélküli (régi) sor: az autó kategóriája a tartalék', () => {
+    const comps = buildDayComps([{ driver_id: 'u1', loader_id: null, trainee_id: null, work_date: '2026-10-07', round: 1, is_box: null, car: boxNow }])
+    expect(comps.get('u1|2026-10-07')).toMatchObject({ boxR1: true })
+  })
+})

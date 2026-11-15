@@ -105,7 +105,7 @@ export default function Payroll() {
           .lte('valid_from', range.start).order('valid_from'),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id, round, car:cars(category:car_categories(box_sheet))')
+        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id, round, is_box, car:cars(category:car_categories(box_sheet))')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, paid_on, reason')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),

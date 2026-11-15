@@ -106,6 +106,8 @@ export interface ShiftLike {
   trainee_id: string | null
   work_date: string
   round?: number | null
+  // a beosztás sorára mentett jelölés: az a nap Box-autón volt-e (az autó későbbi átsorolása a múltat nem írja át)
+  is_box?: boolean | null
   car?: unknown
 }
 
@@ -121,7 +123,8 @@ export function buildDayComps(shifts: ShiftLike[]): Map<string, DayComp> {
     return c
   }
   for (const s of shifts) {
-    const isBox = !!(s.car as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet
+    // a sorra mentett jelölés dönt; az autó MAI kategóriája csak tartalék (régi, jelölés nélküli adat)
+    const isBox = s.is_box ?? !!(s.car as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet
     if (s.driver_id) { const c = compOf(s.driver_id, s.work_date); if (isBox) { if ((s.round ?? 1) === 2) c.boxR2 = true; else c.boxR1 = true } else c.xlDriver = true }
     if (s.loader_id) compOf(s.loader_id, s.work_date).xlLoader = true
     if (s.trainee_id) { const c = compOf(s.trainee_id, s.work_date); if (isBox) c.boxTrainee = true; else c.xlTrainee = true }

@@ -124,7 +124,7 @@ export default function Adjustments() {
       const [ci, sh, ws, hist] = await Promise.all([
         supabase.from('check_ins').select('work_date')
           .eq('workspace_id', currentWorkspaceId!).eq('user_id', userId).gte('work_date', start).lt('work_date', endExclusive),
-        supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, round, car:cars(category:car_categories(box_sheet))')
+        supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, round, is_box, car:cars(category:car_categories(box_sheet))')
           .eq('workspace_id', currentWorkspaceId!)
           .or(`driver_id.eq.${userId},loader_id.eq.${userId},trainee_id.eq.${userId}`).gte('work_date', start).lt('work_date', endExclusive),
         supabase.from('workspaces').select(RATE_COLS).eq('id', currentWorkspaceId!).maybeSingle(),

@@ -2385,6 +2385,7 @@ export type Database = {
           created_by: string | null
           driver_id: string | null
           id: string
+          is_box: boolean | null
           loader_id: string | null
           round: number
           route_id: string | null
@@ -2398,6 +2399,7 @@ export type Database = {
           created_by?: string | null
           driver_id?: string | null
           id?: string
+          is_box?: boolean | null
           loader_id?: string | null
           round?: number
           route_id?: string | null
@@ -2411,6 +2413,7 @@ export type Database = {
           created_by?: string | null
           driver_id?: string | null
           id?: string
+          is_box?: boolean | null
           loader_id?: string | null
           round?: number
           route_id?: string | null
