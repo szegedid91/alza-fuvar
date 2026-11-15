@@ -9,19 +9,28 @@ export type StopNumKey = 'placed' | 'missorted' | 'nf' | 'oversize' | 'shortage'
 // A régi összevont ÉK/NHB/törölt mező (damaged) 2026-11-09-ig: az összesítőkben még beszámít
 export const LEGACY_DAMAGED_KEY = 'damaged' as const
 
-// A papírlap megálló-oszlopai: rövid (jelvény / táblázat-fejléc) és hosszú (űrlap) címke
-export const STOP_FIELDS: { key: StopNumKey; short: string; label: string }[] = [
-  { key: 'placed', short: 'Behelyezve', label: 'Boxba behelyezett csomag (db)' },
-  { key: 'missorted', short: 'Rossz szort.', label: 'Rosszul szortírozott áru (db, raktári)' },
-  { key: 'nf', short: 'NF', label: 'NF – Nincs szabad fiók (db)' },
-  { key: 'oversize', short: 'Túlméretes', label: 'Túlméretes (db)' },
-  { key: 'shortage', short: 'Hiány', label: 'Hiány – box képernyő (db)' },
-  { key: 'returned', short: 'Visszáru', label: 'Visszáru a boxból (db)' },
-  { key: 'invalid_code', short: 'ÉK', label: 'ÉK – Érvénytelen kód a kijelzőn (db)' },
-  { key: 'do_not_place', short: 'NHB', label: 'NHB – Ne helyezd be (kijelző) (db)' },
-  { key: 'cancelled', short: 'Törölt', label: 'Törölt csomag (db)' },
-  { key: 'left_on_car', short: 'Autón maradt', label: 'Autón maradt (db)' },
+// A papírlap megálló-oszlopai: rövid (jelvény / táblázat-fejléc), hosszú (űrlap) címke,
+// és a csoportüzenetbe kerülő, rövidítés nélküli szöveg (msg) — a diszpécser is értse
+export const STOP_FIELDS: { key: StopNumKey; short: string; label: string; msg: string }[] = [
+  { key: 'placed', short: 'Behelyezve', label: 'Boxba behelyezett csomag (db)', msg: 'Behelyezve' },
+  { key: 'missorted', short: 'Rossz szort.', label: 'Rosszul szortírozott áru (db, raktári)', msg: 'Rosszul szortírozott' },
+  { key: 'nf', short: 'NF', label: 'NF – Nincs szabad fiók (db)', msg: 'Nem fért be (nincs szabad fiók)' },
+  { key: 'oversize', short: 'Túlméretes', label: 'Túlméretes (db)', msg: 'Túlméretes, nem fér be' },
+  { key: 'shortage', short: 'Hiány', label: 'Hiány – box képernyő (db)', msg: 'Hiány' },
+  { key: 'returned', short: 'Visszáru', label: 'Visszáru a boxból (db)', msg: 'Visszáru a boxból' },
+  { key: 'invalid_code', short: 'ÉK', label: 'ÉK – Érvénytelen kód a kijelzőn (db)', msg: 'Érvénytelen kód' },
+  { key: 'do_not_place', short: 'NHB', label: 'NHB – Ne helyezd be (kijelző) (db)', msg: 'Ne helyezd be' },
+  { key: 'cancelled', short: 'Törölt', label: 'Törölt csomag (db)', msg: 'Törölt csomag' },
+  { key: 'left_on_car', short: 'Autón maradt', label: 'Autón maradt (db)', msg: 'Autón maradt' },
 ]
+
+// A csoportüzenet sorai egy megállóról: a behelyezett darabszám mindig (0 is), a többi csak ha van —
+// teljes szöveggel és „db”-vel, pl. „Ne helyezd be: 3 db”
+export function stopMessageLines(stop: Partial<Record<StopNumKey, number | null>>): string[] {
+  return STOP_FIELDS
+    .filter((f) => f.key === 'placed' || Number(stop[f.key] ?? 0) > 0)
+    .map((f) => `${f.msg}: ${Number(stop[f.key] ?? 0)} db`)
+}
 
 export type CompKey = 'comp_bu' | 'comp_szh' | 'comp_hb' | 'comp_r'
 export const COMP_FIELDS: { key: CompKey; short: string; label: string }[] = [

@@ -8,7 +8,7 @@ import { signedUrl } from '../lib/photos'
 import { submitNow } from '../lib/outbox'
 import { itemLines, type StopItemLike } from '../lib/boxItems'
 import { sharePhotos, canShareFiles, openWhatsApp } from '../lib/groupMessage'
-import { STOP_FIELDS, type BoxStop, type StopNumKey } from '../lib/boxSheet'
+import { STOP_FIELDS, stopMessageLines, type BoxStop, type StopNumKey } from '../lib/boxSheet'
 import { toast } from '../lib/toast'
 import { MAX_STOP_PHOTOS, aiPhotoPaths, photoLabel } from '../lib/stopPhotos'
 import PhotoSlot, { type CapturedPhoto } from './PhotoSlot'
@@ -146,7 +146,7 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
     mutationFn: async () => {
       // Első sor: box, cím, idő, név — alatta soronként a számok, végül a megjegyzés
       const head = [seqLabel ? `${seqLabel}. box` : null, boxLabel, boxAddress, new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }), courierName].filter((x): x is string => !!x).join(' – ')
-      const lines = [head, ...STOP_FIELDS.filter((f) => stop[f.key] > 0).map((f) => `${f.short}: ${stop[f.key]}`), ...itemLines(items)]
+      const lines = [head, ...stopMessageLines(stop), ...itemLines(items)]
       if (stop.note) lines.push(`Megjegyzés: ${stop.note}`)
       const text = lines.join('\n')
       const blobs = [...taken.map((p) => p.blob), ...savedPaths.filter((sp) => !taken.some((p) => p.path === sp)).map((sp) => savedBlobs[sp]).filter((b): b is Blob => !!b)]
