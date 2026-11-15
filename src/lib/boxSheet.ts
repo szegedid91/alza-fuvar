@@ -108,3 +108,16 @@ export function searchBoxes(boxes: AlzaBox[], query: string, limit = 20): AlzaBo
 export function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toLocaleString('hu-HU', { maximumFractionDigits: 1 })} km`
 }
+
+// A járat kimaradt boxai: a járat megállói közül azok, amelyekhez még nincs sor a lapon.
+// Járatonként (körönként) külön lista, az eredeti sorszámmal („hanyadik cím”). Ha egy box
+// több körben is szerepel, annyiszor számít leadottnak, ahány sora van a lapon.
+export function missedStops<T extends { box_id: string }>(routeStops: T[][], sheetBoxIds: (string | null)[]): { stop: T; n: number }[][] {
+  const left = new Map<string, number>()
+  for (const id of sheetBoxIds) if (id) left.set(id, (left.get(id) ?? 0) + 1)
+  return routeStops.map((stops) => stops.flatMap((stop, i) => {
+    const c = left.get(stop.box_id) ?? 0
+    if (c > 0) { left.set(stop.box_id, c - 1); return [] }
+    return [{ stop, n: i + 1 }]
+  }))
+}

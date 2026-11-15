@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stopMessageLines } from './boxSheet'
+import { missedStops, stopMessageLines } from './boxSheet'
 
 describe('stopMessageLines — a csoportüzenet sorai', () => {
   it('teljes szöveggel, rövidítés nélkül, „db”-vel; csak ami nem nulla', () => {
@@ -19,5 +19,20 @@ describe('stopMessageLines — a csoportüzenet sorai', () => {
       'Behelyezve: 1 db', 'Rosszul szortírozott: 1 db', 'Nem fért be (nincs szabad fiók): 1 db', 'Túlméretes, nem fér be: 1 db', 'Hiány: 1 db',
       'Visszáru a boxból: 1 db', 'Érvénytelen kód: 1 db', 'Ne helyezd be: 1 db', 'Törölt csomag: 1 db', 'Autón maradt: 1 db',
     ])
+  })
+})
+
+describe('missedStops — a járat kimaradt boxai', () => {
+  const r = [{ box_id: 'a' }, { box_id: 'b' }, { box_id: 'c' }]
+  it('ami már szerepel a lapon, kimarad; a sorszám az eredeti cím-sorszám', () => {
+    expect(missedStops([r], ['b', null])).toEqual([[{ stop: { box_id: 'a' }, n: 1 }, { stop: { box_id: 'c' }, n: 3 }]])
+  })
+  it('két kör külön lista; a mindkét körben szereplő box annyiszor számít leadottnak, ahány sora van', () => {
+    const g = [{ box_id: 'c' }, { box_id: 'd' }]
+    expect(missedStops([r, g], ['a', 'b', 'c'])).toEqual([[], [{ stop: { box_id: 'c' }, n: 1 }, { stop: { box_id: 'd' }, n: 2 }]])
+    expect(missedStops([r, g], ['a', 'b', 'c', 'c', 'd'])).toEqual([[], []])
+  })
+  it('üres lapnál a járat minden boxa kimaradt', () => {
+    expect(missedStops([r], []).map((x) => x.length)).toEqual([3])
   })
 })

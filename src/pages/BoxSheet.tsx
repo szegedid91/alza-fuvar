@@ -18,7 +18,7 @@ import { resolveNames } from '../lib/names'
 import { formatDate } from '../lib/labels'
 import { toast } from '../lib/toast'
 import {
-  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO,
+  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO, missedStops,
   type BoxSheet, type BoxStop, type AlzaBox,
 } from '../lib/boxSheet'
 import type { Car } from '../lib/checkin'
@@ -29,6 +29,9 @@ import { useQueued } from '../hooks/useOutbox'
 import { isStopFilled, mergeQueuedStops } from '../lib/queuedMerge'
 import { openNav, shouldNavAfterFill, type AfterFill } from '../lib/nav'
 import { lateMinutes } from '../lib/routePlan'
+import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
+import { useRouteStops } from '../hooks/useRouteStops'
+import { useRoutes } from '../hooks/useRoutes'
 
 // Napi Box-lap: a papír "AlzaBox szállítási lap" digitális mása. Csak a
 // Box-kategóriás (box_sheet = true) autókhoz kell — az XL-eseknek nem.
@@ -398,7 +401,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
           )
         })}
         {overview && (showAdd
-          ? <AddStop onAdd={(b) => { setAddedNow(true); add(b) }} busy={addStop.isPending} />
+          ? <MissedAdd sheetBoxIds={stops.map((s) => s.box_id)} onAdd={(b) => { setAddedNow(true); add(b) }} busy={addStop.isPending} onClose={() => setShowAdd(false)} />
           : <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowAdd(true)}><Icon name="plus" size={12} /> Kimaradt egy box? Hozzáadás</button>)}
       </div>
 
@@ -462,8 +465,50 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   )
 }
 
+// Kimaradt box felvétele az áttekintésben: a járat(ok) még ki nem töltött boxai EGY koppintással,
+// alatta külön kereső más (nem a járathoz tartozó) boxhoz — kódra vagy névre.
+function MissedAdd({ sheetBoxIds, onAdd, busy, onClose }: { sheetBoxIds: (string | null)[]; onAdd: (box: AlzaBox | { code: string }) => void; busy: boolean; onClose: () => void }) {
+  const { data: myShifts } = useMyRoutesToday()
+  const { data: stopsByRoute } = useRouteStops()
+  const { data: routes } = useRoutes()
+  const shifts = myShifts ?? []
+  const missed = useMemo(() => missedStops(shifts.map((sh) => stopsByRoute?.[sh.route_id] ?? []), sheetBoxIds), [shifts, stopsByRoute, sheetBoxIds])
+  const total = missed.reduce((a, m) => a + m.length, 0)
+  return (
+    <div className="stack" style={{ gap: 10, padding: 10, border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)' }}>
+      <div className="between">
+        <span className="small" style={{ fontWeight: 800 }}><Icon name="plus" size={14} /> Kimaradt box hozzáadása</span>
+        <button type="button" className="link-btn tiny" style={{ padding: 0 }} onClick={onClose}>bezárás</button>
+      </div>
+      {shifts.map((sh, i) => missed[i]?.length > 0 && (
+        <div key={sh.id} className="stack" style={{ gap: 6 }}>
+          <div className="tiny muted">{routes?.find((r) => r.id === sh.route_id)?.code ?? '?'} járat{shifts.length > 1 ? ` · ${sh.round}. kör` : ''} — koppints arra, amelyik kimaradt</div>
+          <div className="list" style={{ gap: 6 }}>
+            {missed[i].map(({ stop, n }) => (
+              <button key={stop.id} type="button" className="list-item" disabled={busy} style={{ width: '100%', textAlign: 'left', cursor: 'pointer', padding: '8px 12px' }} onClick={() => onAdd(stop.box)}>
+                <div className="row" style={{ gap: 8 }}>
+                  <Icon name="plus" size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="small" style={{ fontWeight: 700 }}><span className="num">{n}. </span>{stop.box.code && <span className="num">{stop.box.code} · </span>}{stop.box.name}</div>
+                    <div className="tiny muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.box.address}</div>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {shifts.length > 0 && total === 0 && <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> A járatod minden boxa szerepel a lapon.</div>}
+      <div className="stack" style={{ gap: 6 }}>
+        <div className="tiny muted">Más box (nem a járatodé) — kóddal</div>
+        <AddStop onAdd={onAdd} busy={busy} placeholder="Más box: kód vagy név (AB9103…)" />
+      </div>
+    </div>
+  )
+}
+
 // Megálló keresése a jegyzékben (kód / név) — kódra kézzel is felvehető
-function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => void; busy: boolean }) {
+function AddStop({ onAdd, busy, placeholder = 'Box hozzáadása: kód vagy név (AB9103…)' }: { onAdd: (box: AlzaBox | { code: string }) => void; busy: boolean; placeholder?: string }) {
   const { data: boxes } = useAlzaBoxes()
   const [q, setQ] = useState('')
   const results = useMemo(() => searchBoxes(boxes ?? [], q, 6), [boxes, q])
@@ -473,7 +518,7 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
     <div className="stack" style={{ gap: 6 }}>
       <div className="input-icon">
         <Icon name="search" />
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Box hozzáadása: kód vagy név (AB9103…)" autoComplete="off"
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} autoComplete="off"
           onKeyDown={(e) => { if (e.key === 'Enter' && results[0]) { e.preventDefault(); pick(results[0]) } }} />
       </div>
       {trimmed.length >= 2 && (
