@@ -7,7 +7,7 @@ import { getCurrentPosition, distanceMeters } from '../lib/geo'
 import { searchBoxes, type AlzaBox } from '../lib/boxSheet'
 import { formatDateTime } from '../lib/labels'
 import { toast } from '../lib/toast'
-import { batchStartFromRows, boxSyncStatus } from '../lib/boxImport'
+import { batchStartFromRows, boxSyncStatus, manualImportRow, groupByShape, isFullBoxList, type ManualImportRow } from '../lib/boxImport'
 import BoxCard from '../components/BoxCard'
 import { PendingBoxNotesCard } from '../components/BoxNotes'
 import { BoxIssueStatsCard } from '../components/BoxIssue'
@@ -123,7 +123,7 @@ export default function Boxes() {
 // Menedzser: a jegyzék frissítése az alza.hu-ról begyűjtött listából (JSON beillesztés).
 // Az alza.hu API-ját csak böngészőből lehet elérni (Cloudflare), ezért a lista
 // gyűjtése külön lépés — a kapott JSON-t ide kell beilleszteni.
-interface ImportRow { psid: number; name: string; address?: string | null; lat?: number | null; lng?: number | null; code?: string | null; photo?: string | null; article?: string | null; desc?: string | null }
+type ImportRow = ManualImportRow
 
 function ImportCard() {
   const qc = useQueryClient()
@@ -153,32 +153,38 @@ function ImportCard() {
       // LOG-11: az inaktiválás határa a SZERVER időbélyegeiből (a most felvitt sorok updated_at-ja),
       // nem a telefon órájából
       const stamps: { updated_at: string | null }[] = []
-      const toRow = (r: ImportRow) => ({
-        parcel_shop_id: r.psid, name: r.name.trim(), address: r.address ?? null,
-        lat: typeof r.lat === 'number' ? r.lat : null, lng: typeof r.lng === 'number' ? r.lng : null,
-        code: r.code ?? null, photo_url: typeof r.photo === 'string' && /^https?:\/\//i.test(r.photo) ? r.photo : null, article_url: typeof r.article === 'string' && /^https?:\/\//i.test(r.article) ? r.article : null,
-        description: r.desc ?? null, active: true,
-      })
-      for (let i = 0; i < valid.length; i += 200) {
-        const { data, error } = await supabase.from('alza_boxes').upsert(valid.slice(i, i + 200).map(toRow), { onConflict: 'parcel_shop_id' }).select('updated_at')
-        if (error) throw error
-        stamps.push(...(data ?? []))
+      // Csak a sorban TÉNYLEG meglévő mezők mennek fel, azonos mezőkészletű kötegekben — egy részletek nélküli
+      // lista nem nullázza ki a meglévő boxok kódját, címét, koordinátáját (lásd lib/boxImport)
+      for (const rowsOfShape of groupByShape(valid.map(manualImportRow))) {
+        for (let i = 0; i < rowsOfShape.length; i += 200) {
+          const { data, error } = await supabase.from('alza_boxes').upsert(rowsOfShape.slice(i, i + 200) as never, { onConflict: 'parcel_shop_id' }).select('updated_at')
+          if (error) throw error
+          stamps.push(...(data ?? []))
+        }
       }
       const startedAt = batchStartFromRows(stamps)
       // A kézzel (az Alza előtt) felvett boxok összefésülése az importált sorral, ha a kódjuk egyezik
       const { error: mergeErr } = await supabase.rpc('merge_alza_box_duplicates')
       if (mergeErr) throw mergeErr
       // ami a mostani listában nincs benne, az megszűnt (inaktív — a régi lapokon marad a hivatkozás)
+      // Biztonsági korlát: csak TELJES listánál inaktiválunk — ha a beillesztett lista a jelenlegi (Alza-azonosítós)
+      // aktív boxok legalább 80%-át lefedi. Egy részleges lista ne kapcsolja ki a jegyzék többi részét.
+      // A kézzel felvett (Alza-azonosító nélküli) boxokhoz az inaktiválás soha nem nyúl.
       let deactivated = 0
-      if (valid.length >= 100 && startedAt) {
-        const { data, error } = await supabase.from('alza_boxes').update({ active: false }).lt('updated_at', startedAt).eq('active', true).select('id')
-        if (error) throw error
-        deactivated = data?.length ?? 0
+      let skippedDeactivate = false
+      if (startedAt) {
+        const { count, error: cErr } = await supabase.from('alza_boxes').select('id', { count: 'exact', head: true }).eq('active', true).not('parcel_shop_id', 'is', null)
+        if (cErr) throw cErr
+        if (isFullBoxList(valid.length, count ?? 0)) {
+          const { data, error } = await supabase.from('alza_boxes').update({ active: false }).lt('updated_at', startedAt).eq('active', true).not('parcel_shop_id', 'is', null).select('id')
+          if (error) throw error
+          deactivated = data?.length ?? 0
+        } else skippedDeactivate = true
       }
-      return { imported: valid.length, deactivated }
+      return { imported: valid.length, deactivated, skippedDeactivate }
     },
     onSuccess: (r) => {
-      setResult(`Kész: ${r.imported} box frissítve${r.deactivated ? `, ${r.deactivated} megszűnt box inaktiválva` : ''}.`)
+      setResult(`Kész: ${r.imported} box frissítve${r.deactivated ? `, ${r.deactivated} megszűnt box inaktiválva` : ''}${r.skippedDeactivate ? ' — részleges lista: a listában nem szereplő boxok aktívak maradtak' : ''}.`)
       setText('')
       toast.success('A jegyzék frissült.')
       void qc.invalidateQueries({ queryKey: ['alza-boxes'] })

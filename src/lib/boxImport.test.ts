@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { batchStartFromRows, boxSyncStatus } from './boxImport'
+import { batchStartFromRows, boxSyncStatus, groupByShape, isFullBoxList, manualImportRow } from './boxImport'
 
 describe('batchStartFromRows — inaktiválási határ a szerver időbélyegeiből (LOG-11)', () => {
   it('a legkisebb updated_at (ISO, lexikografikusan rendezhető)', () => {
@@ -32,5 +32,28 @@ describe('boxSyncStatus — az automatikus jegyzék-frissítés állapota', () =
   })
   it('a csonka lista megjegyzése megjelenik', () => {
     expect(boxSyncStatus({ ...run, added: 0, deactivated: 0, note: 'A lista rövidebb a vártnál.' }, when, now).text).toContain('A lista rövidebb a vártnál.')
+  })
+})
+
+describe('kézi box-lista — részleges adat nem ír felül', () => {
+  it('csak a tényleg megadott mezők kerülnek a sorba', () => {
+    expect(manualImportRow({ psid: 7, name: ' Teszt box ' })).toEqual({ parcel_shop_id: 7, name: 'Teszt box', active: true })
+    expect(manualImportRow({ psid: 7, name: 'X', code: 'AB9103', lat: 47.5, lng: 19.05, address: 'Fő u. 1', desc: '', photo: 'javascript:alert(1)', article: 'https://alza.hu/x' }))
+      .toEqual({ parcel_shop_id: 7, name: 'X', active: true, code: 'AB9103', lat: 47.5, lng: 19.05, address: 'Fő u. 1', article_url: 'https://alza.hu/x' })
+  })
+  it('fél koordináta nem megy fel (mindkettő kell)', () => {
+    expect(manualImportRow({ psid: 1, name: 'X', lat: 47.5, lng: null })).toEqual({ parcel_shop_id: 1, name: 'X', active: true })
+  })
+  it('az azonos mezőkészletű sorok kerülnek egy kötegbe', () => {
+    const g = groupByShape([manualImportRow({ psid: 1, name: 'A' }), manualImportRow({ psid: 2, name: 'B', code: 'AB1' }), manualImportRow({ psid: 3, name: 'C' })])
+    expect(g.map((rows) => rows.length).sort()).toEqual([1, 2])
+    for (const rows of g) expect(new Set(rows.map((r) => Object.keys(r).sort().join(','))).size).toBe(1)
+  })
+  it('inaktiválás csak teljes listánál: legalább 100 sor és a jelenlegi aktívak 80%-a', () => {
+    expect(isFullBoxList(150, 800)).toBe(false) // részleges lista: a többi marad
+    expect(isFullBoxList(700, 800)).toBe(true)
+    expect(isFullBoxList(640, 800)).toBe(true)
+    expect(isFullBoxList(639, 800)).toBe(false)
+    expect(isFullBoxList(90, 100)).toBe(false) // 100 sor alatt soha
   })
 })
