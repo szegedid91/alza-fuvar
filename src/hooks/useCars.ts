@@ -14,6 +14,8 @@ export function useCars(activeOnly = false) {
   const { currentWorkspaceId } = useWorkspace()
   return useQuery({
     queryKey: ['cars', currentWorkspaceId, activeOnly],
+    // ritkán változik; a módosítás (mentés, élő frissítés) érvényteleníti — visszaváltáskor nem töltjük le újra
+    staleTime: 10 * 60_000,
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       let q = supabase.from('cars').select('*, category:car_categories(name, crew_size, box_sheet)')

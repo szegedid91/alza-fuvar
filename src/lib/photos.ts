@@ -15,9 +15,10 @@ export async function sha256Hex(blob: Blob): Promise<string> {
 // Utólagos csere/manipuláció így kimutatható (admin Képek oldal ellenőrzi).
 export async function recordPhotoProof(workspaceId: string, storagePath: string, blob: Blob): Promise<void> {
   const sha256 = await sha256Hex(blob)
-  const { data: u } = await supabase.auth.getUser()
+  // getSession: a helyben tárolt munkamenetből olvas — a getUser minden fotónál külön hálózati kör volt
+  const { data: s } = await supabase.auth.getSession()
   const { error } = await supabase.from('photo_proofs').upsert(
-    { workspace_id: workspaceId, storage_path: storagePath, sha256, user_id: u.user?.id ?? null },
+    { workspace_id: workspaceId, storage_path: storagePath, sha256, user_id: s.session?.user?.id ?? null },
     { onConflict: 'storage_path' },
   )
   if (error) throw error

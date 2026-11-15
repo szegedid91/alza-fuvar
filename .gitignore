@@ -10,3 +10,6 @@ public/pwa-512.png
 public/apple-touch-icon.png
 
 .netlify
+
+# helyi exportok, riportok
+exports/

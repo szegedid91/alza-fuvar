@@ -64,8 +64,11 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      if (readOnly) return // megtekintésnél nincs megosztás — a teljes képek nem kellenek
       for (const sp of saved ?? []) {
         if (!sp.storage_path || savedBlobs[sp.storage_path]) continue
+        // amit most fotóztunk és töltöttünk fel, az a memóriában van — nem töltjük le újra a szerverről
+        if (photos.some((p) => p.path === sp.storage_path)) continue
         try {
           const url = await signedUrl(sp.storage_path, 600)
           if (!url) continue
@@ -114,7 +117,8 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
       }
       const result = (data as { result?: AiResult } | null)?.result ?? null
       if (result) {
-        await supabase.from('box_sheet_stop_photos').update({ ai_result: result as never }).in('storage_path', paths)
+        // a kiolvasás eredményének mentése a háttérben megy — a futár ne erre várjon a számokkal
+        void supabase.from('box_sheet_stop_photos').update({ ai_result: result as never }).in('storage_path', paths).then(({ error: e }) => { if (e) console.warn('ai_result', e.message) })
         // előtöltés: csak ami kiolvasható volt
         const patch: Partial<BoxStop> = {}
         for (const f of STOP_FIELDS) { const v = result[f.key]; if (typeof v === 'number') (patch as Record<string, number>)[f.key] = v }
@@ -124,10 +128,10 @@ const StopPhotos = forwardRef<StopPhotosHandle, {
         if (unmapped.length) {
           const merged = mergeStopNote(stop.note, unmapped)
           if (merged !== (stop.note ?? '').trim()) patch.note = merged
-          const { error: logErr } = await supabase.from('box_unmapped_messages').insert(unmapped.map((t) => ({
+          // az admin naplója a háttérben (a hiánya ne akassza meg és ne lassítsa a kiolvasást)
+          void Promise.resolve(supabase.from('box_unmapped_messages').insert(unmapped.map((t) => ({
             workspace_id: currentWorkspaceId, stop_id: stop.id, box_code: stop.box_code ?? null, text: t, text_key: unmappedKey(t), created_by: profile?.id ?? null,
-          })))
-          if (logErr) console.warn('unmapped log', logErr.message) // a napló hiánya ne akassza meg a kiolvasást
+          })))).then(({ error: logErr }) => { if (logErr) console.warn('unmapped log', logErr.message) })
         }
         if (Object.keys(patch).length) onPatch(patch)
       }

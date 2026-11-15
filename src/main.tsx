@@ -61,17 +61,21 @@ startVersionWatch(__BUILD_TIME__)
 // Sérült előtöltött gyorsítótár (hiányzó kezdőlap) helyreállítása — különben offline nem indulna az app
 void healBrokenPrecache()
 
-// Előtérbe kerüléskor minden aktív lekérdezés frissül: a háttérben alvó app
-// (telefon) nem kapta meg a realtime eseményeket — ne kelljen kézzel újratölteni
+// Előtérbe kerüléskor az ELAVULT aktív lekérdezések frissülnek: a háttérben alvó app (telefon) nem kapta meg
+// a realtime eseményeket — ne kelljen kézzel újratölteni. Ami fél percen belül frissült (pl. a futár csak
+// elküldte a WhatsApp-üzenetet és visszajött), azt nem töltjük le újra; a már futó kérést nem indítjuk újra.
+// (Korábban minden visszaváltás ~30 kérést indított, a teljes box- és járatlistával együtt.)
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && navigator.onLine) void queryClient.invalidateQueries({ refetchType: 'active' })
+  if (document.visibilityState === 'visible' && navigator.onLine) void queryClient.refetchQueries({ type: 'active', stale: true }, { cancelRefetch: false })
 })
 
 const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'alza-query-cache' })
 // SEC-16: a képernyő-pillanatképek (help-session, akár 900 KB), az audit-napló (bér, telefon),
 // a hibajelentések és a bér NEM kerülnek a localStorage-be — közös telefonon ne maradjanak ott,
 // és egy nagy tétel ne lépje túl a kvótát (akkor a teljes offline cache elveszne)
-const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-history', 'feedback']
+// + tagok (bér, telefon), meghívók (a link maga a kulcs), előlegek, statisztika: vezetői gépen se maradjanak a böngészőben;
+// + aláírt kép-linkek és QR-képek: egy óra múlva úgyis érvénytelenek, csak a tárat hizlalják
+const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-history', 'feedback', 'members', 'ws-members', 'pending-users', 'invites', 'adjustments', 'statistics', 'signed', 'qr', 'photo-review']
 const shouldDehydrateQuery = (q: { queryKey: readonly unknown[]; state: { status: string } }) =>
   q.state.status === 'success' && !NO_PERSIST.some((k) => String(q.queryKey[0]).startsWith(k))
 

@@ -10,6 +10,8 @@ export function useRoutes() {
   const { currentWorkspaceId } = useWorkspace()
   return useQuery({
     queryKey: ['route-names', currentWorkspaceId],
+    // ritkán változik; a módosítás (mentés, élő frissítés) érvényteleníti — visszaváltáskor nem töltjük le újra
+    staleTime: 10 * 60_000,
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
       const { data, error } = await supabase.from('route_names').select('*')

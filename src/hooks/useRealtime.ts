@@ -10,7 +10,13 @@ export function useRealtimeInvalidate(channelId: string | null | undefined, tabl
   const qc = useQueryClient()
   useEffect(() => {
     if (!channelId) return
-    const invalidateAll = () => { for (const key of queryKeys) void qc.invalidateQueries({ queryKey: key }) }
+    const invalidateNow = () => { for (const key of queryKeys) void qc.invalidateQueries({ queryKey: key }) }
+    // Összevonás: egy járatterv-import vagy átrendezés több száz sor-eseményt küld — ezekre EGY frissítés megy
+    // (az utolsó esemény után 400 ms-mal), nem eseményenként egy megszakított és újraindított letöltés
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const invalidateAll = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => { timer = null; invalidateNow() }, 400) }
+    // az első feliratkozáskor a lekérdezések amúgy is frissen töltődnek — csak az ÚJRAcsatlakozás pótol
+    let subscribedOnce = false
     // Ha a csatorna elszakad (telefon háttérben, hálózatváltás, lejárt token), ÚJ csatornát nyitunk
     // (ugyanarra a példányra nem lehet másodszor feliratkozni), és a kimaradt eseményeket egy
     // frissítéssel pótoljuk — a vezetőnek ne kelljen újratöltenie
@@ -26,15 +32,14 @@ export function useRealtimeInvalidate(channelId: string | null | undefined, tabl
         return ch
       },
       remove: (ch) => { void supabase.removeChannel(ch) },
-      onSubscribed: invalidateAll,
+      onSubscribed: () => { if (subscribedOnce) invalidateAll(); subscribedOnce = true },
     })
-    // Előtérbe kerüléskor (háttérből vissza) mindig pótlás — a websocket közben alhatott
-    const onVisible = () => { if (document.visibilityState === 'visible') invalidateAll() }
-    document.addEventListener('visibilitychange', onVisible)
+    // Előtérbe kerüléskor a pótlást a főmodul (main.tsx) végzi minden elavult aktív lekérdezésre — itt külön
+    // nem ismételjük (korábban ugyanazok a kérések kétszer mentek ki, és az első megszakadt)
     window.addEventListener('online', invalidateAll)
     return () => {
       stop()
-      document.removeEventListener('visibilitychange', onVisible)
+      if (timer) clearTimeout(timer)
       window.removeEventListener('online', invalidateAll)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

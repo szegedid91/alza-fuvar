@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useRef, createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { queryClient } from '../lib/queryClient'
@@ -48,13 +48,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // PASSWORD_RECOVERY esemény ezt később megerősíti
   const [recovery, setRecovery] = useState(RECOVERY_IN_URL || RECOVERY_URL_ERROR != null || isRecoveryPending())
 
-  const loadProfile = useCallback(async (userId: string) => {
+  const lastProfileLoad = useRef<{ id: string; at: number; pending?: Promise<void> } | null>(null)
+  const loadProfile = useCallback(async (userId: string, force = false) => {
+    // Az auth-kliens minden előtérbe kerüléskor „bejelentkezve” eseményt küld: ugyanarra a felhasználóra
+    // 10 percen belül nem töltjük újra a profilt (felesleges kérés, és az új objektum mindent újrarajzolna)
+    const last = lastProfileLoad.current
+    if (!force && last && last.id === userId && Date.now() - last.at < 10 * 60_000) {
+      // ha az előző betöltés még fut (induláskor két jelzés jön egyszerre), megvárjuk: a hívó csak kész profil
+      // UTÁN állítja be a munkamenetet — különben egy pillanatra „van belépés, nincs profil” állapot látszana
+      if (last.pending) await last.pending
+      return
+    }
+    let finish: () => void = () => undefined
+    const pending = new Promise<void>((resolve) => { finish = resolve })
+    lastProfileLoad.current = { id: userId, at: Date.now(), pending }
+    try {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle()
     if (error) {
+      lastProfileLoad.current = null // hiba után a következő alkalommal újra próbáljuk
       console.error('Profil betöltési hiba:', error.message)
       // Offline indulás: az utoljára ismert saját profillal lépünk tovább,
       // különben a teljes offline cache elérhetetlen maradna
@@ -72,10 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try { localStorage.setItem('alza-profile-cache', JSON.stringify(data)) } catch { /* betelt tárhely */ }
     }
     setProfile(data ?? null)
+    } finally {
+      if (lastProfileLoad.current?.pending === pending) lastProfileLoad.current = { id: userId, at: lastProfileLoad.current.at }
+      finish()
+    }
   }, [])
 
   const refreshProfile = useCallback(async () => {
-    if (session?.user) await loadProfile(session.user.id)
+    if (session?.user) await loadProfile(session.user.id, true)
   }, [session, loadProfile])
 
   useEffect(() => {
@@ -99,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await loadProfile(newSession.user.id)
           } else {
             setProfile(null)
+            lastProfileLoad.current = null
             // NEM CSAK a kézi kijelentkezésnél kell takarítani: lejárt/érvénytelenített
             // munkamenetnél is, különben közös eszközön az előző felhasználó
             // cache-e és sorban álló írásai a következőre maradnának.

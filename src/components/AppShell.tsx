@@ -176,7 +176,8 @@ function PushPrompt() {
       if (!cancelled) setShow(true)
     })()
     return () => { cancelled = true }
-  }, [profile])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.status])
 
   if (!show) return null
 
