@@ -18,14 +18,14 @@ import { resolveNames } from '../lib/names'
 import { formatDate } from '../lib/labels'
 import { toast } from '../lib/toast'
 import {
-  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO, missedStops, stopMessageLines,
+  STOP_FIELDS, COMP_FIELDS, RET_FIELDS, WH_FIELDS, stopTotals, searchBoxes, isBoxCode, hhmmOfISO, missedStops, stopMessageLines, stopInRound,
   type BoxSheet, type BoxStop, type AlzaBox,
 } from '../lib/boxSheet'
 import type { Car } from '../lib/checkin'
 import { useTodayStatusEvents } from '../lib/statusEvents'
 import { errMsg } from '../lib/errors'
 import { submitNow } from '../lib/outbox'
-import { useQueued } from '../hooks/useOutbox'
+import { useQueuedLoaded } from '../hooks/useOutbox'
 import { isStopFilled, mergeQueuedStops } from '../lib/queuedMerge'
 import { openNav, shouldNavAfterFill, canFinishRouteFromSheet, requestNavPrompt, type AfterFill } from '../lib/nav'
 import { openWhatsApp, statusText } from '../lib/groupMessage'
@@ -159,7 +159,7 @@ function CrewSheet({ car, date, closed = false }: { car: Car; date: string; clos
   if (sheetQ.isError || !sheetQ.data) {
     return <div className="alert error">Nem sikerült megnyitni a mai lapot: {errMsg(sheetQ.error, '')}</div>
   }
-  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} seqLabel={seqLabel} readOnly={closed} />
+  return <SheetEditor sheetId={sheetQ.data} prefillBoxId={prefillBox} prefillSince={prefillBox ? params.get('since') : null} seqLabel={seqLabel} readOnly={closed} />
 }
 
 type SheetRow = BoxSheet & { car: { plate: string } | null }
@@ -169,7 +169,8 @@ type SheetRow = BoxSheet & { car: { plate: string } | null }
 const DAY_END_FIELDS: boolean = false
 
 // readOnly: a futár lezárt napja (autó lerakva) — a lap csak megtekinthető: nincs mező, hozzáadás, törlés, lezárás
-export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null, readOnly = false }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null; readOnly?: boolean }) {
+// prefillSince: a mostani kör „Kiindultam” ideje — ugyanaz a box a 2. körben új sort kap
+export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, prefillSince = null, seqLabel = null, readOnly = false }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; prefillSince?: string | null; seqLabel?: string | null; readOnly?: boolean }) {
   const qc = useQueryClient()
   const { profile } = useAuth()
   const { data: boxes } = useAlzaBoxes()
@@ -227,7 +228,7 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   // fűzzük őket — így egy közben érkező frissítés (fókuszváltás, másik mentés) nem tünteti el a sort.
   const [pendingStops, setPendingStops] = useState<BoxStop[]>([])
   // …és a helyi sorban álló (térerő nélkül még fel nem küldött) felvételek és módosítások is ráolvadnak
-  const queuedWrites = useQueued('box_sheet_stops')
+  const { recs: queuedWrites, loaded: queuedLoaded } = useQueuedLoaded('box_sheet_stops')
   // a most beírt értékek azonnal látszanak (nem várunk a mentés visszaigazolására) — a mentés után a szerver értéke veszi át
   const [optimistic, setOptimistic] = useState<Record<string, Partial<BoxStop>>>({})
   const allStops = useMemo(() => {
@@ -315,14 +316,17 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const [addedNow, setAddedNow] = useState(false)
   useEffect(() => {
     if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
-    // már a lapon van: nincs teendő (a jelzőt NEM állítjuk be — ha egy frissítés után mégsem lenne ott, felvesszük)
-    if (allStops.some((st) => st.box_id === prefillBoxId)) return
+    // a helyi (még fel nem küldött) mentések kiolvasásáig várunk: különben térerő nélkül újra megnyitva a boxot
+    // a sorban álló sor mellé egy második, üres sor jönne létre (a beírt számok elveszettnek látszanának)
+    if (!queuedLoaded) return
+    // már a lapon van (ebben a körben): nincs teendő (a jelzőt NEM állítjuk be — ha egy frissítés után mégsem lenne ott, felvesszük)
+    if (allStops.some((st) => st.box_id === prefillBoxId && stopInRound(st, prefillSince))) return
     const box = boxById.get(prefillBoxId)
     if (!box || data.sheet.status === 'submitted') return
     prefilledRef.current = prefillBoxId
     add(box)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefillBoxId, data, boxById])
+  }, [prefillBoxId, data, boxById, queuedLoaded])
 
   if (isLoading) return <Skeleton rows={5} />
   if (isError || !data) return <div className="alert error">Nem sikerült betölteni a lapot: {errMsg(error, '')}</div>
@@ -349,7 +353,8 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
 
   // A futár a box előtt áll: csak az aktuális box, egy képernyőn, egy fő gombbal
   if (prefillBoxId && !managerView) {
-    const cur = stops.find((st) => st.box_id === prefillBoxId)
+    // a mostani kör sora (ha a box az előző körben is szerepelt, annak a sora nem ez)
+    const cur = [...stops].reverse().find((st) => st.box_id === prefillBoxId && stopInRound(st, prefillSince))
     if (!cur) return <Skeleton rows={4} />
     return (
       <FillStop stop={cur} box={cur.box_id ? boxById.get(cur.box_id) ?? null : null} courierName={name ?? 'Futár'} resetKey={resetTick}

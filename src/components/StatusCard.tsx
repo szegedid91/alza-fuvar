@@ -6,7 +6,7 @@ import { useToday } from '../hooks/useToday'
 import { recordStatusEvent } from '../lib/statusEvents'
 import { toast } from '../lib/toast'
 import { groupTarget, statusText, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
-import { submitNow } from '../lib/outbox'
+import { submitNow, enqueue, flushOutbox } from '../lib/outbox'
 import MultiShotCamera from './MultiShotCamera'
 import { useState, useEffect } from 'react'
 import Icon from './Icon'
@@ -55,10 +55,10 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
   const lastOf = (kind: StatusKind) => [...(events ?? [])].reverse().find((e) => e.kind === kind) ?? null
 
   // Rögzítés a háttérben (offline is sorba áll) — a WhatsApp-link maga a gomb
-  async function record(kind: StatusKind, at: Date): Promise<string | null> {
+  async function record(kind: StatusKind, at: Date, presetId?: string): Promise<string | null> {
     if (!currentWorkspaceId || !profile) return null
     try {
-      const id = await recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: today?.car?.id ?? null, kind, at, geofence: currentWorkspace })
+      const id = await recordStatusEvent({ workspaceId: currentWorkspaceId, userId: profile.id, carId: today?.car?.id ?? null, kind, at, geofence: currentWorkspace, id: presetId })
       invalidate()
       return id
     } catch (e) {
@@ -79,17 +79,22 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
     openWhatsApp(text)
     void (async () => {
       try {
-        const eventId = await record('settled', at)
-        if (!eventId) return
+        // A jelzés és MINDEN felvétel azonnal a telefon tárába (a helyi sorba) kerül — csak utána indul a feltöltés.
+        // Így ha a telefon a WhatsApp alatt bezárja az appot, a visszáru-bizonyíték nem vész el: a következő
+        // megnyitáskor magától felmegy. (Korábban a felvételek a feltöltésig csak a memóriában voltak.)
+        const eventId = crypto.randomUUID()
+        const saved = record('settled', at, eventId) // a jelzés: helyi sor + küldés (a felvételek ELÉ kerül a sorban)
         for (const [i, blob] of blobs.entries()) {
           const photoId = crypto.randomUUID()
-          await submitNow({
+          await enqueue({
             id: photoId, table: 'status_event_photos', op: 'insert', label: blob.type.startsWith('video/') ? 'Elszámolás videó' : 'Elszámolás fotó',
             values: { id: photoId, workspace_id: currentWorkspaceId, event_id: eventId },
             photo: { workspaceId: currentWorkspaceId, folder: `status/${eventId}`, id: photoId, column: 'storage_path', blob, poster: posters[i] },
           })
         }
-        toast.success('Elszámolás rögzítve — a felvételek az appban vannak, a vezetők látják.')
+        if (!(await saved)) return // a jelzést a szerver elutasította — a hibát már kiírtuk
+        const { remaining } = await flushOutbox()
+        toast.success(remaining > 0 ? 'Elszámolás rögzítve — a felvételek a telefonon vannak, kapcsolatnál felmennek.' : 'Elszámolás rögzítve — a felvételek az appban vannak, a vezetők látják.')
         invalidate()
       } catch (e) {
         toast.error('A felvétel mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba')))

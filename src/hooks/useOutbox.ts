@@ -55,3 +55,17 @@ export function useQueued(table: string): OutboxRecord[] {
   }, [table])
   return recs
 }
+
+// Ugyanaz, betöltöttség-jelzéssel: az első kiolvasásig a lista üres — aki ebből dönt („nincs még ilyen sor, felveszem”),
+// várja meg a `loaded` jelzést, különben a sorban álló mentés mellé egy második is létrejönne
+export function useQueuedLoaded(table: string): { recs: OutboxRecord[]; loaded: boolean } {
+  const [state, setState] = useState<{ recs: OutboxRecord[]; loaded: boolean }>({ recs: [], loaded: false })
+  useEffect(() => {
+    let active = true
+    const refresh = () => { void listQueued(table).then((r) => { if (active) setState({ recs: r, loaded: true }) }, () => { if (active) setState((p) => ({ ...p, loaded: true })) }) }
+    refresh()
+    const unsub = subscribeOutbox(refresh)
+    return () => { active = false; unsub() }
+  }, [table])
+  return state
+}

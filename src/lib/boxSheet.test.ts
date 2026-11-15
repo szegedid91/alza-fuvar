@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { missedStops, stopMessageLines } from './boxSheet'
+import { missedStops, stopInRound, stopMessageLines } from './boxSheet'
 
 describe('stopMessageLines — a csoportüzenet sorai', () => {
   it('teljes szöveggel, rövidítés nélkül, „db”-vel; csak ami nem nulla', () => {
@@ -34,5 +34,21 @@ describe('missedStops — a járat kimaradt boxai', () => {
   })
   it('üres lapnál a járat minden boxa kimaradt', () => {
     expect(missedStops([r], []).map((x) => x.length)).toEqual([3])
+  })
+})
+
+describe('stopInRound — a megálló melyik körhöz tartozik', () => {
+  const r2 = '2026-11-17T05:30:00.000Z' // a 2. kör „Kiindultam” jelzése
+  it('az 1. körben kitöltött sor nem számít a 2. körben', () => {
+    expect(stopInRound({ done_at: '2026-11-16T23:10:00.000Z' }, r2)).toBe(false)
+    expect(stopInRound({ done_at: '2026-11-17T06:05:00+00:00' }, r2)).toBe(true)
+  })
+  it('más időformátum (Z és +00:00) is összevethető; 1 perc tűrés', () => {
+    expect(stopInRound({ done_at: '2026-11-17T05:29:30+00:00' }, r2)).toBe(true)
+    expect(stopInRound({ created_at: '2026-11-17T05:28:00.000Z' }, r2)).toBe(false)
+  })
+  it('körkezdet vagy idő nélkül minden megálló számít', () => {
+    expect(stopInRound({ done_at: '2026-11-16T23:10:00.000Z' }, null)).toBe(true)
+    expect(stopInRound({}, r2)).toBe(true)
   })
 })

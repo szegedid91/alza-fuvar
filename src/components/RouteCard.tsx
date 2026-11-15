@@ -25,7 +25,7 @@ import { statusText, openWhatsApp } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
 import { useQueued } from '../hooks/useOutbox'
 import { isStopFilled, mergeQueuedRuns, mergeQueuedStops, type RunRow } from '../lib/queuedMerge'
-import type { BoxStop } from '../lib/boxSheet'
+import { stopInRound, type BoxStop } from '../lib/boxSheet'
 
 // A futár mai járata(i): a beosztásban hozzárendelt járat boxai sorrendben,
 // „hanyadik cím” számlálóval, egy koppintásos navigációval (Google Maps / Waze —
@@ -77,7 +77,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
     refetchInterval: 30000,
     queryFn: async () => {
       const { data, error } = await supabase.from('box_sheet_stops')
-        .select('id, box_id, placed, missorted, nf, oversize, shortage, returned, damaged, invalid_code, do_not_place, cancelled, left_on_car, note, sheet:box_sheets!inner(user_id, work_date)')
+        .select('id, box_id, done_at, created_at, placed, missorted, nf, oversize, shortage, returned, damaged, invalid_code, do_not_place, cancelled, left_on_car, note, sheet:box_sheets!inner(user_id, work_date)')
         .eq('workspace_id', currentWorkspaceId!).eq('sheet.user_id', profile!.id).eq('sheet.work_date', date)
       if (error) throw error
       return (data ?? []) as unknown as BoxStop[]
@@ -85,13 +85,16 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   })
   // a sorban álló kitöltések is számítanak (térerő nélkül is tovább lehessen lépni)
   const queuedStops = useQueued('box_sheet_stops')
-  const filledBoxes = useMemo(() => mergeQueuedStops(sheetStops ?? [], queuedStops, null).filter(isStopFilled).map((r) => r.box_id).filter((x): x is string => !!x), [sheetStops, queuedStops])
+  // a mostani kör kezdete (az utolsó „Kiindultam”): csak az azóta kitöltött sorok számítanak — ha ugyanaz a box
+  // az előző körben is szerepelt, itt újra ki kell tölteni (új sorba)
+  const roundSince = useMemo(() => (todayStatus ?? []).filter((e) => e.kind === 'departed').map((e) => e.at).sort().pop() ?? null, [todayStatus])
+  const filledBoxes = useMemo(() => mergeQueuedStops(sheetStops ?? [], queuedStops, null).filter(isStopFilled).filter((r) => stopInRound(r, roundSince)).map((r) => r.box_id).filter((x): x is string => !!x), [sheetStops, queuedStops, roundSince])
   // amikor a helyi sor kiürül (felment, ami sorban állt), a szerver adatait újraolvassuk
   useEffect(() => {
     void qc.invalidateQueries({ queryKey: ['route-runs'] }); void qc.invalidateQueries({ queryKey: ['box-sheet-filled'] })
   }, [queuedRuns.length, queuedStops.length, qc])
   const setIndex = useMutation({
-    mutationFn: async ({ routeId, round, carId, index, stopId, boxId, done }: { routeId: string; round: number; carId: string; index: number; stopId?: string | null; boxId?: string | null; done?: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[] }) => {
+    mutationFn: async ({ routeId, round, carId, index, stopId, boxId, done, afterSaved }: { routeId: string; round: number; carId: string; index: number; stopId?: string | null; boxId?: string | null; done?: { boxId: string; stopIndex: number; lateMinutes?: number; delayReason?: string }[]; afterSaved?: () => void }) => {
       // A helyi soron át megy: térerő nélkül sorba áll (a kártya a sorban álló állást mutatja), kapcsolatnál felmegy
       await submitNow({
         id: crypto.randomUUID(), table: 'route_runs', op: 'insert', onConflict: 'work_date,route_id,round,car_id', label: 'Járat: léptetés',
@@ -105,6 +108,9 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
           values: { workspace_id: currentWorkspaceId!, work_date: date, route_id: routeId, round, car_id: carId, user_id: profile!.id, box_id: d.boxId, stop_index: d.stopIndex, late_minutes: d.lateMinutes ?? null, delay_reason: d.delayReason ?? null },
         })
       }
+      // LOG-06: a „Járat kész” jelzés csak SIKERES mentés után rögzül — de ITT, a mentésen belül (nem a kártya
+      // visszahívásában): az utolsó boxnál a kártya eltűnhet, mire a mentés visszaér, és a jelzés elveszne
+      afterSaved?.()
     },
     // Azonnali léptetés: a kártya a koppintásra rögtön a következő boxra vált, a mentés a háttérben megy
     // (eddig két írás + egy újraolvasás után váltott — gyenge térerőn ez másodpercek). Hiba esetén visszaáll.
@@ -189,7 +195,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
           // a késés oka az aktuális (utolsóként leadott) boxhoz tartozik — a vezetők pusht kapnak róla
           if (late && done.length) done[done.length - 1] = { ...done[done.length - 1], lateMinutes: late.minutes, delayReason: late.reason }
           // LOG-06: a „Járat kész” jelzés (done esemény) csak SIKERES mentés után rögzül
-          setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, stopId: stops[index]?.id ?? null, boxId: stops[index]?.box_id ?? null, done }, { onSuccess: () => afterSaved?.() })
+          setIndex.mutate({ routeId: sh.route_id, round: sh.round, carId: sh.car_id, index, stopId: stops[index]?.id ?? null, boxId: stops[index]?.box_id ?? null, done, afterSaved })
         }
         // Az utolsó boxnál a „Járat kész”: ugyanaz, mint a jelzés-kártya gombja — a WhatsApp a kész
         // szöveggel nyílik (a koppintáson belül), a jelzés rögzül (idő, GPS)
@@ -220,7 +226,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
             autoFinishBox={finishBox} autoDoneAt={routeDoneAt} onAutoFinishHandled={() => navigate('/', { replace: true, state: null })}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
             // a Box-lap megkapja, hova kell utána navigálni (a „Kész, következő box” gombja a koppintáson belül indítja)
-            onFillSheet={needsBoxSheet ? (after) => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}`, { state: { after } }) : undefined} />
+            onFillSheet={needsBoxSheet ? (after) => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}${roundSince ? `&since=${encodeURIComponent(roundSince)}` : ''}`, { state: { after } }) : undefined} />
         )
       })}
     </>

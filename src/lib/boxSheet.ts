@@ -121,3 +121,14 @@ export function missedStops<T extends { box_id: string }>(routeStops: T[][], she
     return [{ stop, n: i + 1 }]
   }))
 }
+
+// A megálló az adott körhöz tartozik-e: a kör „Kiindultam” jelzése UTÁN készült. Ha ugyanaz a box mindkét
+// körben szerepel, a 2. körben új sort kap — nem az 1. kör sorát nyitja meg és írja felül.
+// (1 perc tűrés; körkezdet nélkül minden megálló számít.)
+export function stopInRound(stop: { done_at?: string | null; created_at?: string | null }, since: string | null | undefined): boolean {
+  if (!since) return true
+  const t = Date.parse(stop.done_at ?? stop.created_at ?? '')
+  const s = Date.parse(since)
+  if (!Number.isFinite(t) || !Number.isFinite(s)) return true
+  return t >= s - 60_000
+}
