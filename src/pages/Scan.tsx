@@ -361,9 +361,16 @@ export default function Scan() {
       </div>
       <div className="btn-grid">
         <button className="btn ghost sm" type="button" onClick={() => { setManualOpen(false); setManualCarId('') }}>Mégse</button>
-        <ConfirmButton className="btn sm" confirmLabel={checkedIn ? 'Igen, erre váltok' : 'Igen, becsekkolok'} disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
-          {busy ? 'Feldolgozás…' : checkedIn ? 'Váltás erre az autóra' : 'Becsekkolás kézzel'}
-        </ConfirmButton>
+        {/* Becsekkolásnál egy koppintás elég (az autó már ki van választva); napközbeni autóváltásnál marad a megerősítés */}
+        {checkedIn ? (
+          <ConfirmButton className="btn sm" confirmLabel="Igen, erre váltok" disabled={!manualCarId || busy} onConfirm={() => void manualCheckIn()}>
+            {busy ? 'Feldolgozás…' : 'Váltás erre az autóra'}
+          </ConfirmButton>
+        ) : (
+          <button type="button" className="btn sm" disabled={!manualCarId || busy} onClick={() => void manualCheckIn()}>
+            {busy ? 'Feldolgozás…' : 'Becsekkolás kézzel'}
+          </button>
+        )}
       </div>
     </div>
   )
