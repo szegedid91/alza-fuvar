@@ -8,7 +8,7 @@ import { useToday } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
 import StopPhotos from '../components/StopPhotos'
-import StopItems, { useStopItems } from '../components/StopItems'
+import StopItems, { type StopItem } from '../components/StopItems'
 import { BoxIssueButton } from '../components/BoxIssue'
 import InspectionGate from '../components/InspectionGate'
 import ConfirmButton from '../components/ConfirmButton'
@@ -146,6 +146,7 @@ type SheetRow = BoxSheet & { car: { plate: string } | null }
 
 export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null, seqLabel = null }: { sheetId: string; managerView?: boolean; prefillBoxId?: string | null; seqLabel?: string | null }) {
   const qc = useQueryClient()
+  const { profile } = useAuth()
   const { data: boxes } = useAlzaBoxes()
   const boxById = useMemo(() => new Map((boxes ?? []).map((b) => [b.id, b])), [boxes])
 
@@ -158,8 +159,24 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
       ])
       if (e1) throw e1
       if (e2) throw e2
-      const names = await resolveNames([sheet.user_id])
+      // a saját lapnál a név megvan a profilból — nem kell érte külön kör a szerverhez
+      const names: Record<string, string | null> = sheet.user_id === profile?.id ? { [sheet.user_id]: profile.full_name ?? profile.email ?? null } : await resolveNames([sheet.user_id])
       return { sheet: sheet as unknown as SheetRow, stops: (stops ?? []) as BoxStop[], name: names[sheet.user_id] ?? null }
+    },
+  })
+
+  // A lap összes csomag-eltérése EGY lekérdezéssel (megállónként csoportosítva) — korábban megállónként ment egy,
+  // ami 10–15 boxnál ugyanennyi kérés volt minden megnyitáskor
+  const { data: itemsByStop } = useQuery({
+    queryKey: ['stop-items', 'sheet', sheetId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('box_stop_items')
+        .select('id, stop_id, kind, package_code, note, return_to_depot, created_at, photos:box_stop_item_photos(id, storage_path), stop:box_sheet_stops!inner(sheet_id)')
+        .eq('stop.sheet_id', sheetId).order('created_at')
+      if (error) throw error
+      const m: Record<string, StopItem[]> = {}
+      for (const r of (data ?? []) as unknown as (StopItem & { stop_id: string })[]) (m[r.stop_id] ??= []).push(r)
+      return m
     },
   })
 
@@ -179,27 +196,54 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
     },
     onSuccess: invalidate, onError: fail,
   })
+  // Megálló felvétele AZONNAL: a sor a koppintásra megjelenik (kliens-oldali azonosítóval), a mentés a háttérben megy.
+  // Korábban a mezők csak a beszúrás + a végzés-idő mentése + a lap újraolvasása után jelentek meg (lassú neten másodpercek).
+  // A most felvett (még mentés alatt álló) megállók a komponens állapotában élnek, és a szerverről jött listához
+  // fűzzük őket — így egy közben érkező frissítés (fókuszváltás, másik mentés) nem tünteti el a sort.
+  const [pendingStops, setPendingStops] = useState<BoxStop[]>([])
+  const allStops = useMemo(() => {
+    const server = data?.stops ?? []
+    return [...server, ...pendingStops.filter((p) => !server.some((st) => st.id === p.id))]
+  }, [data, pendingStops])
+  useEffect(() => {
+    // amit a szerver már visszaadott, az nem függő többé
+    if (pendingStops.length && data?.stops.some((st) => pendingStops.some((p) => p.id === st.id))) setPendingStops((prev) => prev.filter((p) => !data.stops.some((st) => st.id === p.id)))
+  }, [data, pendingStops])
+  const pendingInsert = useRef<Promise<unknown> | null>(null)
   const addStop = useMutation({
-    mutationFn: async (box: AlzaBox | { code: string }) => {
-      const seq = (data?.stops.reduce((m, s) => Math.max(m, s.seq), 0) ?? 0) + 1
-      const row = 'id' in box
-        ? { box_id: box.id, box_code: box.code, box_name: box.name }
-        : { box_code: box.code.toUpperCase(), box_name: null }
-      const now = new Date()
+    mutationFn: async (v: { stop: BoxStop; hm: string }) => {
+      const { stop } = v
       const { error } = await supabase.from('box_sheet_stops')
-        .insert({ sheet_id: sheetId, workspace_id: data!.sheet.workspace_id, seq, done_at: now.toISOString(), ...row })
+        .insert({ id: stop.id, sheet_id: sheetId, workspace_id: stop.workspace_id, seq: stop.seq, done_at: stop.done_at, box_id: stop.box_id, box_code: stop.box_code, box_name: stop.box_name })
       if (error) throw error
-      // A lap „végzés” ideje = az utolsó box ideje (a futár ekkor nyomott rá a Box-lapra ennél a boxnál)
-      const hm = now.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', hour12: false })
-      // LOG-20: a megálló már mentve — a végzés-idő hibája nem „sikertelen hozzáadás” (különben a
-      // futár újra hozzáadná → dupla megálló); a következő megálló úgyis frissíti
-      const { error: e2 } = await supabase.from('box_sheets').update({ end_time: hm }).eq('id', sheetId)
-      if (e2) toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba'))
+      // A lap „végzés” ideje = az utolsó box ideje — a háttérben mentjük, a kitöltést nem tartja fel
+      // LOG-20: a megálló már mentve — a végzés-idő hibája nem „sikertelen hozzáadás”
+      void supabase.from('box_sheets').update({ end_time: v.hm }).eq('id', sheetId).then(({ error: e2 }) => {
+        if (e2) toast.error('A megálló mentve, de a végzés ideje nem frissült: ' + errMsg(e2, 'ismeretlen hiba'))
+      })
     },
-    onSuccess: invalidate, onError: fail,
+    onMutate: (v) => { setPendingStops((prev) => [...prev, v.stop]) },
+    onError: (e, v) => { setPendingStops((prev) => prev.filter((st) => st.id !== v.stop.id)); fail(e) },
+    onSettled: invalidate,
   })
+  const add = (box: AlzaBox | { code: string }) => {
+    if (!data) return
+    const now = new Date()
+    const stop: BoxStop = {
+      id: crypto.randomUUID(), sheet_id: sheetId, workspace_id: data.sheet.workspace_id,
+      seq: allStops.reduce((m, st) => Math.max(m, st.seq), 0) + 1, done_at: now.toISOString(), created_at: now.toISOString(),
+      box_id: 'id' in box ? box.id : null, box_code: 'id' in box ? box.code : box.code.toUpperCase(), box_name: 'id' in box ? box.name : null,
+      placed: 0, missorted: 0, nf: 0, oversize: 0, shortage: 0, returned: 0, damaged: 0, invalid_code: 0, do_not_place: 0, cancelled: 0, left_on_car: 0, note: null,
+    }
+    const hm = now.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', hour12: false })
+    // a mező-mentések megvárják, hogy a sor a szerveren is meglegyen (különben a gyorsan beírt szám elveszne)
+    const p = addStop.mutateAsync({ stop, hm }).catch(() => undefined)
+    pendingInsert.current = p
+    void p.finally(() => { if (pendingInsert.current === p) pendingInsert.current = null })
+  }
   const updateStop = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<BoxStop> }) => {
+      if (pendingInsert.current) await pendingInsert.current // a most felvett sor előbb érjen a szerverre
       const { error } = await supabase.from('box_sheet_stops').update(patch).eq('id', id)
       if (error) throw error
     },
@@ -225,18 +269,20 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
   const [addedNow, setAddedNow] = useState(false)
   useEffect(() => {
     if (!prefillBoxId || !data || prefilledRef.current === prefillBoxId || addStop.isPending) return
-    if (data.stops.some((st) => st.box_id === prefillBoxId)) { prefilledRef.current = prefillBoxId; return }
+    // már a lapon van: nincs teendő (a jelzőt NEM állítjuk be — ha egy frissítés után mégsem lenne ott, felvesszük)
+    if (allStops.some((st) => st.box_id === prefillBoxId)) return
     const box = boxById.get(prefillBoxId)
     if (!box || data.sheet.status === 'submitted') return
     prefilledRef.current = prefillBoxId
-    addStop.mutate(box)
+    add(box)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillBoxId, data, boxById])
 
   if (isLoading) return <Skeleton rows={5} />
   if (isError || !data) return <div className="alert error">Nem sikerült betölteni a lapot: {errMsg(error, '')}</div>
 
-  const { sheet, stops, name } = data
+  const { sheet, name } = data
+  const stops = allStops
   const totals = stopTotals(stops)
   const submitted = sheet.status === 'submitted'
   const saving = updateSheet.isPending || updateStop.isPending || addStop.isPending || removeStop.isPending
@@ -302,18 +348,18 @@ export function SheetEditor({ sheetId, managerView = false, prefillBoxId = null,
           ? <div className="tiny muted">Írd be a darabszámokat ehhez a boxhoz.</div>
           : overview
             ? <div className="tiny muted">{stops.length ? 'Koppints egy boxra, ha meg akarod nézni vagy javítani.' : 'Ma még nincs kitöltött box.'}</div>
-            : <AddStop onAdd={(b) => addStop.mutate(b)} busy={addStop.isPending} />}
+            : <AddStop onAdd={(b) => add(b)} busy={addStop.isPending} />}
         {stops.length === 0 && !prefillBoxId && !overview && <div className="tiny muted">Még nincs megálló — keresd meg a boxot kód vagy név alapján, és add hozzá.</div>}
         {[...stops].sort((a, b) => (a.box_id === prefillBoxId ? -1 : b.box_id === prefillBoxId ? 1 : 0)).map((s) => {
           const i = stops.findIndex((x) => x.id === s.id)
           const focus = !!prefillBoxId && s.box_id === prefillBoxId
           return (
-            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1 && (!overview || addedNow)} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null}
+            <StopRow key={s.id} stop={s} index={i + 1} isLast={!prefillBoxId && i === stops.length - 1 && (!overview || addedNow)} focus={focus} box={s.box_id ? boxById.get(s.box_id) ?? null : null} seqLabel={focus ? seqLabel : null} items={itemsByStop?.[s.id]}
               courierName={name ?? 'Futár'} resetKey={resetTick} onPatch={(patch) => updateStop.mutate({ id: s.id, patch })} onRemove={() => removeStop.mutate(s.id)} />
           )
         })}
         {overview && (showAdd
-          ? <AddStop onAdd={(b) => { setAddedNow(true); addStop.mutate(b) }} busy={addStop.isPending} />
+          ? <AddStop onAdd={(b) => { setAddedNow(true); add(b) }} busy={addStop.isPending} />
           : <button type="button" className="link-btn tiny" style={{ padding: 0, textAlign: 'left' }} onClick={() => setShowAdd(true)}><Icon name="plus" size={12} /> Kimaradt egy box? Hozzáadás</button>)}
       </div>
 
@@ -416,11 +462,10 @@ function AddStop({ onAdd, busy }: { onAdd: (box: AlzaBox | { code: string }) => 
   )
 }
 
-function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null }: {
+function StopRow({ stop, index, isLast, focus = false, box, courierName, onPatch, onRemove, resetKey = 0, seqLabel = null, items }: {
   stop: BoxStop; index: number; isLast: boolean; focus?: boolean; box: AlzaBox | null; courierName: string
-  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number; seqLabel?: string | null; readOnly?: boolean
+  onPatch: (patch: Partial<BoxStop>) => void; onRemove: () => void; resetKey?: number; seqLabel?: string | null; items?: StopItem[]
 }) {
-  const { data: items } = useStopItems(stop.id)
   // Az újonnan felvett (utolsó, még üres) megálló nyitva — a többi összecsukva,
   // hogy 10-20 boxnál is áttekinthető maradjon a lap. Járat-módban a kijelölt box nyitva.
   const [open, setOpen] = useState(focus || (isLast && stop.placed === 0 && !stop.note))

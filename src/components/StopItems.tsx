@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useAuth } from '../context/AuthContext'
@@ -17,19 +17,6 @@ export interface StopItem {
   photos: { id: string; storage_path: string | null }[]
 }
 
-// Egy megálló csomagszintű eltérései (sérült, ismeretlen, nincs vonalkód…) a fotóikkal
-export function useStopItems(stopId: string) {
-  return useQuery({
-    queryKey: ['stop-items', stopId],
-    queryFn: async (): Promise<StopItem[]> => {
-      const { data, error } = await supabase.from('box_stop_items').select('id, kind, package_code, note, return_to_depot, created_at, photos:box_stop_item_photos(id, storage_path)')
-        .eq('stop_id', stopId).order('created_at')
-      if (error) throw error
-      return (data ?? []) as unknown as StopItem[]
-    },
-  })
-}
-
 // Csomagszintű eltérések a Box-lapon: típus + csomagkód + fotó + „visszaviszem a raktárba”.
 // A mentés a helyi soron át megy (gyenge netnél sorba áll, később felmegy).
 export default function StopItems({ stopId, items, readOnly = false }: { stopId: string; items: StopItem[]; readOnly?: boolean }) {
@@ -43,7 +30,7 @@ export default function StopItems({ stopId, items, readOnly = false }: { stopId:
   const [back, setBack] = useState(true)
   const [shots, setShots] = useState<{ blob: Blob; url: string }[]>([])
   const [cam, setCam] = useState(false)
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['stop-items', stopId] })
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ['stop-items'] }) // a lap közös eltérés-lekérdezése
   const reset = () => { setAdding(false); setKind(null); setCode(''); setNote(''); setBack(true); setShots([]) }
 
   const save = useMutation({
