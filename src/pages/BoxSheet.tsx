@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -27,6 +27,8 @@ import { errMsg } from '../lib/errors'
 import { submitNow } from '../lib/outbox'
 import { useQueued } from '../hooks/useOutbox'
 import { isStopFilled, mergeQueuedStops } from '../lib/queuedMerge'
+import { openNav, shouldNavAfterFill, type AfterFill } from '../lib/nav'
+import { lateMinutes } from '../lib/routePlan'
 
 // Napi Box-lap: a papír "AlzaBox szállítási lap" digitális mása. Csak a
 // Box-kategóriás (box_sheet = true) autókhoz kell — az XL-eseknek nem.
@@ -506,6 +508,8 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
   resetKey?: number; seqLabel?: string | null; items?: StopItem[]
 }) {
   const navigate = useNavigate()
+  // a járat-kártyáról érkezve: a „Kész, következő box” utáni navigáció célja (a következő box koordinátája)
+  const after = (useLocation().state as { after?: AfterFill | null } | null)?.after ?? null
   const photosRef = useRef<StopPhotosHandle>(null)
   // „elküldve a csoportba” — a készüléken jegyezzük (a fotók „küldve” jelölése mellett), hogy visszatérve is a „Kész” látsszon
   const sentKey = `box-sent:${stop.id}`
@@ -580,7 +584,12 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
         </>
       ) : (
         <>
-          <button type="button" className="btn" style={{ minHeight: 60, fontSize: 17 }} disabled={!filled} onClick={() => navigate('/', { state: { finishBox: stop.box_id } })}>
+          <button type="button" className="btn" style={{ minHeight: 60, fontSize: 17 }} disabled={!filled} onClick={() => {
+            // a navigáció a koppintáson belül nyílik (különben a telefon rákérdezne); a box lezárását a járat-kártya végzi
+            const nav = last ? null : shouldNavAfterFill(after, stop.box_id, { lateMin: (d) => lateMinutes(d, 1) })
+            navigate('/', { state: { finishBox: stop.box_id } })
+            openNav(nav)
+          }}>
             <Icon name={last ? 'flag' : 'check'} />{last ? 'Kész — vissza a járathoz' : 'Kész, következő box'}
           </button>
           {!filled && <div className="tiny muted" style={{ textAlign: 'center' }}>Írd be a behelyezett darabszámot.</div>}

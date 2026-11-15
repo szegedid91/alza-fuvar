@@ -12,11 +12,19 @@ export const waUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent
 // A WhatsApp app közvetlen megnyitása (séma): a lap ugyanaz marad, nem nyílik új fül
 export const whatsappSchemeUrl = (text: string) => `whatsapp://send?text=${encodeURIComponent(text)}`
 
-// WhatsApp megnyitása a kész szöveggel a koppintáson belül. Előbb az app sémája (a mi lapunk
-// megmarad, visszaváltáskor az app van elöl — nem egy üres fül); ha az app nem indult el
+// Telefon-e (Android / iPhone / iPad): ott a WhatsApp app nyílik, webes tartalék-fül nem kell
+export function isPhone(ua: string = typeof navigator !== 'undefined' ? navigator.userAgent : '', touchPoints: number = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && touchPoints > 1)
+}
+
+// WhatsApp megnyitása a kész szöveggel — MINDIG a koppintáson belül kell hívni (mentés / feltöltés
+// megvárása nélkül), különben a telefon rákérdez („megnyitja másik appban?”). Előbb az app sémája
+// (a mi lapunk megmarad, visszaváltáskor az app van elöl — nem egy üres fül). Telefonon nincs
+// tartalék-fül: ott a WhatsApp app van, a wa.me lap csak zavarna. Gépen, ha az app nem indult el
 // (a lap látható maradt), a wa.me webes változat nyílik új fülön.
-export function openWhatsApp(text: string, deps: { go?: (url: string) => void; open?: (url: string) => void; isHidden?: () => boolean; delayMs?: number; watch?: (onLeave: () => void) => () => void } = {}): void {
+export function openWhatsApp(text: string, deps: { go?: (url: string) => void; open?: (url: string) => void; isHidden?: () => boolean; delayMs?: number; watch?: (onLeave: () => void) => () => void; phone?: boolean } = {}): void {
   const go = deps.go ?? ((url) => { window.location.href = url })
+  if (deps.phone ?? isPhone()) { go(whatsappSchemeUrl(text)); return }
   const open = deps.open ?? ((url) => { window.open(url, '_blank', 'noopener') })
   const isHidden = deps.isHidden ?? (() => document.hidden)
   // Ha a WhatsApp elindult, a lap háttérbe kerül — de ez telefonon néha csak a 2,5 mp-es

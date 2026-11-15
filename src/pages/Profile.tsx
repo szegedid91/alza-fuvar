@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { pushSupported, isPushSubscribed, subscribePush, unsubscribePush } from '../lib/push'
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme'
-import { getNavApp, setNavApp, NAV_LABEL, type NavApp } from '../lib/nav'
+import { getNavApp, setNavApp, getAutoNav, setAutoNav, NAV_LABEL, type NavApp } from '../lib/nav'
+import { SwitchRow } from '../components/Switch'
 import FeedbackCard from '../components/FeedbackCard'
 import { RECOVERY_PATH } from '../lib/recovery'
 import Icon, { type IconName } from '../components/Icon'
@@ -118,6 +119,7 @@ export default function ProfilePage() {
 // Navigációs app a járat-kártyához és a box-adatlaphoz — a választás azonnal mentődik (ezen az eszközön)
 function NavCard() {
   const [app, setApp] = useState<NavApp>(() => getNavApp())
+  const [auto, setAuto] = useState(() => getAutoNav())
   return (
     <div className="card stack">
       <div className="card-title"><Icon name="navigation" />Navigáció</div>
@@ -128,7 +130,9 @@ function NavCard() {
           </button>
         ))}
       </div>
-      <p className="tiny muted" style={{ margin: 0 }}>A járat-kártya „Navigálás” gombja és a box adatlapja ezt az appot nyitja. Automatikusan mentve, ezen a telefonon marad.</p>
+      <SwitchRow title="Automatikus navigáció a következő boxhoz" on={auto} hint="a „Kész, következő” után magától indul"
+        onChange={(v) => { setAutoNav(v); setAuto(v); toast.success(v ? 'Automatikus navigáció bekapcsolva' : 'Automatikus navigáció kikapcsolva') }} />
+      <p className="tiny muted" style={{ margin: 0 }}>A navigáció mindig a box GPS-koordinátájára megy, és rögtön elindul. Automatikusan mentve, ezen a telefonon marad.</p>
     </div>
   )
 }

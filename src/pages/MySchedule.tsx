@@ -375,7 +375,8 @@ export default function MySchedule() {
               <span className="badge primary"><Icon name={iAmDriver ? 'truck' : iAmLoader ? 'package' : 'user'} />{myRole}{routeCode(s.route_id) ? ` · ${routeCode(s.route_id)} járat` : ''}{s.round === 2 ? ' · 2. kör' : ''}</span>
             </div>
             {traineeName && <div className="between"><span className="muted small">Betanuló veletek</span><span className="small">{traineeName}</span></div>}
-            <div className="between">
+            {/* Társ csak akkor, ha tényleg van (egyfős box-autónál nincs sor) */}
+            {shownPartnerId && <div className="between">
               <span className="muted small">Társ</span>
               {partnerTel ? (
                 // Egy koppintás = hívás (a telefon tárcsázója nyílik meg)
@@ -388,7 +389,7 @@ export default function MySchedule() {
                   {partner && <span className="tiny muted"> · nincs telefonszám</span>}
                 </span>
               )}
-            </div>
+            </div>}
             {partnerId && !swapWindowOpen(s.work_date) && (
               <span className="tiny muted">Cserét legfeljebb egy héttel előre lehet kérni.</span>
             )}

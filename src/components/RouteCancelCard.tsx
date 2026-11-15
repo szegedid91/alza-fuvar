@@ -47,11 +47,10 @@ export default function RouteCancelCard() {
     mutationFn: async () => {
       const body = (text.trim() || defaultText).slice(0, 400)
       const sent = await sendPush(targets, 'Járat-közlemény', body, '/')
-      return { sent, body }
+      return { sent }
     },
-    onSuccess: ({ sent, body }) => {
+    onSuccess: ({ sent }) => {
       toast.success(`Push kiküldve ${targets.length} embernek (${sent} készülékre ért el). A csoportba is mehet ugyanez.`)
-      openWhatsApp(body)
       setOpen(false); setText('')
     },
     onError: (e) => toast.error(errMsg(e, 'A küldés nem sikerült')),
@@ -81,7 +80,11 @@ export default function RouteCancelCard() {
       </div>
       <div className="row" style={{ gap: 6 }}>
         <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={() => setOpen(false)}>Mégse</button>
-        <button type="button" className="btn sm" style={{ flex: 2 }} disabled={targets.length === 0 || send.isPending} onClick={() => send.mutate()}><Icon name="send" size={14} />Push küldése{targets.length ? ` (${targets.length})` : ''}</button>
+        <button type="button" className="btn sm" style={{ flex: 2 }} disabled={targets.length === 0 || send.isPending} onClick={() => {
+          // a WhatsApp a koppintáson belül nyílik (a push megvárása után a telefon rákérdezne)
+          openWhatsApp((text.trim() || defaultText).slice(0, 400))
+          send.mutate()
+        }}><Icon name="send" size={14} />Push küldése{targets.length ? ` (${targets.length})` : ''}</button>
       </div>
       <div className="tiny muted">A push azoknak ér el, akik az appban engedélyezték az értesítést; küldés után a WhatsApp is megnyílik ugyanezzel a szöveggel a csoportnak.</div>
     </div>

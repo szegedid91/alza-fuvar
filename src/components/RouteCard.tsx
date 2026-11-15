@@ -8,7 +8,7 @@ import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { todayISO } from '../lib/labels'
-import { getNavApp, navUrl, NAV_LABEL, type NavApp } from '../lib/nav'
+import { getNavApp, navUrl, navTargetOf, openNav, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
 import { toast } from '../lib/toast'
@@ -210,7 +210,8 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
             sheetFilled={!!stops[idx] && (filledBoxes.includes(stops[idx].box_id) || stops[idx].box_id === finishBox)}
             autoFinishBox={finishBox} onAutoFinishHandled={() => navigate('/', { replace: true, state: null })}
             // Box-lap csak az AlzaBox-szállító (Box-kategóriás) autónál kötelező — XL-nél nincs lap, a leadás szabad
-            onFillSheet={needsBoxSheet ? () => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}`) : undefined} />
+            // a Box-lap megkapja, hova kell utána navigálni (a „Kész, következő box” gombja a koppintáson belül indítja)
+            onFillSheet={needsBoxSheet ? (after) => navigate(`/box-lap?box=${stops[idx]?.box_id ?? ''}&n=${idx + 1}&of=${stops.length}`, { state: { after } }) : undefined} />
         )
       })}
     </>
@@ -236,7 +237,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // A raktár: az utolsó box után ide navigál a futár (az admin állítja a Járatok oldalon)
   depot: Depot
   // Box-lap csak eltérésnél: a „Kész, következő” mindig mehet; ha ehhez a boxhoz már van sor a mai lapon, jelezzük
-  sheetFilled?: boolean; onFillSheet?: () => void
+  sheetFilled?: boolean; onFillSheet?: (after: AfterFill | null) => void
   // a Box-lapról „Kész, következő”-vel érkezve: ezt a boxot magától lezárja és továbblép (az utolsó boxnál nem — ott a „Járat kész” a futáré)
   autoFinishBox?: string | null; onAutoFinishHandled?: () => void
 }) {
@@ -261,14 +262,21 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   const curDeadline = planTime(cur?.deadline, round, plannedStart)
   const lateNow = lateMinutes(curDeadline, 1)
   const isLast = idx === stops.length - 1
-  const finish = () => {
+  // Automatikus navigáció: a „Kész, következő” a következő box GPS-koordinátájára nyitja és indítja a navigációt
+  // (a Profilban kapcsolható). Az utolsó boxnál nincs — ott a „Járat kész” üzenete megy a csoportba.
+  const nextNav = !isLast ? navTargetOf(stops[idx + 1]?.box) : null
+  const afterFill: AfterFill | null = cur ? { boxId: cur.box_id, nav: nextNav, deadline: curDeadline, carryKey } : null
+  // fromTap: a futár koppintott (akkor nyitható a navigáció); a Box-lapról érkező automatikus lezárásnál
+  // a Box-lap gombja már megnyitotta
+  const finish = (fromTap = true) => {
     if (lateNow != null && lateNow > 0) {
       // Késés okát körönként egyszer kérdezzük: amíg a futár késésben van, az előzőleg megadott ok megy tovább
-      if (carry.length) { go(idx + 1, { minutes: lateNow, reason: carry.join('; ') }, isLast ? onRouteDone?.() : undefined); return }
+      if (carry.length) { if (fromTap) openNav(nextNav); go(idx + 1, { minutes: lateNow, reason: carry.join('; ') }, isLast ? onRouteDone?.() : undefined); return }
       setLate(lateNow); setReasons(carry); return
     }
     // időben leadva: a késés behozva, az átvitt okok törlődnek
     if (carry.length) saveCarry([])
+    if (fromTap) openNav(nextNav)
     go(idx + 1, undefined, isLast ? onRouteDone?.() : undefined)
   }
   const toggleReason = (r: string) => setReasons((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
@@ -277,6 +285,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
     if (late == null || !reasonAll) return
     // a szabad szöveges ok is továbbmegy a kör következő késő boxaira
     saveCarry(reasonAll.split('; ').filter(Boolean))
+    openNav(nextNav)
     go(idx + 1, { minutes: late, reason: reasonAll }, isLast ? onRouteDone?.() : undefined)
   }
   // A Box-lap „Kész, következő” gombja után: ugyanaz történik, mintha itt nyomta volna meg — egyszer
@@ -287,7 +296,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
     const t = setTimeout(() => {
       if (autoDone.current === autoFinishBox) return
       autoDone.current = autoFinishBox
-      finish()
+      finish(false)
       onAutoFinishHandled?.()
     }, 0)
     return () => clearTimeout(t)
@@ -351,8 +360,8 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                   <button type="button" className="btn ghost sm" disabled={busy || locked || idx === 0} onClick={() => go(idx - 1)} style={{ flex: 1 }}><Icon name="arrow-left" size={14} />Előző</button>
                   {/* Egy fő gomb: amíg a box nincs kitöltve, a kitöltés; utána a „Kész, következő” */}
                   {onFillSheet && !sheetFilled
-                    ? <button type="button" className="btn" disabled={locked} onClick={onFillSheet} style={{ flex: 2 }}><Icon name="clipboard" size={16} />Itt vagyok — Box-lap</button>
-                    : <button type="button" className="btn" disabled={busy || locked || late != null} onClick={finish} style={{ flex: 2 }}><Icon name={isLast ? 'flag' : 'check'} size={16} />{isLast ? 'Járat kész' : 'Kész, következő'}</button>}
+                    ? <button type="button" className="btn" disabled={locked} onClick={() => onFillSheet(afterFill)} style={{ flex: 2 }}><Icon name="clipboard" size={16} />Itt vagyok — Box-lap</button>
+                    : <button type="button" className="btn" disabled={busy || locked || late != null} onClick={() => finish()} style={{ flex: 2 }}><Icon name={isLast ? 'flag' : 'check'} size={16} />{isLast ? 'Járat kész' : 'Kész, következő'}</button>}
                 </div>
                 {locked && <div className="tiny muted" style={{ textAlign: 'center' }}><Icon name="lock" size={12} /> A „Kiindultam” után indul a járat.</div>}
                 {late == null && lateNow != null && lateNow > 0 && carry.length > 0 && !locked && (
@@ -377,7 +386,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
                     <div className="tiny muted">A vezetők értesítést kapnak a késésről és az okokról.</div>
                   </div>
                 )}
-                {onFillSheet && sheetFilled && <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Box-lap kitöltve. <button type="button" className="link-btn inline tiny" onClick={onFillSheet}>Megnyitás</button></div>}
+                {onFillSheet && sheetFilled && <div className="tiny muted"><Icon name="check-circle" size={12} style={{ color: 'var(--success)' }} /> Box-lap kitöltve. <button type="button" className="link-btn inline tiny" onClick={() => onFillSheet(afterFill)}>Megnyitás</button></div>}
               </>
             ) : null}
             {stops.length > 0 && (

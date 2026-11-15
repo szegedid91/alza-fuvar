@@ -50,8 +50,6 @@ export function BoxIssueButton({ box, stopId = null, courierName, onReported }: 
         })
         queued = queued || pr.queued
       }
-      // a csoportba a kész szöveg — a WhatsApp ugyanazon a lapon nyílik
-      openWhatsApp(issueMessage({ kind, boxLabel, at: new Date(), name: courierName, note }))
       onReported?.(issueKindLabel(kind), note.trim())
       return queued
     },
@@ -79,7 +77,13 @@ export function BoxIssueButton({ box, stopId = null, courierName, onReported }: 
       {cam && <CameraCapture title="Box-hiba — fotó" onCancel={() => setCam(false)} onCapture={(blob, url) => { setShots((p) => [...p, { blob, url }]); setCam(false) }} />}
       <div className="row" style={{ gap: 6 }}>
         <button type="button" className="btn ghost sm" style={{ flex: 1 }} onClick={reset}>Mégse</button>
-        <button type="button" className="btn sm" style={{ flex: 2 }} disabled={!kind || send.isPending || (!!sel?.urgent && shots.length === 0)} onClick={() => send.mutate()}><Icon name="send" size={14} />Bejelentés és küldés a csoportba</button>
+        <button type="button" className="btn sm" style={{ flex: 2 }} disabled={!kind || send.isPending || (!!sel?.urgent && shots.length === 0)} onClick={() => {
+          if (!kind) return
+          // A WhatsApp a koppintáson BELÜL nyílik (nem a mentés és a fotó-feltöltés után): így nem kérdez rá
+          // a telefon, és nem nyílik új lap. A bejelentés közben a háttérben mentődik.
+          openWhatsApp(issueMessage({ kind, boxLabel, at: new Date(), name: courierName, note }))
+          send.mutate()
+        }}><Icon name="send" size={14} />Bejelentés és küldés a csoportba</button>
       </div>
     </div>
   )
