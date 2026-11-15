@@ -4,8 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { submitNow } from './outbox'
 import { getCurrentPosition, isOutsideGeofence } from './geo'
-import { todayISO, localISODate } from './labels'
 import { STATUS_META, type StatusKind } from './groupMessage'
+import { workDayISO } from './workDay'
+import { useWorkDay } from '../hooks/useWorkDay'
 
 // Jelzés rögzítése (idő, GPS, autó) — offline is sorba áll. A StatusCard
 // (WhatsApp-jelzések) és az „Elindultam” gomb ugyanezt használja.
@@ -23,7 +24,7 @@ export async function recordStatusEvent(p: {
   await submitNow({
     id, table: 'status_events', op: 'insert', label: `${STATUS_META[p.kind].title} – jelzés`,
     values: {
-      id, workspace_id: p.workspaceId, user_id: p.userId, car_id: p.carId, work_date: localISODate(p.at), kind: p.kind, // LOG-38: a koppintás napja, nem a GPS-várakozás utáni
+      id, workspace_id: p.workspaceId, user_id: p.userId, car_id: p.carId, work_date: workDayISO(p.at), kind: p.kind, // LOG-38: a koppintás pillanatának MUNKANAPJA (este 18:00-tól a holnapi; nyitott becsekkolásnál annak a napja)
       at: p.at.toISOString(), gps_lat: gps.lat, gps_lng: gps.lng, outside_geofence: outside, note: null, confirmed_at: p.at.toISOString(),
     },
   })
@@ -37,7 +38,7 @@ export interface TodayStatusRow { kind: string; at: string }
 export function useTodayStatusEvents<T = TodayStatusRow[]>(select?: (rows: TodayStatusRow[]) => T) {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  const date = useWorkDay()
   return useQuery({
     queryKey: ['status-events', currentWorkspaceId, profile?.id, date, 'home'],
     enabled: !!currentWorkspaceId && !!profile?.id,

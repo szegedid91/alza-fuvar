@@ -7,7 +7,8 @@ import { useRoutes } from '../hooks/useRoutes'
 import { useToday } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
-import { todayISO } from '../lib/labels'
+import { useWorkDay } from '../hooks/useWorkDay'
+import { workDayISO } from '../lib/workDay'
 import { getNavApp, navUrl, navTargetOf, openNav, launchNav, navPromptPending, clearNavPrompt, requestNavPrompt, PROMPT_EVENT, NAV_LABEL, type NavApp, type AfterFill } from '../lib/nav'
 import { depotOf, type Depot } from '../lib/depot'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
@@ -35,7 +36,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const { profile } = useAuth()
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const qc = useQueryClient()
-  const date = todayISO()
+  const date = useWorkDay()
   const depot = depotOf(currentWorkspace)
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
@@ -273,7 +274,7 @@ function RouteCardView({ code, round, plate, stops, idx, busy = false, locked = 
   // előre be vannak jelölve, amíg a futár be nem hozza a késést (egy box időben → törlődik).
   // sessionStorage: újratöltés / oldalváltás után is megmarad a napon belül.
   // a naphoz kötve: a tegnapi késés-ok ne ragadjon rá a mai első késő boxra
-  const carryKey = `late-carry:${todayISO()}:${code}:${round}`
+  const carryKey = `late-carry:${workDayISO()}:${code}:${round}`
   const [carry, setCarry] = useState<string[]>(() => { try { return JSON.parse(sessionStorage.getItem(carryKey) ?? '[]') as string[] } catch { return [] } })
   const saveCarry = (list: string[]) => { setCarry(list); try { sessionStorage.setItem(carryKey, JSON.stringify(list)) } catch { /* nem kritikus */ } }
   useEffect(() => { setShowBox(false); setLate(null); setReasons([]); setReasonText('') }, [idx])

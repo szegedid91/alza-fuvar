@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from './supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { resolveNames } from './names'
-import { todayISO } from './labels'
+import { operationalDayISO } from './workDay'
 
 // "Túl sokan egy autón": egy autón ma több NYITOTT becsekkolás van, mint a
 // kategória létszáma (Box = 1 fő, XL = 2 fő). Ez mindig vezetői beavatkozást
@@ -65,7 +65,7 @@ export async function findCrewConflicts(workspaceId: string, date: string): Prom
 // a realtime invalidálás ['crew-conflicts'] kulccsal gyorsítja.
 export function useCrewConflicts(enabled = true) {
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  const date = operationalDayISO() // élő nézet: a munkanap
   return useQuery({
     queryKey: ['crew-conflicts', currentWorkspaceId, date],
     enabled: enabled && !!currentWorkspaceId,

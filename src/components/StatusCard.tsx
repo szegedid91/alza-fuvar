@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useToday } from '../hooks/useToday'
 import { recordStatusEvent } from '../lib/statusEvents'
-import { todayISO } from '../lib/labels'
 import { toast } from '../lib/toast'
 import { groupTarget, statusText, STATUS_META, type StatusKind, openWhatsApp } from '../lib/groupMessage'
 import { submitNow } from '../lib/outbox'
@@ -14,6 +13,7 @@ import Icon from './Icon'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 import { requestNavPrompt } from '../lib/nav'
+import { useWorkDay } from '../hooks/useWorkDay'
 
 type StatusEvent = Tables<'status_events'> & { photos?: { id: string; storage_path: string | null }[] }
 
@@ -27,7 +27,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
   const { data: today } = useToday()
   const qc = useQueryClient()
-  const date = todayISO()
+  const date = useWorkDay()
   const name = profile?.full_name || profile?.email || 'Munkatárs'
   // A csoportba a kiosztott járat kódja megy (rendszám nem)
   const route = today?.planned?.routeCode ?? null

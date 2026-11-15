@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { toast } from './toast'
 import { errMsg } from './errors'
 import { resolveNames } from './names'
-import { todayISO } from './labels'
+import { operationalDayISO } from './workDay'
 
 // „Nem tudok fotózni” — nyitott vezetői engedélykérések: ma becsekkolt, még nem
 // jelentkezett ki, engedélyt kért, de az autó azóta sincs körbefotózva és nincs
@@ -42,7 +42,7 @@ export async function findPhotoHelpRequests(workspaceId: string, date: string): 
 // 30 mp-enként frissül; a realtime invalidálás ['photo-help'] kulccsal gyorsítja
 export function usePhotoHelpRequests(enabled = true) {
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  const date = operationalDayISO() // élő nézet: a munkanap
   return useQuery({
     queryKey: ['photo-help', currentWorkspaceId, date],
     enabled: enabled && !!currentWorkspaceId,

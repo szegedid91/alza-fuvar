@@ -5,6 +5,8 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { todayISO } from '../lib/labels'
 import { getCrewForDay, countInspectionsToday, traineeScheduled, type CarWithCategory, type CrewMember } from '../lib/checkin'
 import type { Tables } from '../lib/database.types'
+import { useWorkDay } from './useWorkDay'
+import { clearWorkDayPin, isAfterCutover, pinnedWorkDay, pinWorkDay } from '../lib/workDay'
 
 export interface TodayState {
   date: string
@@ -27,12 +29,25 @@ export interface TodayState {
 export function useToday() {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  // a futár MUNKANAPJA (este 18:00-kor vált, a nyitott becsekkolás megtartja) — nem a naptári nap
+  const workDay = useWorkDay()
 
   return useQuery<TodayState>({
-    queryKey: ['today', currentWorkspaceId, profile?.id, date, 'v3'],
+    queryKey: ['today', currentWorkspaceId, profile?.id, workDay, 'v3'],
     enabled: !!currentWorkspaceId && !!profile?.id,
     queryFn: async () => {
+      const uid = profile!.id
+      // Este 6 után a munkanap már a holnapi. Ha a futárnak a naptári MAI napon még NYITOTT becsekkolása van
+      // (nappalos, aki 18:00 után is dolgozik) és a telefonon nincs rögzítve, ahhoz a naphoz kötjük.
+      let date = workDay
+      if (!pinnedWorkDay() && isAfterCutover()) {
+        const cal = todayISO()
+        if (cal !== date) {
+          const { data: open } = await supabase.from('check_ins').select('id')
+            .eq('workspace_id', currentWorkspaceId!).eq('user_id', uid).eq('work_date', cal).is('checked_out_at', null).limit(1)
+          if (open && open.length > 0) { pinWorkDay(cal, uid); date = cal }
+        }
+      }
       // A két lekérdezés független — párhuzamosan futnak.
       // FONTOS: limit(1) nélkül a maybeSingle() több sor esetén (pl. napközbeni
       // autóváltás = két becsekkolás) hibát ad és "nincs becsekkolva"-t mutatna.
@@ -79,6 +94,10 @@ export function useToday() {
       const plannedRoute = (shift?.route as unknown as { code: string } | null) ?? null
       const planned = plannedCar ? { plate: plannedCar.plate, label: plannedCar.label, routeCode: plannedRoute?.code ?? null, round: shift?.round ?? null, isBox: plannedCar.category?.box_sheet ?? null } : null
 
+      // Rögzítés: amíg a becsekkolás nyitott, a munkanap ez a nap marad (éjfélkor és 18:00-kor sem vált);
+      // lezárt nap (autó lerakva) vagy hiányzó becsekkolás után a váltás szerinti nap él
+      if (checkin && !checkin.checked_out_at) pinWorkDay(date, uid)
+      else if (pinnedWorkDay() === date) clearWorkDayPin()
       return { date, checkin, car, crew, assignedRole, inspectionDone: inspCount > 0, traineeOnCar, planned }
     },
   })

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { todayISO } from '../lib/labels'
+import { useWorkDay } from './useWorkDay'
 
 export interface MyRouteShift { id: string; car_id: string; round: number; route_id: string; plate: string }
 
@@ -11,7 +11,7 @@ export interface MyRouteShift { id: string; car_id: string; round: number; route
 export function useMyRoutesToday() {
   const { profile } = useAuth()
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  const date = useWorkDay() // a futár munkanapja (nem a naptári nap)
   return useQuery({
     queryKey: ['my-routes-today', currentWorkspaceId, profile?.id, date],
     enabled: !!currentWorkspaceId && !!profile?.id,

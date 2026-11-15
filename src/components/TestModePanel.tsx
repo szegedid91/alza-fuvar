@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { DEV_ACCOUNTS, type DevAccount } from '../lib/devAuth'
 import { clearTestEvents, getUseRealCamera, setUseRealCamera, useTestEvents, type TestEvent } from '../lib/testMode'
 import { errMsg } from '../lib/errors'
+import { clearWorkDayPin } from '../lib/workDay'
 import { toast } from '../lib/toast'
 import { SwitchRow } from './Switch'
 
@@ -62,6 +63,7 @@ export default function TestModePanel() {
         Object.keys(sessionStorage).filter((k) => k.startsWith('late-carry:')).forEach((k) => sessionStorage.removeItem(k))
       } catch { /* nem kritikus */ }
       clearTestEvents()
+      clearWorkDayPin()
       await qc.invalidateQueries()
       const r = data as unknown as { shifts?: { round: number; route: string | null; plate: string }[]; shift_created?: boolean } | null
       const shifts = (r?.shifts ?? []).map((s) => `${s.plate}${s.route ? ` · ${s.route} járat` : ''}${(r?.shifts?.length ?? 0) > 1 ? ` · ${s.round}. kör` : ''}`).join(', ')

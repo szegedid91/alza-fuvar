@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { resolveNames } from '../lib/names'
 import { getCurrentPosition } from '../lib/geo'
-import { todayISO, parseHuNumber } from '../lib/labels'
+import { parseHuNumber } from '../lib/labels'
 import { addDays } from '../lib/calendar'
 import { fetchAll } from '../lib/fetchAll'
 import { useCrewConflicts } from '../lib/crewConflicts'
@@ -21,6 +21,7 @@ import RouteProgressCard from '../components/RouteProgressCard'
 import HelpSessionsCard from '../components/HelpSessionsCard'
 import { STATUS_META, type StatusKind } from '../lib/groupMessage'
 import { errMsg } from '../lib/errors'
+import { operationalDayISO } from '../lib/workDay'
 
 // Túl sokan egy autón (Box = 1 fő): ezt a vezetőnek kell rendeznie — vagy a
 // tévesen becsekkolt embert kijelentkezteti innen, vagy a munkatárs maga vált
@@ -267,7 +268,8 @@ function TemplatesCard() {
 
 export default function Dashboard() {
   const { currentWorkspaceId, currentWorkspace } = useWorkspace()
-  const today = todayISO()
+  // ÉLŐ nézet: a MUNKANAP szerint (este 18:00-tól a következő nap — az esti 1. kör már oda tartozik)
+  const today = operationalDayISO()
 
   useRealtimeInvalidate(currentWorkspaceId, ['check_ins', 'fuel_logs', 'car_inspections', 'shifts', 'car_issues', 'status_events'], [['dashboard'], ['crew-conflicts'], ['photo-help']])
 

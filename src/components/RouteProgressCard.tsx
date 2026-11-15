@@ -6,15 +6,15 @@ import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { useRoutes } from '../hooks/useRoutes'
 import { useRouteStops } from '../hooks/useRouteStops'
 import { resolveNames } from '../lib/names'
-import { todayISO } from '../lib/labels'
 import Icon from './Icon'
 import { lateMinutes, resolveRunIndex, planTime } from '../lib/routePlan'
+import { operationalDayISO } from '../lib/workDay'
 
 // Vezetői nézet: a mai járatok (beosztásból), ki viszi, és hanyadik címnél tart
 // a futár — a route_runs haladásból, realtime frissülve
 export default function RouteProgressCard() {
   const { currentWorkspaceId } = useWorkspace()
-  const date = todayISO()
+  const date = operationalDayISO() // élő nézet: a munkanap (este 18:00-tól a következő nap járatai)
   const { data: routes } = useRoutes()
   const { data: stopsByRoute } = useRouteStops()
   useRealtimeInvalidate(currentWorkspaceId, ['route_runs', 'shifts', 'route_stop_logs'], [['route-progress']])

@@ -17,10 +17,11 @@ import { resolveCarByToken, checkInspectionRequirement, getCrewForDay, traineeSc
 import { getCurrentPosition, isOutsideGeofence } from '../lib/geo'
 import { submitNow } from '../lib/outbox'
 import { supabase } from '../lib/supabase'
-import { todayISO, formatHours } from '../lib/labels'
+import { formatHours } from '../lib/labels'
 import { errMsg } from '../lib/errors'
 import { toast } from '../lib/toast'
 import { TEST_MODE } from '../lib/testMode'
+import { workDayISO } from '../lib/workDay'
 
 // A QR-olvasó könyvtár nagy (~300 kB) — csak a beolvasás indításakor töltődik
 const QrScanner = lazy(() => import('../components/QrScanner'))
@@ -98,11 +99,11 @@ export default function Scan() {
     }
     let others: CrewMember[] = []
     try {
-      others = (await getCrewForDay(car.id, todayISO(), true)).filter((c) => c.user_id !== profile?.id)
+      others = (await getCrewForDay(car.id, workDayISO(), true)).filter((c) => c.user_id !== profile?.id)
     } catch { /* offline: nem tudjuk ellenőrizni — a flush után az Áttekintés jelzi */ }
     // betanulóval az autón eggyel többen lehetnek
     let trainee = false
-    try { trainee = await traineeScheduled(car.id, todayISO()) } catch { /* offline: betanuló nélkül számolunk */ }
+    try { trainee = await traineeScheduled(car.id, workDayISO()) } catch { /* offline: betanuló nélkül számolunk */ }
     const capacity = crewSizeFor(cars, categories, car.id) + (trainee ? 1 : 0)
     if (others.length >= capacity) {
       setPendingConflict({ car, manual, others, capacity })
@@ -118,7 +119,7 @@ export default function Scan() {
     if (profile) {
       try {
         const { data, error } = await supabase.from('check_ins').select('id, car_id')
-          .eq('user_id', profile.id).eq('work_date', todayISO()).is('checked_out_at', null)
+          .eq('user_id', profile.id).eq('work_date', workDayISO()).is('checked_out_at', null)
           .order('checked_in_at', { ascending: false }).limit(1).maybeSingle()
         if (!error) openCi = data ?? null
       } catch { /* offline */ }
@@ -189,7 +190,8 @@ export default function Scan() {
   // conflict: tele autóra, a figyelmeztetés ellenére — a vezetők pusht kapnak.
   async function doCheckIn(car: Car, reason: string | null, prevCarId: string | null, prevCheckinId: string | null, manual = false, conflict = false) {
     if (!currentWorkspaceId || !profile) return
-    const date = todayISO()
+    // a becsekkolás a futár MUNKANAPJÁRA szól: este 18:00-tól a holnapi napra (az esti 1. kör a reggel napjához tartozik)
+    const date = workDayISO()
     const gps = await getCurrentPosition()
     // a követelmény (sofőrváltás, 9-e) csak tájékoztató — a fotókaput külön kényszeríti a rendszer; offline nem akadály
     let req: InspectionRequirement = { required: false, reasons: [] }

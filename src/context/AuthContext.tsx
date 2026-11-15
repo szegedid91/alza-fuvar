@@ -32,6 +32,7 @@ async function clearLocalUserData(): Promise<void> {
   localStorage.removeItem('alza-current-workspace')
   localStorage.removeItem('alza-profile-cache')
   localStorage.removeItem('alza-workspaces-cache')
+  localStorage.removeItem('alza-workday-pin')
   // Közös telefonon a félbehagyott jelszó-visszaállítás ne a következő
   // belépőnek jöjjön elő
   clearRecoveryPending()
