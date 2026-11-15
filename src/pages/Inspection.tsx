@@ -317,7 +317,7 @@ function InspectionInner({ car, date, checkin }: { car: Car; date: string; check
 }
 
 // Takarítás: önálló oldalon (/takaritas) érhető el — az ellenőrző fotók oldalán nincs.
-// Az autó MAI takarításait mutatja (a társét is) — párosnál így látszik, ki csinálta.
+// Naponta egy takarítás: ha ma már megvolt (akár a társ csinálta), csak a „kész” sor és a fotók látszanak.
 // askPhotos: a nap végén a takarításról fotót kérünk (a rögzítés után rögtön a kamera nyílik)
 export function CleaningCard({ car, date, askPhotos = false }: { car: Car; date: string; askPhotos?: boolean }) {
   const { profile } = useAuth()
@@ -380,36 +380,40 @@ export function CleaningCard({ car, date, askPhotos = false }: { car: Car; date:
     }
   }
 
+  // a mai nap egy takarításnak számít: a legkorábbi az időpont, a sajátomhoz mennek a fotók
+  const first = cleaning?.length ? cleaning[cleaning.length - 1] : null
+  const mine = cleaning?.find((c) => c.user_id === profile?.id) ?? null
+  const photos = (cleaning ?? []).flatMap((c) => c.photos)
+
   return (
     <div className="card stack">
       <div className="card-title"><Icon name="sparkles" />Takarítás</div>
       {err && <div className="alert error">{err}</div>}
       {cameraFor && <MultiShotCamera title="Takarítás — fotók" sendLabel="Fotók mentése" onCancel={() => setCameraFor(null)} onSend={(blobs) => void savePhotos(cameraFor, blobs)} />}
-      {(cleaning?.length ?? 0) > 0 ? (
-        <div className="list">
-          {cleaning!.map((c) => (
-            <div key={c.id} className="between" style={{ gap: 8 }}>
-              <span className="row" style={{ gap: 8, minWidth: 0 }}>
-                <span className="badge success"><Icon name="check" />Kész</span>
-                <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c._name ?? 'Ismeretlen'}{c.user_id === profile?.id ? <span className="tiny muted"> (te)</span> : null}
-                </span>
+      {first ? (
+        // Naponta EGY takarítás: egy sor (kész + mikor), alatta a fotók — több kép is készíthető, akár több részletben.
+        // Újabb takarítás rögzítése és a korábbi tételek listája nincs: az csak zavarna.
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="between" style={{ gap: 8 }}>
+            <span className="row" style={{ gap: 8, minWidth: 0 }}>
+              <span className="badge success"><Icon name="check" />Kész</span>
+              <span className="small" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Ma kitakarítva{!mine && first._name ? ` — ${first._name}` : ''}
               </span>
-              {/* mai esemény: elég az óra:perc — a dátum csak helyet foglal a név elől */}
-              <span className="row" style={{ gap: 6, flexShrink: 0 }}>
-                <span className="tiny muted">{new Date(c.created_at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</span>
-                {c.user_id === profile?.id && <button type="button" className="btn ghost sm auto" style={{ minHeight: 30, padding: '0 8px' }} disabled={busy} onClick={() => setCameraFor(c.id)}><Icon name="camera" size={14} />{c.photos.length ? '+ fotó' : 'Fotó'}</button>}
-              </span>
-            </div>
-          ))}
-          {cleaning!.some((c) => c.photos.length > 0) && (
+            </span>
+            <span className="tiny muted" style={{ flexShrink: 0 }}>{new Date(first.created_at).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+          {photos.length > 0 && (
             <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
-              {cleaning!.flatMap((c) => c.photos).map((p) => <div key={p.id} style={{ width: 64 }}><PhotoThumb path={p.storage_path} /></div>)}
+              {photos.map((ph) => <div key={ph.id} style={{ width: 64 }}><PhotoThumb path={ph.storage_path} /></div>)}
             </div>
           )}
-          {askPhotos && cleaning!.every((c) => c.photos.length === 0) && <div className="tiny" style={{ color: 'var(--warning)' }}>Kérünk egy-két fotót a kitakarított autóról — a „Fotó” gombbal.</div>}
-          <p className="tiny muted" style={{ margin: 0 }}>A vezetők a beosztás-naptárban látják, ki és mikor takarított.</p>
-          <button className="btn secondary sm" disabled={busy} onClick={() => void markClean()}><Icon name="plus" />{busy ? 'Mentés…' : 'Újabb takarítás rögzítése'}</button>
+          {mine && (
+            <button type="button" className={photos.length ? 'btn ghost sm' : 'btn secondary'} disabled={busy} onClick={() => setCameraFor(mine.id)}>
+              <Icon name="camera" size={16} />{busy ? 'Mentés…' : photos.length ? `További fotók (eddig ${photos.length})` : 'Fotók a takarításról'}
+            </button>
+          )}
+          {mine && askPhotos && photos.length === 0 && <div className="tiny" style={{ color: 'var(--warning)' }}>Kérünk pár fotót a kitakarított autóról — egyszerre több képet is készíthetsz.</div>}
         </div>
       ) : (
         <>

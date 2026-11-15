@@ -192,7 +192,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
       })()}
 
       {moreCamera && (
-        <MultiShotCamera video title="További visszáru-felvétel" sendLabel="Mentés" hint="Fotózd vagy videózd le, ami az előző felvételekről kimaradt — minden visszahozott csomag látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
+        <MultiShotCamera video upload title="További visszáru-felvétel" sendLabel="Mentés" hint="Fotózd vagy videózd le, ami az előző felvételekről kimaradt — minden visszahozott csomag látszódjon." onCancel={() => setMoreCamera(false)} onSend={addSettlePhotos} />
       )}
       {lastOf('settled') && !moreCamera && (
         <button type="button" className="btn secondary sm" onClick={() => setMoreCamera(true)}>
@@ -200,7 +200,7 @@ export default function StatusCard({ roundsOver = false, onRoute = false }: { ro
         </button>
       )}
       {settleCamera && (
-        <MultiShotCamera video title="Elszámolás — visszáru" sendLabel="Mentés" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le. A felvétel csak az appba kerül." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
+        <MultiShotCamera video upload title="Elszámolás — visszáru" sendLabel="Mentés" hint="Fotózd vagy videózd le az ÖSSZES visszahozott csomagot — mindegyik látszódjon. Ez igazolja, hogy visszakerült a raktárba. Ha nem jött vissza semmi, az üres rakteret fotózd le. Kész felvételt is feltölthetsz a telefonról. A felvétel csak az appba kerül." onCancel={() => setSettleCamera(false)} onSend={sendSettle} />
       )}
 
       {roundsOver && (
