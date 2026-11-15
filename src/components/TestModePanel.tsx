@@ -95,7 +95,7 @@ export default function TestModePanel() {
         </div>
       )}
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
-        style={{ position: 'fixed', left: 8, bottom: 'calc(env(safe-area-inset-bottom) + 150px)', zIndex: 301, border: `1px solid ${AMBER}`, background: '#451a03', color: AMBER, borderRadius: 999, padding: '6px 12px', fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,.4)' }}>
+        style={{ position: 'fixed', left: 8, bottom: 'calc(env(safe-area-inset-bottom) + 150px)', zIndex: 90, border: `1px solid ${AMBER}`, background: '#451a03', color: AMBER, borderRadius: 999, padding: '6px 12px', fontWeight: 800, fontSize: 12, cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,.4)' }}>
         🧪 TESZT{events.length ? ` · ${events.length}` : ''}
       </button>
       {open && (

@@ -23,6 +23,7 @@ import HelpSessionsCard from '../components/HelpSessionsCard'
 import WaiverRequest from '../components/WaiverRequest'
 import { useFuelGate } from '../hooks/useDayEnd'
 import { DestNavPrompt } from '../components/NavPromptOverlay'
+import SettleMedia from '../components/SettleMedia'
 
 interface HubItem { to: string; icon: IconName; title: string; desc: string; group?: string; badge?: number }
 
@@ -146,6 +147,8 @@ export default function Home() {
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && settled && (
         <div className="card stack" style={{ borderColor: 'var(--success)', gap: 10 }}>
           <div className="card-title" style={{ margin: 0 }}><Icon name="flag" />Nap vége</div>
+          {/* az elszámolás felvételei — ha csak videó készült, itt még fotó is hozzátehető (és fordítva) */}
+          <SettleMedia />
           <div className="small">Elszámoltál, a mai körök megvannak. {fuelGate.needed ? 'Három' : 'Két'} dolog maradt:</div>
           <div className="small" style={{ fontWeight: 700 }}>1. Takarítottad az autót?</div>
           {today.car && <CleaningCard car={today.car} date={today.date} askPhotos />}

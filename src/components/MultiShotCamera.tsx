@@ -185,6 +185,12 @@ export default function MultiShotCamera({
             </div>
           )}
           {videoOff && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(176,0,32,0.85)', color: '#fff', padding: '6px 8px', borderRadius: 8, zIndex: 3 }}>{videoOff}</p>}
+          {/* az első felvétel után: jelezzük, hogy lehet még készíteni — a mentés csak a gombra megy */}
+          {shots.length > 0 && !recording && !videoOff && (
+            <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '6px 8px', borderRadius: 8, zIndex: 3 }}>
+              Megvan ({countText}). Készíthetsz még {video ? 'fotót vagy videót' : 'fotót'} — ha minden megvan: „{sendLabel}”.
+            </p>
+          )}
           {shots.length === 0 && !recording && !videoOff && <p className="tiny" style={{ position: 'absolute', top: 12, left: 12, right: 12, margin: 0, textAlign: 'center', background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '6px 8px', borderRadius: 8 }}>{hint}</p>}
         </div>
       )}
