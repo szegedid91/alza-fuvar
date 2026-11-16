@@ -131,7 +131,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (p.action === 'renew' || p.action === 'send_email') {
-    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name, email, expires_at, role').eq('id', p.invite_id ?? '').maybeSingle()
+    const { data: inv } = await admin.from('invites').select('id, workspace_id, placeholder_id, used_at, full_name, email, expires_at, role, email_sent_at').eq('id', p.invite_id ?? '').maybeSingle()
     if (!inv) return json({ error: 'A meghívó nem található' }, 404)
     if (!wsIds.has(inv.workspace_id) && caller.role !== 'admin') return json({ error: 'Nincs jogosultság' }, 403)
     // SEC: admin-meghívót csak admin újíthat meg vagy küldhet ki
@@ -147,6 +147,10 @@ Deno.serve(async (req: Request) => {
       if (error) { console.error('invite renew', error); return json({ error: 'A meghívó megújítása nem sikerült' }, 500) }
     }
     if (p.action === 'renew') return json({ ok: true, expires_at: expiresAt })
+    // SEC: ugyanarra a meghívóra percenként legfeljebb egy levél (ne lehessen a céges feladóval levélözönt küldeni)
+    if (inv.email_sent_at && Date.now() - new Date(inv.email_sent_at).getTime() < 60_000) {
+      return json({ error: 'Erre a meghívóra az előbb ment levél — várj egy percet az újraküldéssel.' }, 429)
+    }
 
     const email = (p.email ?? inv.email ?? '').trim().toLowerCase()
     if (!EMAIL_RE.test(email)) return json({ error: 'Adj meg egy érvényes email-címet' }, 400)

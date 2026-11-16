@@ -61,6 +61,12 @@ export default function RoutePlanImport() {
       if (exErr) throw exErr
       const current = [...(existing ?? [])]
       let nextOrder = current.reduce((m, r) => Math.max(m, r.sort_order ?? 0), 0) + 1
+      // A mentesítő járatok a rendes járatokból ÁTVETT boxokat viszik: ha a heti tervet rájuk töltenénk, ugyanaz a box
+      // két járaton szerepelne (két futár menne ugyanoda). Előbb fel kell oszlatni őket.
+      const relief = Object.entries(stopsByRoute ?? {}).filter(([, stops]) => stops.some((st) => !!st.moved_from_route_id)).map(([rid]) => current.find((r) => r.id === rid)?.code ?? '?')
+      if (relief.length > 0) throw new Error(`Mentesítő járat él (${relief.join(', ')}): előbb oszlasd fel a Járatok oldalon, utána töltsd be a tervet — különben ugyanaz a box két járaton szerepelne.`)
+      // a járatonkénti megálló-listák összegyűlnek, és a végén EGY szerver-hívás cseréli le mindet
+      const plan: { route_id: string; stops: unknown[]; planned_start: string | null; planned_end: string | null; plan_km: number | null; back_km: number | null }[] = []
       for (const pr of preview.routes) {
         // 1) járat (kód szerint), ha nincs, létrejön
         let route = current.find((r) => r.code.toUpperCase() === pr.code)
@@ -83,14 +89,16 @@ export default function RoutePlanImport() {
             ids.set(s.code, data.id); preview.known.set(s.code, { id: data.id, code: s.code, lat: s.lat, lng: s.lng })
           }
         }
-        // 3) megállók cseréje a terv szerint — egy tranzakcióban a szerveren (félbeszakadva nem marad üres járat)
-        const { error: rpcErr } = await supabase.rpc('replace_route_stops', {
-          p_route_id: route.id,
-          p_stops: pr.stops.map((s) => ({ box_id: ids.get(s.code)!, eta: s.eta, etd: s.etd, deadline: s.deadline, dist_km: s.distKm })),
-          p_planned_start: pr.start, p_planned_end: pr.end, p_source: preview.fileName, p_plan_km: pr.distanceKm, p_back_km: pr.backKm,
-        } as never)
-        if (rpcErr) throw rpcErr
+        plan.push({
+          route_id: route.id,
+          stops: pr.stops.map((st) => ({ box_id: ids.get(st.code)!, eta: st.eta, etd: st.etd, deadline: st.deadline, dist_km: st.distKm })),
+          planned_start: pr.start, planned_end: pr.end, plan_km: pr.distanceKm, back_km: pr.backKm,
+        })
       }
+      // 3) megállók cseréje a terv szerint — MINDEN járat egy tranzakcióban a szerveren: ha egy járat hibázik,
+      //    a többi sem változik (nem marad fél terv, és egy áthelyezett box nem szerepel két járaton)
+      const { error: rpcErr } = await supabase.rpc('replace_route_plan' as never, { p_routes: plan, p_source: preview.fileName } as never)
+      if (rpcErr) throw rpcErr
     },
     onSuccess: () => {
       toast.success('Járatterv betöltve — a járatok a fájl szerint frissültek (ugyanannak a fájlnak az újratöltése a meglévő verziót frissíti).')

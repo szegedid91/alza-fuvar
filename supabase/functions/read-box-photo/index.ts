@@ -75,10 +75,11 @@ Deno.serve(async (req: Request) => {
 
   // napi korlát (költségvédelem): számláló az internal_config-ban, kulcs: rbp:{felhasználó}:{budapesti nap}
   const dayKey = `rbp:${uid}:${budapestDay()}`
-  const { data: cnt } = await admin.from('internal_config').select('value').eq('key', dayKey).maybeSingle()
-  const used = parseInt(cnt?.value ?? '0', 10) || 0
-  if (used >= DAILY_LIMIT) return json({ error: 'A mai kiolvasási keret elfogyott — írd be a számokat kézzel.' }, 429)
-  await admin.from('internal_config').upsert({ key: dayKey, value: String(used + 1) }, { onConflict: 'key' })
+  // ATOMI léptetés (egy SQL-utasítás): párhuzamos kérésekkel sem lehet a keret fölé menni
+  // (korábban kiolvasás, majd külön írás volt — egyszerre indított kérések mind ugyanazt az értéket látták)
+  const { data: allowed, error: limErr } = await admin.rpc('bump_daily_counter', { p_key: dayKey, p_limit: DAILY_LIMIT })
+  if (limErr) console.error('napi keret', limErr.message) // a számláló hibája ne állítsa meg a futárt
+  else if (allowed === false) return json({ error: 'A mai kiolvasási keret elfogyott — írd be a számokat kézzel.' }, 429)
 
   const images: { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }[] = []
   for (const p of paths) {

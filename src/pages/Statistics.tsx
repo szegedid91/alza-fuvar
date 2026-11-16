@@ -101,7 +101,7 @@ export default function Statistics() {
       const [carsRes, checkins, shifts, fuel, incidents, issues, adj, swaps, insp, clean] = await Promise.all([
         supabase.from('cars').select('id, plate, category:car_categories(name)').eq('workspace_id', ws),
         fetchAll((f, t) => supabase.from('check_ins')
-          .select('user_id, car_id, work_date, checked_in_at, checked_out_at, switch_reason, prev_car_id, outside_geofence, out_outside_geofence')
+          .select('user_id, car_id, work_date, checked_in_at, first_checked_in_at, checked_out_at, switch_reason, prev_car_id, outside_geofence, out_outside_geofence')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
@@ -167,7 +167,8 @@ export default function Statistics() {
           else row.loaderDays++
         }
         const row = u(c.user_id)
-        const from = new Date(c.checked_in_at).getTime()
+        // az EREDETI kezdés (A→B→A autóváltásnál a sor kezdete új szakaszt kap — a nap ettől nem rövidebb)
+        const from = new Date(c.first_checked_in_at ?? c.checked_in_at).getTime()
         const to = c.checked_out_at ? new Date(c.checked_out_at).getTime() : null
         const span = dayspan.get(key)
         if (!span) dayspan.set(key, { from, to, open: to == null })

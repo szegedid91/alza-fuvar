@@ -23,6 +23,7 @@
 # hogy a Napló/konzol alapján finomítható legyen, mielőtt kényszerítjük.
 /*
   X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(self), geolocation=(self), microphone=()

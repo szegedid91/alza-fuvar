@@ -108,10 +108,15 @@ Deno.serve(async (req: Request) => {
   const { data: subs, error } = await admin.from('push_subscriptions').select('*').in('user_id', userIds)
   if (error) return json({ error: 'A feliratkozások lekérése nem sikerült' }, 500)
 
+  // SEC: a feliratkozás végpontját a kliens adja meg — csak az ismert push-szolgáltatók https címeire küldünk
+  // (különben a függvény tetszőleges címre küldhetne kérést a szerver hálózatából)
+  const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /\.push\.services\.mozilla\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.push\.apple\.com$/, /\.notify\.windows\.com$/]
+  const okEndpoint = (e: string): boolean => { try { const u = new URL(e); return u.protocol === 'https:' && PUSH_HOSTS.some((re) => re.test(u.hostname)) } catch { return false } }
+
   const notif = JSON.stringify({ title, body, url, ...(silent ? { silent: true } : {}), ...(alarm ? { alarm: true } : {}), ...(tag ? { tag } : {}) })
   let sent = 0
   await Promise.all(
-    (subs ?? []).map(async (s: { endpoint: string; p256dh: string; auth: string }) => {
+    (subs ?? []).filter((s: { endpoint: string }) => okEndpoint(s.endpoint)).map(async (s: { endpoint: string; p256dh: string; auth: string }) => {
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, notif)
         sent++
