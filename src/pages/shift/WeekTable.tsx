@@ -59,7 +59,7 @@ export default function WeekTable() {
   // már beírt körök foglaltak (a másik körben szabadon választható)
   const takenRoutes = (date: string, round: number, exceptCarId: string): Map<string, string> => {
     const m = new Map<string, string>()
-    for (const s of shifts ?? []) if (s.work_date === date && (s.round ?? 1) === round && s.route_id && s.car_id !== exceptCarId) m.set(s.route_id, carOf(s.car_id)?.plate ?? '?')
+    for (const t of takenIndex.get(`${date}|${round}`) ?? []) if (t.carId !== exceptCarId) m.set(t.routeId, carOf(t.carId)?.plate ?? '?')
     return m
   }
   const [addedCars, setAddedCars] = useState<string[]>([])
@@ -132,8 +132,25 @@ export default function WeekTable() {
     },
   })
 
-  const shiftAt = (carId: string, date: string, round = 1) =>
-    (shifts ?? []).find((s) => s.car_id === carId && s.work_date === date && (s.round ?? 1) === round)
+  // Gyorsítás: a foglalt járatok nap + kör szerint előre csoportosítva (cellánként csak az adott nap néhány sora)
+  const takenIndex = useMemo(() => {
+    const m = new Map<string, { routeId: string; carId: string }[]>()
+    for (const s of shifts ?? []) {
+      if (!s.route_id) continue
+      const k = `${s.work_date}|${s.round ?? 1}`
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push({ routeId: s.route_id, carId: s.car_id })
+    }
+    return m
+  }, [shifts])
+  // Gyorsítás: beosztás autó + nap + kör szerint indexelve (a tábla minden cellája többször is lekérdezi)
+  const shiftIndex = useMemo(() => {
+    const m = new Map<string, NonNullable<typeof shifts>[number]>()
+    // az ELSŐ találat számít, ahogy eddig a keresésnél is
+    for (const s of shifts ?? []) { const k = `${s.car_id}|${s.work_date}|${s.round ?? 1}`; if (!m.has(k)) m.set(k, s) }
+    return m
+  }, [shifts])
+  const shiftAt = (carId: string, date: string, round = 1) => shiftIndex.get(`${carId}|${date}|${round}`)
 
   // Sor-módok: 2. kör (szezon) és betanuló mező — kézzel bekapcsolva, vagy ha a
   // héten már van ilyen adat az autónál, automatikusan
@@ -158,13 +175,15 @@ export default function WeekTable() {
   }, [shifts, addedCars, cars, categories])
   const rowCarIds = useMemo(() => rowCars.map((c) => c.id), [rowCars])
   // Archivált autó: a régi beosztásai látszanak, de új beosztás nem adható rá
-  const isArchived = (carId: string) => (cars ?? []).find((c) => c.id === carId)?.active === false
+  const carById = useMemo(() => new Map((cars ?? []).map((c) => [c.id, c])), [cars])
+  const categoryById = useMemo(() => new Map((categories ?? []).map((k) => [k.id, k])), [categories])
+  const isArchived = (carId: string) => carById.get(carId)?.active === false
   const categoryName = (id: string | null) => (categories ?? []).find((c) => c.id === id)?.name ?? null
   const crewOf = (carId: string) => crewSizeFor(cars, categories, carId)
   // Körök (1./2. kör, kör-nevek) csak a Box-kategóriás (AlzaBox-töltő) autóknál vannak — XL-nél nincs
   const isBox = (carId: string) => {
-    const car = (cars ?? []).find((c) => c.id === carId)
-    return !!(categories ?? []).find((k) => k.id === car?.category_id)?.box_sheet
+    const catId = carById.get(carId)?.category_id
+    return !!(catId ? categoryById.get(catId) : undefined)?.box_sheet
   }
   // A cella mezői: sofőr, (rakodó — 2 fős kategória vagy ha be van töltve),
   // (betanuló — ha a sor betanuló-módban van vagy be van töltve)
@@ -269,7 +288,7 @@ export default function WeekTable() {
     await qc.invalidateQueries({ queryKey: ['shift-cal'] })
   }
 
-  const carOf = (id: string) => (cars ?? []).find((c) => c.id === id)
+  const carOf = (id: string) => carById.get(id)
 
   // Ragadó nap-fejléc: lefelé görgetve a napok sávja a fejléc alatt marad.
   // (A vízszintesen görgethető táblázatban a sticky thead nem működik, ezért
@@ -547,7 +566,7 @@ export default function WeekTable() {
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
                                           onChange={(e) => void setCell(carId, d, round, 'route_id', e.target.value)}>
                                           <option value="">— járat —</option>
-                                          {activeRoutes.map((r) => { const by = takenRoutes(d, round, carId).get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> })}
+                                          {(() => { const taken = takenRoutes(d, round, carId); return activeRoutes.map((r) => { const by = taken.get(r.id); return <option key={r.id} value={r.id} disabled={!!by}>{by ? `${r.code} — ${by}` : r.code}</option> }) })()}
                                           {s?.route_id && !activeRoutes.some((r) => r.id === s.route_id) && <option value={s.route_id}>{routeCode(s.route_id) ?? '?'}</option>}
                                         </select>
                                       )}

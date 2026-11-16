@@ -29,7 +29,8 @@ export function useInspectionZone(): void {
   const { data: hasInspection } = useQuery({
     queryKey: ['zone-inspection', carId, workDate],
     enabled: !!carId && !!workDate && !checkedOut,
-    refetchInterval: 60_000,
+    // ha az ellenőrzés megvan, nincs mit figyelni tovább (eddig egész nap percenként lekérdezte)
+    refetchInterval: (q) => (q.state.data === true ? false : 60_000),
     queryFn: async () => {
       const { count, error } = await supabase
         .from('car_inspections')

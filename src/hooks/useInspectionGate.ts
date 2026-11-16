@@ -23,14 +23,16 @@ export interface InspectionGateState {
 export function useInspectionGate(carId: string | undefined, date: string): InspectionGateState {
   const { profile } = useAuth()
   const todayQ = useToday()
-  const reasonsQ = useQuery({
-    queryKey: ['inspection-reasons', carId, date, profile?.id],
-    enabled: !!carId && !!profile,
-    queryFn: () => checkInspectionRequirement(carId!, profile!.id, date),
-  })
   const t = todayQ.data
   const waived = !!t?.checkin?.inspection_waived_at
   const blocked = !!t?.car && !t.inspectionDone && !waived
+  // az okok (9-e / sofőrváltás) csak a ZÁRT kapu szövegében látszanak — kész ellenőrzés után nem kérdezzük le
+  // (eddig minden kapu-megnyitás 3 felesleges kérést indított, a Box-lap minden megnyitásakor is)
+  const reasonsQ = useQuery({
+    queryKey: ['inspection-reasons', carId, date, profile?.id],
+    enabled: !!carId && !!profile && blocked,
+    queryFn: () => checkInspectionRequirement(carId!, profile!.id, date),
+  })
   // Amíg a kapu zárva (a munkatárs a vezetői engedélyre vár), 15 mp-enként
   // frissítünk — az engedély után magától kinyílik, nem kell újratölteni.
   const qc = useQueryClient()
