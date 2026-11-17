@@ -12,7 +12,7 @@ import { resolveNames } from '../lib/names'
 import { signedUrl, signedUrls, sha256Hex, thumbPath, isVideoPath } from '../lib/photos'
 import Icon from '../components/Icon'
 import Skeleton from '../components/Skeleton'
-import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber } from '../lib/labels'
+import { inspectionViewLabel, evidenceCategoryLabel, carIssueStatusLabel, formatDateTime, parseHuNumber, memberLabel } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
 
@@ -210,7 +210,7 @@ export default function PhotoReview() {
             <label>Munkatárs</label>
             <select className="select" value={userId} onChange={(e) => setUserId(e.target.value)}>
               <option value="">— összes —</option>
-              {members?.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+              {members?.map((m) => <option key={m.id} value={m.id}>{memberLabel(m)}</option>)}
             </select>
           </div>
         </div>

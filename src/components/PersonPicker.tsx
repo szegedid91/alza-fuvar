@@ -6,7 +6,7 @@ export interface PickerOption { id: string; label: string }
 // koppintásra választ, × törli. A lista fixen pozicionált, így a
 // vízszintesen görgethető táblázat sem vágja le.
 export default function PersonPicker({
-  value, options, placeholder, onChange, disabled, compact, danger, title, fallbackLabel,
+  value, options, placeholder, onChange, disabled, compact, danger, title, fallbackLabel, onNav, inputData,
 }: {
   value: string
   options: PickerOption[]
@@ -19,6 +19,11 @@ export default function PersonPicker({
   compact?: boolean
   danger?: boolean
   title?: string
+  // Táblázatos lépkedés (heti beosztás): Tab = következő, Shift+Tab = előző, Enter = lefelé. A begépelt szöveg
+  // első találatát lépés előtt kiválasztja. Igazzal tér vissza, ha volt hova lépni (különben a Tab a szokásos).
+  onNav?: (dir: 'next' | 'prev' | 'down') => boolean
+  // data-* jellemzők a beviteli mezőre (a lépkedés ezek alapján találja meg a mezőket)
+  inputData?: Record<`data-${string}`, string | number>
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -30,14 +35,17 @@ export default function PersonPicker({
   const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const filtered = q.trim() ? options.filter((o) => norm(o.label).includes(norm(q))) : options
 
-  function openList() {
-    if (disabled) return
+  function place() {
     const r = inputRef.current?.getBoundingClientRect()
     if (r) {
       const width = Math.max(r.width, 230)
       const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8))
       setRect({ top: r.bottom + 4, left, width })
     }
+  }
+  function openList() {
+    if (disabled) return
+    place()
     setQ('')
     setOpen(true)
   }
@@ -83,12 +91,27 @@ export default function PersonPicker({
         spellCheck={false}
         onFocus={openList}
         onClick={() => { if (!open) openList() }}
-        onChange={(e) => { setQ(e.target.value); if (!open) setOpen(true) }}
+        onChange={(e) => { setQ(e.target.value); if (!open) { place(); setOpen(true) } }}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onKeyDown={(e) => {
+          if (onNav && (e.key === 'Tab' || e.key === 'Enter')) {
+            // táblázatos mód: csak a BEGÉPELT szöveg első találatát választja ki (üres Enter nem ír felül semmit), utána lép
+            const typed = open && q.trim() ? filtered[0] : undefined
+            const commit = () => { if (typed && typed.id !== value) onChange(typed.id); setOpen(false); setQ('') }
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+              onNav('down')
+            } else if (onNav(e.shiftKey ? 'prev' : 'next')) {
+              e.preventDefault()
+              commit()
+            } else commit() // nincs hova lépni: a Tab a szokásos módon megy tovább
+            return
+          }
           if (e.key === 'Enter') { e.preventDefault(); if (filtered[0]) pick(filtered[0].id) }
           if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur() }
         }}
+        {...inputData}
       />
       {value && !open && !disabled && (
         <button

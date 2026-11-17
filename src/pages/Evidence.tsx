@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { supabase } from '../lib/supabase'
 import { submitNow } from '../lib/outbox'
-import { evidenceCategoryLabel, formatDateTime, formatHuf, todayISO, parseHuf, isCrewRole } from '../lib/labels'
+import { evidenceCategoryLabel, formatDateTime, formatHuf, todayISO, parseHuf, isCrewRole, memberLabel } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import type { Enums } from '../lib/database.types'
 import PhotoThumb from '../components/PhotoThumb'
@@ -75,7 +75,7 @@ function DeductionFromEvidence({ evidenceId, categoryLabel, existing, names, onC
     <div className="stack" style={{ marginTop: 2 }}>
       <select className="select" value={userId} onChange={(e) => setUserId(e.target.value)}>
         <option value="">— kire —</option>
-        {crew.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+        {crew.map((m) => <option key={m.id} value={m.id}>{memberLabel(m)}</option>)}
       </select>
       <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Összeg (Ft)" />
       {error && <div className="alert error">{error}</div>}

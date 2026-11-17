@@ -9,6 +9,13 @@ export const roleLabel: Record<Enums<'user_role'>, string> = {
   admin: 'Adminisztrátor',
 }
 
+// Név a választólistákban: a vezetők (menedzser, admin) neve után ott a szerepük — így két azonos nevű ember
+// (pl. egy menedzser és egy futár) megkülönböztethető, és látszik, ki nem futár
+export function memberLabel(m: { full_name?: string | null; email?: string | null; role?: string | null }): string {
+  const name = m.full_name || m.email || '—'
+  return m.role === 'admin' ? `${name} (admin)` : m.role === 'manager' ? `${name} (menedzser)` : name
+}
+
 // Napi (beosztás szerinti) szerep címkéje — a shiftből származik, nem a profilból.
 export const dailyRoleLabel = { driver: 'Sofőr', loader: 'Rakodó', trainee: 'Betanuló' } as const
 export type DailyRole = keyof typeof dailyRoleLabel

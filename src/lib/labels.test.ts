@@ -90,3 +90,13 @@ describe('localISODate — helyi nap egy időpontból (LOG-38)', () => {
     expect(localISODate(new Date(2026, 10, 3, 23, 59))).toBe('2026-11-03')
   })
 })
+
+describe('memberLabel', () => {
+  it('a vezetők neve után ott a szerepük, a futáré után nincs semmi', async () => {
+    const { memberLabel } = await import('./labels')
+    expect(memberLabel({ full_name: 'Elter Ferenc', email: 'x@y.hu', role: 'manager' })).toBe('Elter Ferenc (menedzser)')
+    expect(memberLabel({ full_name: 'Elter Ferenc', email: 'x@y.hu', role: 'crew' })).toBe('Elter Ferenc')
+    expect(memberLabel({ full_name: 'Szegedi Dániel', role: 'admin' })).toBe('Szegedi Dániel (admin)')
+    expect(memberLabel({ full_name: null, email: 'a@b.hu' })).toBe('a@b.hu')
+  })
+})

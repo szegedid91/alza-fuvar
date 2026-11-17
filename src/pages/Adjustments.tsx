@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
-import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuf, isCrewRole } from '../lib/labels'
+import { todayISO, formatDate, formatHuf, adjustmentTypeLabel, parseHuf, isCrewRole, memberLabel } from '../lib/labels'
 import { resolveNames } from '../lib/names'
 import { sumAdvances, monthRange, currentYm, buildDayComps, payForDay, rateSetOf, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, type AdvanceBasis } from '../lib/payroll'
 import { readPayBasis, savePayBasis } from '../lib/payBasis'
@@ -234,7 +234,7 @@ export default function Adjustments() {
           <label>Munkatárs</label>
           <select className="select" value={userId} onChange={(e) => setUserId(e.target.value)}>
             <option value="">— válassz —</option>
-            {crew.map((m) => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+            {crew.map((m) => <option key={m.id} value={m.id}>{memberLabel(m)}</option>)}
           </select>
         </div>
         <div className="field">

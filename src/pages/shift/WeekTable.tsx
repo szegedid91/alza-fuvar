@@ -12,15 +12,16 @@ import ConfirmButton from '../../components/ConfirmButton'
 import CarTimeline, { type TimelineEntry } from '../../components/CarTimeline'
 import { resolveNames } from '../../lib/names'
 import { sendPush } from '../../lib/push'
-import { todayISO, formatDate } from '../../lib/labels'
+import { todayISO, formatDate, memberLabel } from '../../lib/labels'
 import { addDays, mondayOf, crewSizeFor, groupByCategory, DAY_NAMES_LONG, weekLabel } from '../../lib/calendar'
 import Icon from '../../components/Icon'
 import CrewDaysCard from '../../components/CrewDaysCard'
 import { crewDayCounts } from '../../lib/crewDayCounts'
 import type { Tables } from '../../lib/database.types'
 import { errMsg } from '../../lib/errors'
-import { nextShiftValues, isEmptyShift } from '../../lib/shiftCell'
+import { nextShiftValues, isEmptyShift, type ShiftPeople } from '../../lib/shiftCell'
 import { useRealtimeInvalidate } from '../../hooks/useRealtime'
+import { navKey, navTarget, type NavDir } from '../../lib/weekNav'
 
 type Car = Tables<'cars'>
 type Shift = Tables<'shifts'>
@@ -63,7 +64,8 @@ export default function WeekTable() {
     return m
   }
   const [addedCars, setAddedCars] = useState<string[]>([])
-  const memberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: m.full_name || m.email || '—' })), [members])
+  // a vezetők neve után ott a szerepük; azonos névnél a futár kerül előre (a begépelt név első találata ő legyen)
+  const memberOptions = useMemo(() => (members ?? []).map((m) => ({ id: m.id, label: memberLabel(m) })).sort((a, b) => a.label.localeCompare(b.label, 'hu')), [members])
   const [error, setError] = useState<string | null>(null)
   const [busyCell, setBusyCell] = useState<string | null>(null)
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
@@ -73,7 +75,7 @@ export default function WeekTable() {
 
   // Más vezető / másik fül módosítása azonnal látsszon (LOG-07)
   useRealtimeInvalidate(currentWorkspaceId, ['shifts'], [['shift-week'], ['shift-cal']])
-  const { data: shifts } = useQuery({
+  const { data: serverShifts, dataUpdatedAt } = useQuery({
     queryKey: ['shift-week', currentWorkspaceId, weekStart],
     enabled: !!currentWorkspaceId,
     queryFn: async () => {
@@ -84,6 +86,35 @@ export default function WeekTable() {
       return (data ?? []) as Shift[]
     },
   })
+  // A most beírt, még mentés alatt álló cellák: AZONNAL látszanak a táblában, a mentés a háttérben megy.
+  // Kulcs: autó|nap|kör. A réteg a szerverről jött hétre kerül rá, így egy közbeeső újratöltés (másik cella mentése,
+  // élő frissítés) sem tünteti el a már beírt nevet; a mentés UTÁNI első friss adat érkezésekor kerül le.
+  const [overlay, setOverlay] = useState<Record<string, { shown: ShiftPeople; isBox: boolean; seq: number; doneAt?: number }>>({})
+  const shifts = useMemo(() => {
+    const keys = Object.keys(overlay)
+    if (!serverShifts || keys.length === 0) return serverShifts
+    const last = addDays(weekStart, 6)
+    const out = [...serverShifts]
+    for (const k of keys) {
+      const [carId, date, r] = k.split('|')
+      if (date < weekStart || date > last) continue
+      const round = Number(r), p = overlay[k]
+      const at = out.findIndex((x) => x.car_id === carId && x.work_date === date && (x.round ?? 1) === round)
+      if (isEmptyShift(p.shown)) { if (at >= 0) out.splice(at, 1) }
+      else if (at >= 0) out[at] = { ...out[at], ...p.shown }
+      else out.push({ id: `tmp-${k}`, workspace_id: currentWorkspaceId, work_date: date, car_id: carId, round, ...p.shown, is_box: p.isBox } as Shift)
+    }
+    return out
+  }, [serverShifts, overlay, weekStart, currentWorkspaceId])
+  useEffect(() => {
+    setOverlay((o) => {
+      const drop = Object.keys(o).filter((k) => o[k].doneAt != null && dataUpdatedAt > o[k].doneAt!)
+      if (drop.length === 0) return o
+      const n = { ...o }
+      for (const k of drop) delete n[k]
+      return n
+    })
+  }, [dataUpdatedAt, overlay])
   // A hét beosztásában szereplő, de már nem választható emberek (letiltva / áthelyezve): a nevük látsszon a cellában,
   // ne üres helyként — a soruk attól még él (bér, export, heti értesítés)
   const memberIdSet = useMemo(() => new Set((members ?? []).map((m) => m.id)), [members])
@@ -244,45 +275,71 @@ export default function WeekTable() {
     return new Set([...carsOf.entries()].filter(([, cs]) => cs.size > 1).map(([k]) => k))
   }, [shifts])
 
-  async function setCell(carId: string, date: string, round: number, field: Field | 'route_id', value: string, extra?: Partial<Pick<Shift, 'driver_id' | 'loader_id' | 'trainee_id'>>) {
-    if (!currentWorkspaceId || !profile) return
-    setError(null)
-    setBusyCell(`${carId}|${date}`)
-    try {
-      // LOG-07: a módosítás alapja a SZERVER aktuális sora, nem a cache — így két vezető / két fül
-      // nem írja felül egymás beírását (korábban mind a négy mező a régi cache-ből ment vissza)
-      const { data: cur, error: curErr } = await supabase.from('shifts').select('id, driver_id, loader_id, trainee_id, route_id')
-        .eq('car_id', carId).eq('work_date', date).eq('round', round).maybeSingle()
-      if (curErr) throw curErr
-      const next = nextShiftValues(cur, field, value, extra)
-      // LOG-28: járat személy nélkül nem menthető — ne tűnjön el csendben
-      if (field === 'route_id' && value && isEmptyShift(next)) { setError('Előbb válassz sofőrt vagy rakodót, utána a járatot.'); return }
-      if (isEmptyShift(next)) {
-        // Minden mező üres → a napi (köri) beosztás törlődik
-        if (cur) {
-          const { error } = await supabase.from('shifts').delete().eq('id', cur.id)
-          if (error) throw error
-        }
-      } else if (cur) {
-        const { error } = await supabase.from('shifts').update(next).eq('id', cur.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('shifts').upsert({
-          workspace_id: currentWorkspaceId, work_date: date, car_id: carId, round,
-          ...next, created_by: profile.id,
-          // vegyes autó: a nap módja a sorra kerül (kategóriás autónál a szerver állítja be)
-          ...(isMixed(carId) ? { is_box: round === 2 || dayIsBox(carId, date) } : {}),
-        }, { onConflict: 'car_id,work_date,round' })
+  // Egy cella mentése a szerverre. A módosítás alapja a SZERVER aktuális sora, nem a cache (LOG-07) — így két vezető /
+  // két fül nem írja felül egymás beírását (korábban mind a négy mező a régi cache-ből ment vissza).
+  async function saveCell(carId: string, date: string, round: number, field: Field | 'route_id', value: string, extra: Partial<Pick<Shift, 'driver_id' | 'loader_id' | 'trainee_id'>> | undefined, mixedBox: boolean | undefined, ws: string, uid: string) {
+    const { data: cur, error: curErr } = await supabase.from('shifts').select('id, driver_id, loader_id, trainee_id, route_id')
+      .eq('car_id', carId).eq('work_date', date).eq('round', round).maybeSingle()
+    if (curErr) throw curErr
+    const next = nextShiftValues(cur, field, value, extra)
+    // LOG-28: járat személy nélkül nem menthető — ne tűnjön el csendben
+    if (field === 'route_id' && value && isEmptyShift(next)) throw new Error('Előbb válassz sofőrt vagy rakodót, utána a járatot.')
+    if (isEmptyShift(next)) {
+      // Minden mező üres → a napi (köri) beosztás törlődik
+      if (cur) {
+        const { error } = await supabase.from('shifts').delete().eq('id', cur.id)
         if (error) throw error
       }
-      await qc.invalidateQueries({ queryKey: ['shift-week'] })
-      await qc.invalidateQueries({ queryKey: ['shift-cal'] })
-    } catch (e) {
-      const msg = errMsg(e, 'Mentési hiba')
-      setError(/ROUTE_TAKEN/.test(msg) ? msg.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem menthető: ') : msg)
-    } finally {
-      setBusyCell(null)
+    } else if (cur) {
+      const { error } = await supabase.from('shifts').update(next).eq('id', cur.id)
+      if (error) throw error
+    } else {
+      const { error } = await supabase.from('shifts').upsert({
+        workspace_id: ws, work_date: date, car_id: carId, round,
+        ...next, created_by: uid,
+        // vegyes autó: a nap módja a sorra kerül (kategóriás autónál a szerver állítja be)
+        ...(mixedBox != null ? { is_box: mixedBox } : {}),
+      }, { onConflict: 'car_id,work_date,round' })
+      if (error) throw error
     }
+  }
+
+  // A beírt név AZONNAL megjelenik a táblában (lásd az `overlay` réteget), a mentés a háttérben megy — korábban a szerver
+  // olvasása, írása és a hét újratöltése mind a név megjelenése ELŐTT futott le, lassú neten másodpercekig üres maradt a mező.
+  // Egy cella mentései sorban futnak (nem előzik meg egymást); hibánál a réteg lekerül, és a valódi állapot látszik.
+  const saveQueue = useRef(new Map<string, Promise<void>>())
+  const editSeq = useRef(0)
+  function setCell(carId: string, date: string, round: number, field: Field | 'route_id', value: string, extra?: Partial<Pick<Shift, 'driver_id' | 'loader_id' | 'trainee_id'>>): Promise<void> {
+    if (!currentWorkspaceId || !profile) return Promise.resolve()
+    const ws = currentWorkspaceId, uid = profile.id
+    setError(null)
+    const shown = nextShiftValues(shiftAt(carId, date, round) ?? null, field, value, extra)
+    if (field === 'route_id' && value && isEmptyShift(shown)) { setError('Előbb válassz sofőrt vagy rakodót, utána a járatot.'); return Promise.resolve() }
+    const mixedBox = isMixed(carId) ? round === 2 || dayIsBox(carId, date) : undefined
+    const slot = `${carId}|${date}|${round}`
+    const seq = ++editSeq.current
+    setOverlay((o) => ({ ...o, [slot]: { shown, isBox: mixedBox ?? isBox(carId), seq } }))
+    const key = `${carId}|${date}`
+    const run: Promise<void> = (saveQueue.current.get(key) ?? Promise.resolve())
+      .then(() => saveCell(carId, date, round, field, value, extra, mixedBox, ws, uid))
+      .then(() => true, (e) => {
+        const msg = errMsg(e, 'Mentési hiba')
+        setError(/ROUTE_TAKEN/.test(msg) ? msg.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem menthető: ') : msg)
+        return false
+      })
+      .then(async (ok) => {
+        // ha közben újabb beírás jött ugyanerre a mezőre, az ő rétege marad (az ő mentése zárja le)
+        setOverlay((o) => {
+          if (o[slot]?.seq !== seq) return o
+          if (ok) return { ...o, [slot]: { ...o[slot], doneAt: Date.now() } }
+          const n = { ...o }; delete n[slot]; return n
+        })
+        if (saveQueue.current.get(key) === run) saveQueue.current.delete(key)
+        await qc.invalidateQueries({ queryKey: ['shift-week'] })
+        await qc.invalidateQueries({ queryKey: ['shift-cal'] })
+      })
+    saveQueue.current.set(key, run)
+    return run
   }
 
   // Vegyes autó: a nap átállítása Box ↔ XL. Ha a napra már van beosztás, a sor(ok)ra mentjük;
@@ -333,6 +390,22 @@ export default function WeekTable() {
   }
 
   const carOf = (id: string) => carById.get(id)
+
+  // Billentyűs lépkedés a névmezők között, mint egy táblázatkezelőben: Tab = következő nap, Shift+Tab = előző nap,
+  // Enter = az alatta lévő név. (A névmezők mentés közben sem zárolnak, így a fókusz nem vész el.)
+  const navInputs = () => [...(scrollRef.current?.querySelectorAll<HTMLInputElement>('input[data-wk]') ?? [])]
+  function handleNav(key: string, dir: NavDir): boolean {
+    const inputs = navInputs()
+    const slots = inputs.filter((i) => !i.disabled || i.dataset.wk === key).map((i) => {
+      const [car, day, round, field] = (i.dataset.wk ?? '').split('|')
+      return { key: i.dataset.wk ?? '', car, day: Number(day), round: Number(round), field }
+    })
+    const target = navTarget(slots, key, dir, days.length)
+    const el = target ? inputs.find((i) => i.dataset.wk === target) : null
+    if (!el) return false
+    el.focus()
+    return true
+  }
 
   // Ragadó nap-fejléc: lefelé görgetve a napok sávja a fejléc alatt marad.
   // (A vízszintesen görgethető táblázatban a sticky thead nem működik, ezért
@@ -588,7 +661,7 @@ export default function WeekTable() {
                       </tr>
                     )}
                   <tr style={{ height: rowH(carId) }}>
-                    {days.map((d) => {
+                    {days.map((d, di) => {
                       const busy = busyCell === `${carId}|${d}`
                       const rowBg = rowIdx % 2 ? 'var(--bg-elev-2)' : 'var(--bg)'
                       const rounds = roundsOn(carId, d)
@@ -656,6 +729,8 @@ export default function WeekTable() {
                                         danger={dup}
                                         title={dup ? 'Ütközés: aznap másik autóra is be van osztva!' : FIELD_LABEL[field]}
                                         onChange={(id) => void setCell(carId, d, round, field, id)}
+                                        inputData={{ 'data-wk': navKey(carId, di, round, field) }}
+                                        onNav={(dir) => handleNav(navKey(carId, di, round, field), dir)}
                                       />
                                     </div>
                                   )
@@ -753,7 +828,7 @@ export default function WeekTable() {
         </select>
         <div className="tiny muted">
           A cella azonnal mentődik. Piros keret = az ember aznap másik autóra is be van osztva.
-          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>betanuló</strong> mező, Box-autónál <strong>2. kör</strong> (szezon, akár más emberrel). Box-autónál a 2. körnél a „mint az 1.” gomb átmásolja az 1. kör emberét, a kör neve (R, G, I…) a kis legördülőből választható. <strong>Vegyes</strong> (kategória nélküli) autónál a cella tetején naponként váltható, hogy aznap <strong>Box</strong> vagy <strong>XL</strong>: Box napon van járat és 2. kör. Görgethető oldalra →
+          Billentyűzettel: <strong>Tab</strong> a következő napra lép, <strong>Shift+Tab</strong> vissza, <strong>Enter</strong> az alatta lévő névre — a begépelt név első találatát közben kiválasztja. Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>betanuló</strong> mező, Box-autónál <strong>2. kör</strong> (szezon, akár más emberrel). Box-autónál a 2. körnél a „mint az 1.” gomb átmásolja az 1. kör emberét, a kör neve (R, G, I…) a kis legördülőből választható. <strong>Vegyes</strong> (kategória nélküli) autónál a cella tetején naponként váltható, hogy aznap <strong>Box</strong> vagy <strong>XL</strong>: Box napon van járat és 2. kör. Görgethető oldalra →
         </div>
       </div>
 
