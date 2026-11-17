@@ -157,7 +157,7 @@ export default function WeekTable() {
   const [roundCars, setRoundCars] = useState<string[]>([])
   const [traineeCars, setTraineeCars] = useState<string[]>([])
   // LOG-27: a meglévő 2. körös sorok akkor is látszanak, ha az autó már nem Box-kategóriás
-  const hasRound2 = (carId: string) => (isBox(carId) && roundCars.includes(carId)) || (shifts ?? []).some((s) => s.car_id === carId && s.round === 2)
+  const hasRound2 = (carId: string) => ((isBox(carId) || isMixed(carId)) && roundCars.includes(carId)) || (shifts ?? []).some((s) => s.car_id === carId && s.round === 2)
   const hasTrainee = (carId: string) => traineeCars.includes(carId) || (shifts ?? []).some((s) => s.car_id === carId && !!s.trainee_id)
   const round2Count = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && s.round === 2).length
   const traineeCount = (carId: string) => (shifts ?? []).filter((s) => s.car_id === carId && !!s.trainee_id).length
@@ -185,11 +185,26 @@ export default function WeekTable() {
     const catId = carById.get(carId)?.category_id
     return !!(catId ? categoryById.get(catId) : undefined)?.box_sheet
   }
+  // Vegyes autó: nincs kategóriája, mert hol Boxban, hol XL-ben dolgozik — a nap módját (Box / XL) a vezető
+  // naponként adja meg, és a beosztás sorára mentjük (shifts.is_box). Box napon van járat és 2. kör, XL napon páros.
+  const isMixed = (carId: string) => { const c = carById.get(carId); return !!c && !(c.category_id && categoryById.has(c.category_id)) }
+  // Amíg a napra nincs beosztás (nincs sor, amire a mód menthető), a választás itt él
+  const [pendingBox, setPendingBox] = useState<string[]>([])
+  const dayIsBox = (carId: string, date: string): boolean => {
+    if (!isMixed(carId)) return isBox(carId)
+    const r1 = shiftAt(carId, date, 1), r2 = shiftAt(carId, date, 2)
+    if (r1 || r2) return !!(r1?.is_box || r2?.is_box)
+    return pendingBox.includes(`${carId}|${date}`)
+  }
+  // Az adott napon látszó körök: vegyes autónál a 2. kör csak Box napon (vagy ha már van benne adat)
+  const roundsOn = (carId: string, date: string): number[] =>
+    hasRound2(carId) && (!isMixed(carId) || dayIsBox(carId, date) || !!shiftAt(carId, date, 2)) ? [1, 2] : [1]
   // A cella mezői: sofőr, (rakodó — 2 fős kategória vagy ha be van töltve),
   // (betanuló — ha a sor betanuló-módban van vagy be van töltve)
-  const fieldsOf = (carId: string, s?: Shift): Field[] => {
+  const fieldsOf = (carId: string, s?: Shift, date?: string): Field[] => {
     const f: Field[] = ['driver_id']
-    if (crewOf(carId) === 2 || s?.loader_id) f.push('loader_id')
+    const crew = isMixed(carId) && date ? (dayIsBox(carId, date) ? 1 : 2) : crewOf(carId)
+    if (crew === 2 || s?.loader_id) f.push('loader_id')
     if (hasTrainee(carId) || s?.trainee_id) f.push('trainee_id')
     return f
   }
@@ -197,8 +212,8 @@ export default function WeekTable() {
   // sormagassága különben szétcsúszna)
   const rowH = (carId: string) => {
     const rounds = hasRound2(carId) ? 2 : 1
-    const maxFields = Math.max(...days.map((d) => Math.max(...[1, 2].map((r) => fieldsOf(carId, shiftAt(carId, d, r)).length))))
-    const header = rounds > 1 || (isBox(carId) && activeRoutes.length > 0) ? ROUND_LABEL_H + 10 : 0
+    const maxFields = Math.max(...days.map((d) => Math.max(...[1, 2].map((r) => fieldsOf(carId, shiftAt(carId, d, r), d).length))))
+    const header = rounds > 1 || isMixed(carId) || (isBox(carId) && activeRoutes.length > 0) ? ROUND_LABEL_H + 10 : 0
     return rounds * (maxFields * FIELD_H + BLOCK_PAD + header) + (rounds - 1) * 6
   }
   // Hány egymást követő sor tartozik ugyanabba a kategóriába (rowSpan-hoz)
@@ -255,6 +270,8 @@ export default function WeekTable() {
         const { error } = await supabase.from('shifts').upsert({
           workspace_id: currentWorkspaceId, work_date: date, car_id: carId, round,
           ...next, created_by: profile.id,
+          // vegyes autó: a nap módja a sorra kerül (kategóriás autónál a szerver állítja be)
+          ...(isMixed(carId) ? { is_box: round === 2 || dayIsBox(carId, date) } : {}),
         }, { onConflict: 'car_id,work_date,round' })
         if (error) throw error
       }
@@ -263,6 +280,32 @@ export default function WeekTable() {
     } catch (e) {
       const msg = errMsg(e, 'Mentési hiba')
       setError(/ROUTE_TAKEN/.test(msg) ? msg.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem menthető: ') : msg)
+    } finally {
+      setBusyCell(null)
+    }
+  }
+
+  // Vegyes autó: a nap átállítása Box ↔ XL. Ha a napra már van beosztás, a sor(ok)ra mentjük;
+  // XL-re váltáskor a járat lekerül, a 2. kört előbb ki kell üríteni.
+  async function setDayMode(carId: string, date: string, box: boolean) {
+    if (!currentWorkspaceId) return
+    setError(null)
+    const key = `${carId}|${date}`
+    setBusyCell(key)
+    try {
+      const { data: rows, error: rErr } = await supabase.from('shifts').select('id, round').eq('car_id', carId).eq('work_date', date)
+      if (rErr) throw rErr
+      if (!box && (rows ?? []).some((r) => r.round === 2)) { setError('Előbb ürítsd ki a 2. kör mezőit ezen a napon, utána állíthatod XL-re.'); return }
+      if ((rows ?? []).length > 0) {
+        const { error } = await supabase.from('shifts').update(box ? { is_box: true } : { is_box: false, route_id: null })
+          .in('id', (rows ?? []).map((r) => r.id))
+        if (error) throw error
+      }
+      setPendingBox((p) => (box ? [...p.filter((x) => x !== key), key] : p.filter((x) => x !== key)))
+      await qc.invalidateQueries({ queryKey: ['shift-week'] })
+      await qc.invalidateQueries({ queryKey: ['shift-cal'] })
+    } catch (e) {
+      setError(errMsg(e, 'Mentési hiba'))
     } finally {
       setBusyCell(null)
     }
@@ -279,6 +322,7 @@ export default function WeekTable() {
     const rows = prev!.map((s) => ({
       workspace_id: currentWorkspaceId, work_date: addDays(s.work_date, 7), car_id: s.car_id, round: s.round ?? 1,
       driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, route_id: s.route_id, created_by: profile.id,
+      is_box: s.is_box, // vegyes autónál a nap módja is átjön (kategóriás autónál a szerver úgyis a kategóriából állítja)
     }))
     const { error } = await supabase.from('shifts').upsert(rows, { onConflict: 'car_id,work_date,round' })
     // LOG-29: a trigger üzenete (ROUTE_TAKEN) itt is olvashatóan
@@ -494,8 +538,8 @@ export default function WeekTable() {
                   )}
                 <tr style={{ height: rowH(carId) }}>
                   {isGroupStart(rowIdx) && (
-                    <td className="wk-catcol" rowSpan={groupSpan(rowIdx)} title={categoryName(rowCars[rowIdx].category_id) ?? 'Nincs kategória'}>
-                      {categoryName(rowCars[rowIdx].category_id) ?? '—'}
+                    <td className="wk-catcol" rowSpan={groupSpan(rowIdx)} title={categoryName(rowCars[rowIdx].category_id) ?? 'Vegyes autó (nincs kategóriája): naponként állítható Box vagy XL'}>
+                      {categoryName(rowCars[rowIdx].category_id) ?? 'Vegyes'}
                     </td>
                   )}
                   <td className="wk-plate" style={{ background: rowIdx % 2 ? 'var(--bg-elev-2)' : 'var(--bg)', padding: 0 }}>
@@ -547,20 +591,32 @@ export default function WeekTable() {
                     {days.map((d) => {
                       const busy = busyCell === `${carId}|${d}`
                       const rowBg = rowIdx % 2 ? 'var(--bg-elev-2)' : 'var(--bg)'
-                      const rounds = hasRound2(carId) ? [1, 2] : [1]
+                      const rounds = roundsOn(carId, d)
+                      const mixed = isMixed(carId)
+                      const boxDay = dayIsBox(carId, d)
                       return (
                         <td key={d} style={{ verticalAlign: 'top', background: d === today ? 'rgba(20,184,166,.10)' : rowBg, borderRadius: 8, padding: 4, opacity: busy ? 0.55 : 1 }}>
                           {rounds.map((round) => {
                             const s = shiftAt(carId, d, round)
                             // 1 fős kategória: csak sofőr-mező (a rakodó/betanuló akkor is látszik, ha be van töltve, hogy törölhető legyen)
-                            const fields = fieldsOf(carId, s)
+                            const fields = fieldsOf(carId, s, d)
                             return (
                               <div key={round} style={{ marginBottom: round < rounds.length ? 6 : 0 }}>
-                                {(rounds.length > 1 || (isBox(carId) && activeRoutes.length > 0)) && (
+                                {(rounds.length > 1 || mixed || (boxDay && activeRoutes.length > 0)) && (
                                   <div className="between" style={{ gap: 4, minHeight: ROUND_LABEL_H + 10, marginBottom: 2 }}>
-                                    <span className="tiny muted" style={{ fontSize: 9, fontWeight: 700, paddingLeft: 2, whiteSpace: 'nowrap' }}>{rounds.length > 1 ? `${round}. kör` : 'járat'}</span>
+                                    {mixed && round === 1 ? (
+                                      // Vegyes autó: a nap módja egy koppintással vált (Box: járat + 2. kör, XL: páros)
+                                      <button type="button" disabled={busy || isArchived(carId)} aria-pressed={boxDay}
+                                        title={boxDay ? 'Box nap — koppints, ha ezen a napon XL-ben megy' : 'XL nap — koppints, ha ezen a napon Boxban megy'}
+                                        style={{ border: '1px solid var(--border)', background: boxDay ? 'var(--primary-ghost)' : 'transparent', color: boxDay ? 'var(--primary)' : 'var(--text-dim)', borderRadius: 6, height: 20, padding: '0 6px', fontSize: 9, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                        onClick={() => void setDayMode(carId, d, !boxDay)}>
+                                        {boxDay ? (rounds.length > 1 ? 'Box · 1. kör' : 'Box') : 'XL'}
+                                      </button>
+                                    ) : (
+                                      <span className="tiny muted" style={{ fontSize: 9, fontWeight: 700, paddingLeft: 2, whiteSpace: 'nowrap' }}>{rounds.length > 1 ? `${round}. kör` : 'járat'}</span>
+                                    )}
                                     <span className="row" style={{ gap: 3 }}>
-                                      {isBox(carId) && activeRoutes.length > 0 && (
+                                      {boxDay && activeRoutes.length > 0 && (
                                         // Melyik járatot viszi (R, G, I…)
                                         <select className="select" value={s?.route_id ?? ''} disabled={busy || isArchived(carId)} title="Járat"
                                           style={{ minHeight: 20, height: 20, padding: '0 16px 0 4px', fontSize: 10, borderRadius: 6, width: 'auto', maxWidth: 70, fontWeight: 700 }}
@@ -657,7 +713,7 @@ export default function WeekTable() {
                   const tr = hasTrainee(cid); const nt = traineeCount(cid)
                   return (
                     <div className="stack" style={{ gap: 6 }}>
-                      {isBox(cid) && <button type="button" className={`btn sm ${r2 ? 'secondary' : 'ghost'}`} disabled={rowBusy || (r2 && n2 > 0)}
+                      {(isBox(cid) || isMixed(cid)) && <button type="button" className={`btn sm ${r2 ? 'secondary' : 'ghost'}`} disabled={rowBusy || (r2 && n2 > 0)}
                         title={r2 && n2 > 0 ? 'Előbb üresítsd ki a 2. kör mezőit' : undefined}
                         onClick={() => setRoundCars((p) => (r2 ? p.filter((x) => x !== cid) : [...p, cid]))}>
                         <Icon name="repeat" size={14} />{r2 ? `2. kör: bekapcsolva${n2 ? ` (${n2} nap)` : ''}` : '2. kör bekapcsolása (szezon)'}
@@ -697,7 +753,7 @@ export default function WeekTable() {
         </select>
         <div className="tiny muted">
           A cella azonnal mentődik. Piros keret = az ember aznap másik autóra is be van osztva.
-          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>betanuló</strong> mező, Box-autónál <strong>2. kör</strong> (szezon, akár más emberrel). Box-autónál a 2. körnél a „mint az 1.” gomb átmásolja az 1. kör emberét, a kör neve (R, G, I…) a kis legördülőből választható. Görgethető oldalra →
+          Mező kiürítése törli a napi beosztást. A rendszámra koppintva: autó cseréje / kivétele, <strong>betanuló</strong> mező, Box-autónál <strong>2. kör</strong> (szezon, akár más emberrel). Box-autónál a 2. körnél a „mint az 1.” gomb átmásolja az 1. kör emberét, a kör neve (R, G, I…) a kis legördülőből választható. <strong>Vegyes</strong> (kategória nélküli) autónál a cella tetején naponként váltható, hogy aznap <strong>Box</strong> vagy <strong>XL</strong>: Box napon van járat és 2. kör. Görgethető oldalra →
         </div>
       </div>
 

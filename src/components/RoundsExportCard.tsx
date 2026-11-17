@@ -28,14 +28,14 @@ export default function RoundsExportCard({ ym }: { ym: string }) {
       const ws = currentWorkspaceId!
       const [routesRes, shifts] = await Promise.all([
         supabase.from('route_names').select('id, code, active, is_relief').eq('workspace_id', ws),
-        fetchAll((f, t) => supabase.from('shifts').select('work_date, round, route_id, driver_id, loader_id, car:cars(category:car_categories(box_sheet))')
+        fetchAll((f, t) => supabase.from('shifts').select('work_date, round, route_id, driver_id, loader_id, is_box, car:cars(category:car_categories(box_sheet))')
           .eq('workspace_id', ws).gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
       ])
       if (routesRes.error) throw routesRes.error
       const rows: RoundShift[] = (shifts ?? []).map((s) => ({
         work_date: s.work_date, round: s.round, route_id: s.route_id,
         staffed: !!(s.driver_id || s.loader_id),
-        isBox: !!(s.car as unknown as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet,
+        isBox: s.is_box ?? !!(s.car as unknown as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet,
       }))
       return { routes: routesRes.data ?? [], shifts: rows }
     },

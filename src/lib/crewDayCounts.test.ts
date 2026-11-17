@@ -22,3 +22,15 @@ describe('crewDayCounts', () => {
     expect(crewDayCounts([], members, isBox).map((x) => x.name)).toEqual(['Anna', 'Béla', 'z@x.hu'])
   })
 })
+
+describe('crewDayCounts — vegyes autó', () => {
+  it('a beosztás sorának jelölése dönt, az autó kategóriája csak tartalék', () => {
+    const members = [{ id: 'u1', role: 'crew', full_name: 'Anna', email: null }]
+    const r = crewDayCounts([
+      { work_date: '2026-11-16', car_id: 'vegyes', driver_id: 'u1', loader_id: null, trainee_id: null, is_box: true },
+      { work_date: '2026-11-17', car_id: 'vegyes', driver_id: 'u1', loader_id: null, trainee_id: null, is_box: false },
+      { work_date: '2026-11-18', car_id: 'box', driver_id: 'u1', loader_id: null, trainee_id: null },
+    ], members, (id) => id === 'box')
+    expect(r[0]).toMatchObject({ count: 3, box: 2, xl: 1 })
+  })
+})

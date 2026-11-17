@@ -115,7 +115,7 @@ export default function ShiftEditor() {
   // Havi összesítő: ki hány napot dolgozott (összes, Box, XL, betanuló) — a heti nézettel közös számítás
   const monthCounts = useMemo(() => {
     const isBoxCar = new Map((cars ?? []).map((c) => [c.id, !!c.category?.box_sheet]))
-    return crewDayCounts(cal?.shifts ?? [], members ?? [], (id) => !!isBoxCar.get(id))
+    return crewDayCounts(cal?.shifts ?? [], members ?? [], (id) => !!isBoxCar.get(id)) // a sor saját is_box jelölése dönt, ez csak tartalék
   }, [cal, members, cars])
 
   const shiftsByDay = useMemo(() => {

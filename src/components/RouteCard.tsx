@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useRoutes } from '../hooks/useRoutes'
-import { useToday } from '../hooks/useToday'
+import { useToday, todayIsBox } from '../hooks/useToday'
 import { useRouteStops, type RouteStop } from '../hooks/useRouteStops'
 import { useRealtimeInvalidate } from '../hooks/useRealtime'
 import { useWorkDay } from '../hooks/useWorkDay'
@@ -41,7 +41,7 @@ export default function RouteCard({ active = true }: { active?: boolean }) {
   const { data: routes } = useRoutes()
   const navApp: NavApp = getNavApp()
   const { data: today } = useToday()
-  const needsBoxSheet = !!today?.car?.category?.box_sheet
+  const needsBoxSheet = !!today?.car && todayIsBox(today)
   // A vezető módosítása (boxok, sorrend) és a páros másik tagjának lépése azonnal ideér
   useRealtimeInvalidate(currentWorkspaceId, ['route_stops', 'route_runs', 'shifts', 'box_sheet_stops'], [['route-stops'], ['route-runs'], ['my-routes-today'], ['box-sheet-filled']])
   const navigate = useNavigate()

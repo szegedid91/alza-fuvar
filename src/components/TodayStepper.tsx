@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { useToday } from '../hooks/useToday'
+import { useToday, todayIsBox } from '../hooks/useToday'
 import { useInspectionGate } from '../hooks/useInspectionGate'
 import Icon, { type IconName } from './Icon'
 import ParkCarButton, { useSettledToday } from './ParkCarButton'
@@ -56,7 +56,7 @@ export default function TodayStepper() {
   })
 
   // Box-lap (csak AlzaBox-szállító autónál): a mai lap állapota
-  const needsBoxSheet = !!car?.category?.box_sheet
+  const needsBoxSheet = !!car && todayIsBox(today)
   const { data: boxSheet } = useQuery({
     queryKey: ['box-sheet-status', car?.id, date],
     enabled: needsBoxSheet,

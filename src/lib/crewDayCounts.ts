@@ -1,7 +1,7 @@
 // Fejenkénti napszám a beosztásból (hét / hónap): összes, Box-os, XL-es és betanuló napok.
 // Egy nap a Box-ba és az XL-be is beleszámít, ha az ember aznap mindkét típusú autón volt;
 // az „összes” a különböző napok száma. Betanuló: amikor betanulóként volt beosztva.
-export interface CrewShiftLike { work_date: string; car_id: string; driver_id: string | null; loader_id: string | null; trainee_id: string | null }
+export interface CrewShiftLike { work_date: string; car_id: string; driver_id: string | null; loader_id: string | null; trainee_id: string | null; is_box?: boolean | null }
 export interface CrewMemberLike { id: string; role: string | null; full_name: string | null; email: string | null }
 export interface CrewDayCount { id: string; name: string; count: number; box: number; xl: number; trainee: number }
 
@@ -13,7 +13,8 @@ export function crewDayCounts(shifts: CrewShiftLike[], members: CrewMemberLike[]
       if (!byUser.has(uid)) byUser.set(uid, { all: new Set(), box: new Set(), xl: new Set(), trainee: new Set() })
       const u = byUser.get(uid)!
       u.all.add(s.work_date)
-      ;(isBoxCar(s.car_id) ? u.box : u.xl).add(s.work_date)
+      // a beosztás sorára mentett jelölés dönt (vegyes autó: naponként Box vagy XL); az autó kategóriája csak tartalék
+      ;((s.is_box ?? isBoxCar(s.car_id)) ? u.box : u.xl).add(s.work_date)
       if (uid === s.trainee_id) u.trainee.add(s.work_date)
     }
   }

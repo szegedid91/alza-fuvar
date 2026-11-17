@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { useToday } from '../hooks/useToday'
+import { useToday, todayIsBox } from '../hooks/useToday'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import RequireCheckin from '../components/RequireCheckin'
 import StopPhotos, { type StopPhotosHandle } from '../components/StopPhotos'
@@ -114,7 +114,7 @@ function CrewSheet({ car, date, closed = false }: { car: Car; date: string; clos
   const { currentWorkspaceId } = useWorkspace()
   const { data: today } = useToday()
   const category = today?.car?.category ?? null
-  const needsSheet = !!category?.box_sheet
+  const needsSheet = todayIsBox(today)
 
   // A mai lap: ha még nincs, létrehozzuk (egy ember – egy nap – egy lap)
   const sheetQ = useQuery({
