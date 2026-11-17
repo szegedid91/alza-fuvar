@@ -15,8 +15,9 @@ import { shiftMonth, monthTitle } from '../lib/calendar'
 import { normalize } from '../lib/boxSheet'
 import type { Tables } from '../lib/database.types'
 import { errMsg } from '../lib/errors'
+import XlResultsCard from '../components/XlResultsCard'
 
-interface WorkspaceRate { id: string; name: string; driver: number; loader: number; trainee: number; box: number; boxTrainee: number; box2: number }
+interface WorkspaceRate { id: string; name: string; driver: number; loader: number; trainee: number; box: number; boxTrainee: number; box2: number; xlBonusOver: number; xlBonus: number }
 
 // Havi zárás: zárolt hónapra a DB-trigger tiltja a bér-befolyásoló írásokat
 // (előleg/levonás, beosztás, becsekkolás, tankolás). Csak admin zárolhat/oldhat.
@@ -89,25 +90,28 @@ export default function Payroll() {
   const range = useMemo(() => monthRange(ym), [ym])
 
   const { data, isLoading, isError, error: loadError } = useQuery({
-    queryKey: ['payroll', ym, basis, today, 'v6'],
+    queryKey: ['payroll', ym, basis, today, 'v7'],
     queryFn: async () => {
       // admin minden tenantot lát; a hónap-szintű lekérdezések lapozva jönnek
       // (1000 sor felett is teljesek), és minden hiba dob — csonka adatból nem számolunk bért
-      const [profilesRes, workspacesRes, rateHistRes, checkins, shifts, adj] = await Promise.all([
+      const [profilesRes, workspacesRes, rateHistRes, checkins, shifts, adj, xlResults] = await Promise.all([
         // Státusz-szűrő NÉLKÜL: a hónap közben letiltott munkatársnak is jár a
         // ledolgozott napjaiért a bér — csak a bér nélküli inaktívakat hagyjuk ki lent
         supabase.from('profiles').select('*, workspace:workspaces!profiles_workspace_id_fkey(name)'),
-        supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate').order('name'),
+        supabase.from('workspaces').select('id, name, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate, xl_bonus_over, xl_bonus_amount').order('name'),
         // A hónapra ÉRVÉNYES napidíjak: minden olyan sor, ami a hónap kezdetéig
         // hatályba lépett — munkaterületenként a legutolsó számít
         supabase.from('workspace_rate_history')
-          .select('workspace_id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate')
+          .select('workspace_id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate, xl_bonus_over, xl_bonus_amount')
           .lte('valid_from', range.start).order('valid_from'),
         fetchAll((f, t) => supabase.from('check_ins').select('user_id, work_date, workspace_id')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id, round, is_box, car:cars(category:car_categories(box_sheet))')
+        fetchAll((f, t) => supabase.from('shifts').select('driver_id, loader_id, trainee_id, work_date, workspace_id, round, is_box, car_id, car:cars(category:car_categories(box_sheet))')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('adjustments').select('user_id, type, amount, work_date, paid_on, reason')
+          .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
+        // XL sikerdíj: az autók napi sikeres címszámai
+        fetchAll((f, t) => supabase.from('xl_day_results').select('car_id, work_date, success_count')
           .gte('work_date', range.start).lt('work_date', range.endExclusive).order('id').range(f, t)),
       ])
       if (profilesRes.error) throw profilesRes.error
@@ -120,16 +124,16 @@ export default function Payroll() {
       if (rateHistRes.error) throw rateHistRes.error
       const rates: Record<string, WorkspaceRate> = {}
       for (const w of workspaces ?? []) {
-        rates[w.id] = { id: w.id, name: w.name, driver: Number(w.driver_day_rate ?? 0), loader: Number(w.loader_day_rate ?? 0), trainee: Number(w.trainee_day_rate ?? 0), box: Number(w.box_day_rate ?? 0), boxTrainee: Number(w.box_trainee_day_rate ?? 0), box2: Number(w.box_round2_day_rate ?? 0) }
+        rates[w.id] = { id: w.id, name: w.name, driver: Number(w.driver_day_rate ?? 0), loader: Number(w.loader_day_rate ?? 0), trainee: Number(w.trainee_day_rate ?? 0), box: Number(w.box_day_rate ?? 0), boxTrainee: Number(w.box_trainee_day_rate ?? 0), box2: Number(w.box_round2_day_rate ?? 0), xlBonusOver: Number(w.xl_bonus_over ?? 0), xlBonus: Number(w.xl_bonus_amount ?? 0) }
       }
       // valid_from szerint növekvő sorrendben jön: az utolsó illeszkedő nyer
       for (const r of rateHistRes.data ?? []) {
         const ws = rates[r.workspace_id]
-        if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0); ws.trainee = Number(r.trainee_day_rate ?? 0); ws.box = Number(r.box_day_rate ?? 0); ws.boxTrainee = Number(r.box_trainee_day_rate ?? 0); ws.box2 = Number(r.box_round2_day_rate ?? 0) }
+        if (ws) { ws.driver = Number(r.driver_day_rate ?? 0); ws.loader = Number(r.loader_day_rate ?? 0); ws.trainee = Number(r.trainee_day_rate ?? 0); ws.box = Number(r.box_day_rate ?? 0); ws.boxTrainee = Number(r.box_trainee_day_rate ?? 0); ws.box2 = Number(r.box_round2_day_rate ?? 0); ws.xlBonusOver = Number(r.xl_bonus_over ?? 0); ws.xlBonus = Number(r.xl_bonus_amount ?? 0) }
       }
 
       // Napi összetevők a beosztásból (kulcs `${userId}|${date}`) — közös segéd a lib/payroll-ban
-      const compByUserDay = buildDayComps(shifts ?? [])
+      const compByUserDay = buildDayComps(shifts ?? [], xlResults ?? [])
 
       // Fizetendő napok usereként (duplázás nélkül): a becsekkolásból, vagy „beosztás alapján”
       // módban a beosztásból a mai napig; a hátralévő beosztott napok külön, tervként
@@ -170,6 +174,8 @@ export default function Payroll() {
           let boxPay = 0
           let boxTraineePay = 0
           let boxRound2Pay = 0
+          let xlBonusDays = 0
+          let xlBonusPay = 0
           for (const [date, wsId] of dayMap) {
             const r = rates[wsId ?? p.workspace_id ?? '']
             const d = payForDay(compByUserDay.get(`${p.id}|${date}`), r)
@@ -179,6 +185,7 @@ export default function Payroll() {
             if (d.box2 != null) { boxRound2Days++; boxRound2Pay += d.box2 }
             if (d.trainee != null) { traineeDays++; traineePay += d.trainee }
             if (d.boxTrainee != null) { boxTraineeDays++; boxTraineePay += d.boxTrainee }
+            if (d.xlBonus != null) { xlBonusDays++; xlBonusPay += d.xlBonus }
             base += d.rate
             workedDays.push({ date, role: d.role, rate: d.rate, rounds: d.rounds, label: d.label })
           }
@@ -194,7 +201,7 @@ export default function Payroll() {
             userId: p.id, name: p.full_name || p.email || '—', workspace: p.workspace?.name ?? '—',
             workspaceId: p.workspace_id, driverDays, loaderDays, traineeDays, boxDays, boxTraineeDays, boxRound2Days, days: dayMap.size,
             driverRate: wsRate?.driver ?? 0, loaderRate: wsRate?.loader ?? 0, traineeRate: wsRate?.trainee ?? 0, boxRate: wsRate?.box ?? 0, boxTraineeRate: wsRate?.boxTrainee ?? 0, boxRound2Rate: wsRate?.box2 ?? 0,
-            driverPay, loaderPay, traineePay, boxPay, boxTraineePay, boxRound2Pay,
+            driverPay, loaderPay, traineePay, boxPay, boxTraineePay, boxRound2Pay, xlBonusDays, xlBonusPay,
             advances, deductions, base,
             futureDays: futureMap?.size ?? 0, futurePay,
             status: p.status as string,
@@ -216,8 +223,8 @@ export default function Payroll() {
     if (!data) return
     await exportRowsToXlsx(`ber_${ym}.xlsx`, `Bér ${ym}`, data.rows.map((r) => ({
       'Munkatárs': r.name, 'Munkaterület': r.workspace, 'Alap': basis === 'schedule' ? 'beosztás' : 'becsekkolás',
-      'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, [basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap']: r.days,
-      'XL sofőr napidíj': r.driverRate, 'XL rakodó napidíj': r.loaderRate, 'Box 1. kör díj': r.boxRate, 'Box 2. kör díj': r.boxRound2Rate, 'XL betanuló napidíj': r.traineeRate, 'Box betanuló napidíj': r.boxTraineeRate, 'Alapbér': r.base,
+      'XL sofőr nap': r.driverDays, 'XL rakodó nap': r.loaderDays, 'Box sofőr nap': r.boxDays, 'Box 2. kör': r.boxRound2Days, 'XL sikerdíjas nap': r.xlBonusDays ?? 0, 'XL betanuló nap': r.traineeDays, 'Box betanuló nap': r.boxTraineeDays, [basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap']: r.days,
+      'XL sofőr napidíj': r.driverRate, 'XL rakodó napidíj': r.loaderRate, 'Box 1. kör díj': r.boxRate, 'Box 2. kör díj': r.boxRound2Rate, 'XL betanuló napidíj': r.traineeRate, 'Box betanuló napidíj': r.boxTraineeRate, 'XL sikerdíj': r.xlBonusPay ?? 0, 'Alapbér': r.base,
       'AlzaBox bér': boxPayOf(r), 'XL bér': xlPayOf(r),
       'Előleg': r.advances, 'Levonás': r.deductions, 'Fizetés': r.total,
     })))
@@ -293,6 +300,8 @@ export default function Payroll() {
         <RateHistoryCard key={w.id} ws={w} currentYm={ym} />
       ))}
 
+      {data && <XlResultsCard ym={ym} rates={data.workspaces} />}
+
       {data && <MonthLockCard ym={ym} workspaces={data.workspaces} />}
 
       {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Nincs adat a munkatársakról.</div>}
@@ -350,15 +359,18 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   const [box, setBox] = useState('')
   const [boxTrainee, setBoxTrainee] = useState('')
   const [box2, setBox2] = useState('')
+  // XL sikerdíj: ennyi sikeres cím FELETT jár, és mennyi (Ft / nap / fő)
+  const [bonusOver, setBonusOver] = useState('')
+  const [bonus, setBonus] = useState('')
   // Kezdeti díj: minden hónapra érvényes, amíg nincs későbbi díj (valid_from = 2000-01-01)
   const [asBase, setAsBase] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const { data: history } = useQuery({
-    queryKey: ['rate-history', ws.id, 'v3'],
+    queryKey: ['rate-history', ws.id, 'v4'],
     queryFn: async () => {
       const { data, error } = await supabase.from('workspace_rate_history')
-        .select('id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate')
+        .select('id, valid_from, driver_day_rate, loader_day_rate, trainee_day_rate, box_day_rate, box_trainee_day_rate, box_round2_day_rate, xl_bonus_over, xl_bonus_amount')
         .eq('workspace_id', ws.id)
         .order('valid_from', { ascending: false })
       if (error) throw error
@@ -375,18 +387,23 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       const bx = box.trim() ? parseHuf(box) : 0
       const bt = boxTrainee.trim() ? parseHuf(boxTrainee) : 0
       const b2 = box2.trim() ? parseHuf(box2) : 0
+      const bo = bonusOver.trim() ? Number(bonusOver.trim()) : 0
+      const ba = bonus.trim() ? parseHuf(bonus) : 0
       if (!Number.isFinite(d) || !Number.isFinite(l) || !Number.isFinite(tr) || !Number.isFinite(bx) || !Number.isFinite(bt) || !Number.isFinite(b2) || d < 0 || l < 0 || tr < 0 || bx < 0 || bt < 0 || b2 < 0) {
         throw new Error('Érvénytelen összeg — írj be számot, pl. 25 000')
       }
+      if (!Number.isInteger(bo) || bo < 0 || bo > 999 || !Number.isFinite(ba) || ba < 0) throw new Error('A sikerdíj küszöbe egész szám (pl. 40), az összege forint (pl. 3 000).')
+      if (ba > 0 && bo === 0) throw new Error('Add meg, hány sikeres cím felett jár a sikerdíj.')
       // LOG-23: üres hónap-mező „-01”-ként ment volna a szervernek
       if (!asBase && !/^\d{4}-\d{2}$/.test(addFrom)) throw new Error('Add meg a hónapot, amelytől a díj érvényes.')
       const { error } = await supabase.rpc('set_workspace_rate_from', {
         p_workspace_id: ws.id, p_valid_from: asBase ? '2000-01-01' : `${addFrom}-01`, p_driver_rate: d, p_loader_rate: l, p_trainee_rate: tr, p_box_rate: bx, p_box_trainee_rate: bt, p_box_round2_rate: b2,
+        p_xl_bonus_over: bo, p_xl_bonus_amount: ba,
       })
       if (error) throw error
     },
     onSuccess: () => {
-      setError(null); setDriver(''); setLoader(''); setTrainee(''); setBox(''); setBoxTrainee(''); setBox2(''); setAsBase(false); setOpen(false)
+      setError(null); setDriver(''); setLoader(''); setTrainee(''); setBox(''); setBoxTrainee(''); setBox2(''); setBonusOver(''); setBonus(''); setAsBase(false); setOpen(false)
       void qc.invalidateQueries({ queryKey: ['rate-history', ws.id] })
       void qc.invalidateQueries({ queryKey: ['payroll'] })
     },
@@ -424,7 +441,15 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
       <div className="between">
         <div className="card-title" style={{ margin: 0 }}><Icon name="banknote" />Napidíjak — {ws.name}</div>
         {isAdmin && (
-          <button className="btn ghost sm" onClick={() => { setOpen((o) => !o); setError(null) }}>
+          <button className="btn ghost sm" onClick={() => {
+            if (!open) {
+              // a most érvényes díjakkal indul: elég azt az egy mezőt átírni, ami változik
+              const v = (n: number) => (n > 0 ? String(n) : '')
+              setDriver(String(ws.driver)); setLoader(String(ws.loader)); setBox(v(ws.box)); setBox2(v(ws.box2)); setTrainee(v(ws.trainee)); setBoxTrainee(v(ws.boxTrainee))
+              setBonusOver(v(ws.xlBonusOver)); setBonus(v(ws.xlBonus)); setAsBase(false)
+            }
+            setOpen((o) => !o); setError(null)
+          }}>
             {open ? 'Bezárás' : <><Icon name="plus" />Emelés hónaptól</>}
           </button>
         )}
@@ -437,6 +462,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="repeat" size={14} />Box 2. kör (ráadás)</span><span className="num">{formatHuf(ws.box2)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="user" size={14} />XL betanuló/nap</span><span className="num">{formatHuf(ws.trainee)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="user" size={14} />Box betanuló/nap</span><span className="num">{formatHuf(ws.boxTrainee)}</span></div>
+        <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="trending-up" size={14} />XL sikerdíj</span><span className="num">{ws.xlBonus > 0 ? `${ws.xlBonusOver} cím felett +${formatHuf(ws.xlBonus)}` : 'nincs'}</span></div>
       </div>
       <div className="tiny muted" style={{ marginTop: -6 }}>Érvényes: {monthTitle(nowYm)}</div>
 
@@ -476,6 +502,14 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
             <div className="field">
               <label>Box betanuló napidíj (Ft)</label>
               <input className="input" inputMode="decimal" value={boxTrainee} onFocus={(e) => e.target.select()} onChange={(e) => setBoxTrainee(e.target.value)} placeholder="0 = nem fizetett" />
+            </div>
+            <div className="field">
+              <label>XL sikerdíj — ennyi sikeres cím FELETT jár (db)</label>
+              <input className="input" inputMode="numeric" value={bonusOver} onFocus={(e) => e.target.select()} onChange={(e) => setBonusOver(e.target.value)} placeholder="pl. 40" />
+            </div>
+            <div className="field">
+              <label>XL sikerdíj összege (Ft / nap) — a sofőr és a rakodó is megkapja</label>
+              <input className="input" inputMode="decimal" value={bonus} onFocus={(e) => e.target.select()} onChange={(e) => setBonus(e.target.value)} placeholder="üres = nincs sikerdíj" />
             </div>
           </div>
           <div className="tiny muted">
@@ -528,6 +562,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
                       {Number(r.box_day_rate) > 0 && <><span className="muted"> · </span><Icon name="car" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(r.box_day_rate))}{Number(r.box_round2_day_rate) > 0 ? ` +${formatHuf(Number(r.box_round2_day_rate))} (2. kör)` : ''}</>}
                       {Number(r.trainee_day_rate) > 0 && <><span className="muted"> · </span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> XL bet. {formatHuf(Number(r.trainee_day_rate))}</>}
                       {Number(r.box_trainee_day_rate) > 0 && <><span className="muted"> · </span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> Box bet. {formatHuf(Number(r.box_trainee_day_rate))}</>}
+                      {Number(r.xl_bonus_amount) > 0 && <><span className="muted"> · </span><Icon name="trending-up" size={14} style={{ verticalAlign: -2 }} /> {r.xl_bonus_over} cím felett +{formatHuf(Number(r.xl_bonus_amount))}</>}
                     </span>
                     {isActive && <span className="badge primary">ekkor érvényes</span>}
                     {isFuture && <span className="badge warning">jövőbeli</span>}
@@ -552,7 +587,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
               {activeRow?.id === base.id && <span className="badge primary">ekkor érvényes</span>}
               {isAdmin && (
                 <button className="btn ghost sm auto" style={{ minHeight: 28, padding: '0 8px' }} title="Kezdeti díj módosítása"
-                  onClick={() => { setAsBase(true); setDriver(String(base.driver_day_rate ?? 0)); setLoader(String(base.loader_day_rate ?? 0)); setBox(String(base.box_day_rate ?? 0)); setBox2(String(base.box_round2_day_rate ?? 0)); setTrainee(String(base.trainee_day_rate ?? 0)); setBoxTrainee(String(base.box_trainee_day_rate ?? 0)); setOpen(true); setError(null) }}>
+                  onClick={() => { setAsBase(true); setDriver(String(base.driver_day_rate ?? 0)); setLoader(String(base.loader_day_rate ?? 0)); setBox(String(base.box_day_rate ?? 0)); setBox2(String(base.box_round2_day_rate ?? 0)); setTrainee(String(base.trainee_day_rate ?? 0)); setBoxTrainee(String(base.box_trainee_day_rate ?? 0)); setBonusOver(Number(base.xl_bonus_over) > 0 ? String(base.xl_bonus_over) : ''); setBonus(Number(base.xl_bonus_amount) > 0 ? String(base.xl_bonus_amount) : ''); setOpen(true); setError(null) }}>
                   <Icon name="pencil" size={14} />
                 </button>
               )}
@@ -564,6 +599,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
               {Number(base.box_day_rate) > 0 && <span><Icon name="car" size={14} style={{ verticalAlign: -2 }} /> {formatHuf(Number(base.box_day_rate))}{Number(base.box_round2_day_rate) > 0 ? ` +${formatHuf(Number(base.box_round2_day_rate))}` : ''}</span>}
               {Number(base.trainee_day_rate) > 0 && <span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> XL bet. {formatHuf(Number(base.trainee_day_rate))}</span>}
               {Number(base.box_trainee_day_rate) > 0 && <span><Icon name="user" size={14} style={{ verticalAlign: -2 }} /> Box bet. {formatHuf(Number(base.box_trainee_day_rate))}</span>}
+              {Number(base.xl_bonus_amount) > 0 && <span><Icon name="trending-up" size={14} style={{ verticalAlign: -2 }} /> {base.xl_bonus_over} cím felett +{formatHuf(Number(base.xl_bonus_amount))}</span>}
             </span>
           </div>
         )}
@@ -597,6 +633,7 @@ function PayrollCard({ row, ym, basis }: { row: PayrollRow; ym: string; basis: A
       <div className="grid-2 pay-grid small">
         {row.driverDays > 0 && <div className="between"><span className="muted">XL sofőrként</span><span>{row.driverDays} nap · {formatHuf(row.driverPay)}</span></div>}
         {row.loaderDays > 0 && <div className="between"><span className="muted">XL rakodóként</span><span>{row.loaderDays} nap · {formatHuf(row.loaderPay)}</span></div>}
+        {(row.xlBonusDays ?? 0) > 0 && <div className="between"><span className="muted">XL sikerdíj</span><span>{row.xlBonusDays} nap · {formatHuf(row.xlBonusPay ?? 0)}</span></div>}
         {row.boxDays > 0 && <div className="between"><span className="muted">Box sofőrként · 1. kör díj</span><span>{row.boxDays} nap · {formatHuf(row.boxPay)}</span></div>}
         {row.boxRound2Days > 0 && <div className="between"><span className="muted">Box 2. körök</span><span>{row.boxRound2Days} db · {formatHuf(row.boxRound2Pay)}</span></div>}
         {row.boxTraineeDays > 0 && <div className="between"><span className="muted">Box betanulóként</span><span>{row.boxTraineeDays} nap · {formatHuf(row.boxTraineePay)}</span></div>}

@@ -54,6 +54,7 @@ export function openPayslip(row: PayrollRow, ymRaw: string, basis: 'checkin' | '
     <tr><th>Tétel</th><th>Mennyiség</th><th>Összeg</th></tr>
     <tr><td>XL sofőr napok</td><td>${row.driverDays} nap</td><td>${HUF(row.driverPay)}</td></tr>
     <tr><td>XL rakodó napok</td><td>${row.loaderDays} nap</td><td>${HUF(row.loaderPay)}</td></tr>
+    ${(row.xlBonusDays ?? 0) > 0 ? `<tr><td>XL sikerdíj</td><td>${row.xlBonusDays} nap</td><td>${HUF(row.xlBonusPay ?? 0)}</td></tr>` : ''}
     ${row.boxDays > 0 ? `<tr><td>Box sofőr napok (1. kör)</td><td>${row.boxDays} nap</td><td>${HUF(row.boxPay)}</td></tr>` : ''}
     ${row.boxRound2Days > 0 ? `<tr><td>Box 2. körök</td><td>${row.boxRound2Days} db</td><td>${HUF(row.boxRound2Pay)}</td></tr>` : ''}
     ${row.traineeDays > 0 ? `<tr><td>XL betanuló napok</td><td>${row.traineeDays} nap</td><td>${HUF(row.traineePay)}</td></tr>` : ''}

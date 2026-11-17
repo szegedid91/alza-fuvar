@@ -59,6 +59,9 @@ export interface PayrollRow {
   boxPay: number
   boxTraineePay: number
   boxRound2Pay: number
+  // XL sikerdíj: hány napon járt (a napi sikeres címek száma a küszöb felett volt) és mennyi
+  xlBonusDays?: number
+  xlBonusPay?: number
   advances: number
   deductions: number
   base: number
@@ -84,8 +87,11 @@ export function sumAdvances(rows: { type: string; amount: number | string; work_
 // ---- Napi bér: egy ember egy napjának díja a beosztott szerep(ek)ből ----
 // A Bérszámítás ÉS az Előleg-képernyő ugyanezt használja, hogy a „ledolgozott napok
 // értéke” mindkét helyen ugyanannyi legyen.
-export interface RateSet { driver: number; loader: number; trainee: number; box: number; boxTrainee: number; box2: number }
-export interface DayComp { xlDriver: boolean; xlLoader: boolean; boxR1: boolean; boxR2: boolean; xlTrainee: boolean; boxTrainee: boolean }
+// xlBonusOver / xlBonus: XL sikerdíj — ha az autó napi sikeres címeinek száma a küszöb FELETT van, a sofőr és a rakodó
+// is megkapja a fix összeget (0 összeg = nincs sikerdíj)
+export interface RateSet { driver: number; loader: number; trainee: number; box: number; boxTrainee: number; box2: number; xlBonusOver?: number; xlBonus?: number }
+// xlSuccess: az XL autó aznapi sikeres címeinek száma (null / hiányzik = nincs adat)
+export interface DayComp { xlDriver: boolean; xlLoader: boolean; boxR1: boolean; boxR2: boolean; xlTrainee: boolean; boxTrainee: boolean; xlSuccess?: number | null }
 export interface DayPay {
   rate: number
   role: PayRole
@@ -98,6 +104,8 @@ export interface DayPay {
   box2: number | null
   trainee: number | null
   boxTrainee: number | null
+  // XL sikerdíj aznap (null = nem járt)
+  xlBonus: number | null
 }
 
 export interface ShiftLike {
@@ -109,13 +117,19 @@ export interface ShiftLike {
   // a beosztás sorára mentett jelölés: az a nap Box-autón volt-e (az autó későbbi átsorolása a múltat nem írja át)
   is_box?: boolean | null
   car?: unknown
+  // az XL sikerdíjhoz: melyik autón volt (a sikeres címek száma autónként és naponként van meg)
+  car_id?: string | null
 }
+
+// Egy XL autó egy napi sikeres címeinek száma
+export interface XlResultLike { car_id: string; work_date: string; success_count: number }
 
 // Napi összetevők a beosztásból, kulcs `${userId}|${date}`: egy ember egy napon
 // több dolgot is csinálhat (pl. XL sofőr ÉS Box 1. kör) — mindegyik külön díjat kap,
 // a nap viszont egy napnak számít
-export function buildDayComps(shifts: ShiftLike[]): Map<string, DayComp> {
+export function buildDayComps(shifts: ShiftLike[], xlResults: XlResultLike[] = []): Map<string, DayComp> {
   const map = new Map<string, DayComp>()
+  const successOf = new Map(xlResults.map((x) => [`${x.car_id}|${x.work_date}`, Number(x.success_count)]))
   const compOf = (uid: string, date: string): DayComp => {
     const k = `${uid}|${date}`
     let c = map.get(k)
@@ -127,16 +141,29 @@ export function buildDayComps(shifts: ShiftLike[]): Map<string, DayComp> {
     const isBox = s.is_box ?? !!(s.car as { category: { box_sheet: boolean } | null } | null)?.category?.box_sheet
     if (s.driver_id) { const c = compOf(s.driver_id, s.work_date); if (isBox) { if ((s.round ?? 1) === 2) c.boxR2 = true; else c.boxR1 = true } else c.xlDriver = true }
     if (s.loader_id) compOf(s.loader_id, s.work_date).xlLoader = true
+    // XL sikerdíj: az autó aznapi sikeres címei a sofőrhöz és a rakodóhoz is odakerülnek (betanulóhoz nem)
+    const success = !isBox && s.car_id ? successOf.get(`${s.car_id}|${s.work_date}`) : undefined
+    if (success != null) for (const uid of [s.driver_id, s.loader_id]) {
+      if (!uid) continue
+      const c = compOf(uid, s.work_date)
+      c.xlSuccess = Math.max(c.xlSuccess ?? 0, success)
+    }
     if (s.trainee_id) { const c = compOf(s.trainee_id, s.work_date); if (isBox) c.boxTrainee = true; else c.xlTrainee = true }
   }
   return map
 }
 
 export function payForDay(c: DayComp | undefined, r: RateSet | undefined): DayPay {
-  const out: DayPay = { rate: 0, role: 'loader', label: '', driver: null, loader: null, box: null, box2: null, trainee: null, boxTrainee: null }
+  const out: DayPay = { rate: 0, role: 'loader', label: '', driver: null, loader: null, box: null, box2: null, trainee: null, boxTrainee: null, xlBonus: null }
   const parts: string[] = []
   if (c?.xlDriver) { out.driver = r?.driver ?? 0; out.rate += out.driver; parts.push('XL sofőr'); out.role = 'driver' }
   else if (c?.xlLoader) { out.loader = r?.loader ?? 0; out.rate += out.loader; parts.push('XL rakodó'); out.role = 'loader' }
+  // XL sikerdíj: a küszöb FELETTI sikeres címszámnál fix összeg (sofőrnek és rakodónak egyformán)
+  if ((c?.xlDriver || c?.xlLoader) && (r?.xlBonus ?? 0) > 0 && c.xlSuccess != null && c.xlSuccess > (r?.xlBonusOver ?? 0)) {
+    out.xlBonus = r!.xlBonus!
+    out.rate += out.xlBonus
+    parts.push(`sikerdíj (${c.xlSuccess} cím)`)
+  }
   if (c?.boxR1 || c?.boxR2) {
     // Box-nap díja jár, ha bármelyik kört vitte; a 2. kör díja RÁADÁS, ha aznap mindkét kört vitte
     out.box = r?.box ?? 0
@@ -158,11 +185,13 @@ export function payForDay(c: DayComp | undefined, r: RateSet | undefined): DayPa
 type RateCols = {
   driver_day_rate: number | null; loader_day_rate: number | null; trainee_day_rate: number | null
   box_day_rate: number | null; box_trainee_day_rate: number | null; box_round2_day_rate: number | null
+  xl_bonus_over?: number | null; xl_bonus_amount?: number | null
 }
 export function rateSetOf(r: RateCols): RateSet {
   return {
     driver: Number(r.driver_day_rate ?? 0), loader: Number(r.loader_day_rate ?? 0), trainee: Number(r.trainee_day_rate ?? 0),
     box: Number(r.box_day_rate ?? 0), boxTrainee: Number(r.box_trainee_day_rate ?? 0), box2: Number(r.box_round2_day_rate ?? 0),
+    xlBonusOver: Number(r.xl_bonus_over ?? 0), xlBonus: Number(r.xl_bonus_amount ?? 0),
   }
 }
 
@@ -274,6 +303,6 @@ export function payrollDays(basis: AdvanceBasis, checkins: CheckinLike[], shifts
 }
 
 // ---- Bér bontása: XL (sofőr, rakodó, betanuló) és AlzaBox (1. kör, 2. kör, Box-betanuló) ----
-type PayParts = Pick<PayrollRow, 'driverPay' | 'loaderPay' | 'traineePay' | 'boxPay' | 'boxRound2Pay' | 'boxTraineePay'>
-export const xlPayOf = (r: PayParts): number => r.driverPay + r.loaderPay + r.traineePay
+type PayParts = Pick<PayrollRow, 'driverPay' | 'loaderPay' | 'traineePay' | 'boxPay' | 'boxRound2Pay' | 'boxTraineePay' | 'xlBonusPay'>
+export const xlPayOf = (r: PayParts): number => r.driverPay + r.loaderPay + r.traineePay + (r.xlBonusPay ?? 0)
 export const boxPayOf = (r: PayParts): number => r.boxPay + r.boxRound2Pay + r.boxTraineePay

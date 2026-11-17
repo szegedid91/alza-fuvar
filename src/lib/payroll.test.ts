@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, payrollDays, xlPayOf, boxPayOf } from './payroll'
+import { monthRange, currentYm, sumAdvances, buildDayComps, payForDay, advanceCoverage, advanceLimitError, advanceDays, defaultDateForMonth, accountingDate, payrollDays, xlPayOf, boxPayOf, rateSetOf } from './payroll'
 
 describe('monthRange', () => {
   it('hónap eleje és a következő hónap eleje (kizáró vég)', () => {
@@ -225,5 +225,45 @@ describe('buildDayComps — a beosztásra mentett Box-jelölés dönt (nem az au
   it('jelölés nélküli (régi) sor: az autó kategóriája a tartalék', () => {
     const comps = buildDayComps([{ driver_id: 'u1', loader_id: null, trainee_id: null, work_date: '2026-10-07', round: 1, is_box: null, car: boxNow }])
     expect(comps.get('u1|2026-10-07')).toMatchObject({ boxR1: true })
+  })
+})
+
+describe('XL sikerdíj', () => {
+  const rate = { driver: 25000, loader: 20000, trainee: 5000, box: 22000, boxTrainee: 0, box2: 10000, xlBonusOver: 40, xlBonus: 3000 }
+  const xl = (date: string, car: string, driver: string | null, loader: string | null, extra: object = {}) =>
+    ({ work_date: date, car_id: car, driver_id: driver, loader_id: loader, trainee_id: null, round: 1, is_box: false, ...extra })
+
+  it('a küszöb FELETT a sofőr és a rakodó is megkapja, pontosan a küszöbnél még nem', () => {
+    const shifts = [xl('2026-11-02', 'c1', 'd', 'l'), xl('2026-11-03', 'c1', 'd', 'l')]
+    const comps = buildDayComps(shifts, [
+      { car_id: 'c1', work_date: '2026-11-02', success_count: 41 },
+      { car_id: 'c1', work_date: '2026-11-03', success_count: 40 },
+    ])
+    const d = payForDay(comps.get('d|2026-11-02'), rate)
+    expect(d.xlBonus).toBe(3000); expect(d.rate).toBe(28000); expect(d.label).toBe('XL sofőr + sikerdíj (41 cím)')
+    expect(payForDay(comps.get('l|2026-11-02'), rate).rate).toBe(23000)
+    const at = payForDay(comps.get('d|2026-11-03'), rate)
+    expect(at.xlBonus).toBeNull(); expect(at.rate).toBe(25000)
+  })
+
+  it('adat nélkül, 0 összeggel, Box napon és betanulónak nem jár', () => {
+    const shifts = [
+      xl('2026-11-02', 'c1', 'd', 'l', { trainee_id: 't' }),
+      xl('2026-11-02', 'c2', 'b', null, { is_box: true }),
+    ]
+    const res = [{ car_id: 'c1', work_date: '2026-11-02', success_count: 60 }, { car_id: 'c2', work_date: '2026-11-02', success_count: 60 }]
+    expect(payForDay(buildDayComps(shifts).get('d|2026-11-02'), rate).xlBonus).toBeNull()
+    const comps = buildDayComps(shifts, res)
+    expect(payForDay(comps.get('d|2026-11-02'), { ...rate, xlBonus: 0 }).rate).toBe(25000)
+    expect(payForDay(comps.get('b|2026-11-02'), rate).rate).toBe(22000)
+    expect(payForDay(comps.get('t|2026-11-02'), rate).rate).toBe(5000)
+    expect(payForDay(comps.get('d|2026-11-02'), rate).rate).toBe(28000)
+  })
+
+  it('a díjsorból kiolvassa a küszöböt és az összeget, az XL bér tartalmazza a sikerdíjat', () => {
+    const r = rateSetOf({ driver_day_rate: 1, loader_day_rate: 1, trainee_day_rate: 0, box_day_rate: 0, box_trainee_day_rate: 0, box_round2_day_rate: 0, xl_bonus_over: 35, xl_bonus_amount: 2500 })
+    expect(r.xlBonusOver).toBe(35); expect(r.xlBonus).toBe(2500)
+    expect(rateSetOf({ driver_day_rate: 1, loader_day_rate: 1, trainee_day_rate: 0, box_day_rate: 0, box_trainee_day_rate: 0, box_round2_day_rate: 0 }).xlBonus).toBe(0)
+    expect(xlPayOf({ driverPay: 100, loaderPay: 50, traineePay: 0, boxPay: 0, boxRound2Pay: 0, boxTraineePay: 0, xlBonusPay: 30 })).toBe(180)
   })
 })

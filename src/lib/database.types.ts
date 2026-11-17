@@ -2727,6 +2727,8 @@ export type Database = {
           trainee_day_rate: number
           valid_from: string
           workspace_id: string
+          xl_bonus_amount: number
+          xl_bonus_over: number
         }
         Insert: {
           box_day_rate?: number
@@ -2740,6 +2742,8 @@ export type Database = {
           trainee_day_rate?: number
           valid_from: string
           workspace_id: string
+          xl_bonus_amount?: number
+          xl_bonus_over?: number
         }
         Update: {
           box_day_rate?: number
@@ -2753,6 +2757,8 @@ export type Database = {
           trainee_day_rate?: number
           valid_from?: string
           workspace_id?: string
+          xl_bonus_amount?: number
+          xl_bonus_over?: number
         }
         Relationships: [
           {
@@ -2792,6 +2798,8 @@ export type Database = {
           name: string
           photo_retention_days: number
           trainee_day_rate: number
+          xl_bonus_amount: number
+          xl_bonus_over: number
         }
         Insert: {
           arrival_whatsapp_group?: string | null
@@ -2813,6 +2821,8 @@ export type Database = {
           name: string
           photo_retention_days?: number
           trainee_day_rate?: number
+          xl_bonus_amount?: number
+          xl_bonus_over?: number
         }
         Update: {
           arrival_whatsapp_group?: string | null
@@ -2834,8 +2844,67 @@ export type Database = {
           name?: string
           photo_retention_days?: number
           trainee_day_rate?: number
+          xl_bonus_amount?: number
+          xl_bonus_over?: number
         }
         Relationships: []
+      }
+      xl_day_results: {
+        Row: {
+          car_id: string
+          created_at: string
+          id: string
+          note: string | null
+          route_code: string | null
+          source: string
+          success_count: number
+          updated_at: string
+          updated_by: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          car_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          route_code?: string | null
+          source?: string
+          success_count: number
+          updated_at?: string
+          updated_by?: string | null
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          car_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          route_code?: string | null
+          source?: string
+          success_count?: number
+          updated_at?: string
+          updated_by?: string | null
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xl_day_results_car_id_fkey"
+            columns: ["car_id"]
+            isOneToOne: false
+            referencedRelation: "cars"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "xl_day_results_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -2966,6 +3035,8 @@ export type Database = {
           p_trainee_rate?: number
           p_valid_from: string
           p_workspace_id: string
+          p_xl_bonus_amount?: number
+          p_xl_bonus_over?: number
         }
         Returns: undefined
       }
