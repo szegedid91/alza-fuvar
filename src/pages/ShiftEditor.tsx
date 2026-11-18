@@ -1,5 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, useRef } from 'react'
-import { useNarrow } from '../hooks/useNarrow'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -241,19 +240,6 @@ export default function ShiftEditor() {
     return iconsOf(rest.incident || rest.issue || rest.clean || rest.geo || rest.sw ? rest : undefined)
   }
   const isFullCrew = (s: Shift) => !!s.driver_id && (!!s.loader_id || crewOf(s.car_id) === 1)
-  // Telefonon a hétoszlopos rácsban a nevek nem férnek ki: ott a hónap LISTA, naponként egy sor, teljes nevekkel
-  const narrow = useNarrow()
-  const weekdayOf = (date: string) => { const [y, mo, d] = date.split('-').map(Number); return dayNames[(new Date(y, mo - 1, d).getDay() + 6) % 7] }
-  const fullNames = (s: Shift): string => {
-    const parts = [nameOf[s.driver_id ?? ''] ?? '—']
-    if (crewOf(s.car_id) === 2 || s.loader_id) parts.push(nameOf[s.loader_id ?? ''] ?? '—')
-    return parts.join(' + ') + (s.trainee_id ? ` + betanuló: ${nameOf[s.trainee_id] ?? '—'}` : '')
-  }
-  // listás nézetben a kiválasztott nap részletei a lista alatt vannak — odagörgetünk
-  const detailsRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (narrow && selectedDate) detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [narrow, selectedDate])
 
   return (
     <div className="stack">
@@ -290,49 +276,7 @@ export default function ShiftEditor() {
           </select>
         </div>
 
-        {narrow && (
-          <div className="stack" style={{ gap: 0 }}>
-            {cells.filter((d): d is string => !!d).map((date, i) => {
-              const ds = dayShiftsOf(date)
-              const icons = restIconsOf(date, ds)
-              const isSel = date === selectedDate
-              const isToday = date === today
-              const wd = weekdayOf(date)
-              const weekend = wd === 'Szo' || wd === 'V'
-              return (
-                <button key={date} type="button" onClick={() => tapDay(date)}
-                  style={{
-                    display: 'grid', gridTemplateColumns: '46px 1fr', gap: 8, alignItems: 'start', width: '100%', textAlign: 'left',
-                    padding: '7px 6px', cursor: 'pointer', color: 'inherit', font: 'inherit',
-                    border: 'none', borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-                    outline: isSel ? '2px solid var(--primary)' : 'none', outlineOffset: -2, borderRadius: isSel || isToday ? 8 : 0,
-                    background: isToday ? 'rgba(20,184,166,.12)' : 'transparent',
-                  }}>
-                  <span style={{ lineHeight: 1.15 }}>
-                    <span className="num" style={{ display: 'block', fontSize: 17, fontWeight: isToday ? 800 : 700 }}>{Number(date.slice(8, 10))}.</span>
-                    <span className="tiny" style={{ color: weekend ? 'var(--warning)' : 'var(--text-dim)', fontWeight: 700 }}>{wd}{isToday ? ' · ma' : ''}</span>
-                  </span>
-                  <span className="stack" style={{ gap: 3, minWidth: 0 }}>
-                    {ds.length === 0 && <span className="small muted">nincs beosztás</span>}
-                    {ds.map((s) => {
-                      const rc = routeCode(s.route_id)
-                      return (
-                        <span key={s.id} className="small" style={{ borderLeft: `3px solid ${isFullCrew(s) ? 'rgb(20,184,166)' : 'rgb(234,179,8)'}`, paddingLeft: 6, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-                          <span className="num" style={{ fontWeight: 700 }}>{carOf(s.car_id)?.plate ?? '?'}</span>
-                          {s.round === 2 && <span className="muted"> · 2. kör</span>}
-                          {rc && <span className="badge" style={{ fontSize: 10, padding: '0 6px', marginLeft: 4 }}>{rc}</span>}
-                          {' '}{fullNames(s)} {iconsOf(markers.get(`${date}|${s.car_id}`), 12)}
-                        </span>
-                      )
-                    })}
-                    {icons && <span>{icons}</span>}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-        {!narrow && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
           {dayNames.map((d) => (
             <div key={d} className="tiny muted" style={{ textAlign: 'center', padding: '2px 0' }}>{d}</div>
           ))}
@@ -384,11 +328,11 @@ export default function ShiftEditor() {
               </button>
             )
           })}
-        </div>}
+        </div>
         {/* Jelmagyarázat: tördelődő sor — telefonon 2-3 sorba esik, nem lóg ki */}
         <div className="tiny muted" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 12px' }}>
-          <span style={{ background: 'rgba(20,184,166,.22)', borderRadius: 4, padding: '0 6px', borderLeft: narrow ? '3px solid rgb(20,184,166)' : undefined }}>teljes páros</span>
-          <span style={{ background: 'rgba(234,179,8,.25)', borderRadius: 4, padding: '0 6px', borderLeft: narrow ? '3px solid rgb(234,179,8)' : undefined }}>hiányos</span>
+          <span style={{ background: 'rgba(20,184,166,.22)', borderRadius: 4, padding: '0 6px' }}>teljes páros</span>
+          <span style={{ background: 'rgba(234,179,8,.25)', borderRadius: 4, padding: '0 6px' }}>hiányos</span>
           {MARK.map((m) => (
             <span key={m.key} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               <Icon name={m.icon} size={12} style={{ color: m.color }} />{m.label}
@@ -420,7 +364,7 @@ export default function ShiftEditor() {
         const carFull = (cid: string | null) => `${catName(cid) ? `${catName(cid)} · ` : ''}${plate(cid)}`
         const empty = dShifts.length + inc.length + iss.length + cln.length + geo.length + sw.length === 0
         return (
-          <div ref={detailsRef} className="card stack" style={{ borderColor: 'var(--primary)', scrollMarginTop: 70 }}>
+          <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
             <div className="between">
               <div className="card-title" style={{ margin: 0 }}><Icon name="calendar" />{formatDate(d)} — mi történt aznap</div>
               <button className="icon-btn" title="Kijelölés megszüntetése" aria-label="Kijelölés megszüntetése" onClick={() => setSelectedDate('')}><Icon name="x" /></button>
