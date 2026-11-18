@@ -2961,6 +2961,10 @@ export type Database = {
         Returns: undefined
       }
       push_inspection_reminder: { Args: { p_id: string }; Returns: undefined }
+      rename_member: {
+        Args: { p_full_name: string; target_id: string }
+        Returns: undefined
+      }
       replace_route_stops: {
         Args: {
           p_back_km?: number

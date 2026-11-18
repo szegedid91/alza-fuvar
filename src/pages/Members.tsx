@@ -368,6 +368,18 @@ export default function Members() {
     onError: (e) => setActionError('A szerep mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
   })
 
+  // Név átírása: a név mindenhol az azonosítóból jön, ezért a régi beosztások, bérlapok és kimutatások is az új nevet mutatják.
+  // Mentés után minden nyitott lista frissül (a nevek sok lekérdezésben benne vannak).
+  const [nameDraft, setNameDraft] = useState<{ id: string; text: string } | null>(null)
+  const rename = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.rpc('rename_member', { target_id: id, p_full_name: name })
+      if (error) throw error
+    },
+    onSuccess: () => { setActionError(null); setNameDraft(null); void qc.invalidateQueries() },
+    onError: (e) => setActionError('A név mentése nem sikerült: ' + (errMsg(e, 'ismeretlen hiba'))),
+  })
+
   // Tag törlése. A szerver alapból MEGTAGADJA, ha munka-/bér-adat tartozik hozzá
   // (ADATOS_TAG hiba) — ilyenkor megmutatjuk, mi veszne el, és a felhasználó
   // dönthet a végleges törlésről vagy a letiltásról.
@@ -557,6 +569,29 @@ export default function Members() {
                           : <div className="small">{m.phone}</div>)
                         : <div className="tiny muted">Nincs megadva.</div>}
                     </div>
+                    {/* Név átírása — visszamenőleg is mindenhol az új név látszik (a vezetők nevét csak admin írhatja át) */}
+                    {(() => {
+                      const current = m.full_name ?? ''
+                      const text = nameDraft?.id === m.id ? nameDraft.text : current
+                      const clean = text.replace(/\s+/g, ' ').trim()
+                      const changed = clean !== current.trim()
+                      const locked = leaderLocked && !isSelf
+                      return (
+                        <div className="field" style={{ gridColumn: '1 / -1' }}>
+                          <label>Név</label>
+                          <div className="row" style={{ gap: 6 }}>
+                            <input className="input" value={text} disabled={locked || rename.isPending} maxLength={120} autoComplete="off"
+                              onChange={(e) => setNameDraft({ id: m.id, text: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && changed && clean.length >= 2) rename.mutate({ id: m.id, name: clean }) }} />
+                            {changed && (
+                              <button type="button" className="btn sm auto" disabled={rename.isPending || clean.length < 2}
+                                onClick={() => rename.mutate({ id: m.id, name: clean })}>{rename.isPending ? 'Mentés…' : 'Mentés'}</button>
+                            )}
+                          </div>
+                          <div className="tiny muted">{locked ? 'Vezető nevét csak admin módosíthatja.' : 'Az átírt név a korábbi beosztásokban, bérlapokon és kimutatásokban is megjelenik.'}</div>
+                        </div>
+                      )
+                    })()}
                     <div className="field">
                       <label>Szerep</label>
                       <select
