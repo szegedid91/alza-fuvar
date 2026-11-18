@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, useRef } from 'react'
 import { useNarrow } from '../hooks/useNarrow'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useMembers } from '../hooks/useMembers'
@@ -262,10 +261,6 @@ export default function ShiftEditor() {
 
       <SwapApprovals workspaceId={currentWorkspaceId} />
       <RouteCancelCard />
-      <Link to="/jaratok" className="card between" style={{ textDecoration: 'none', color: 'inherit', padding: 12 }}>
-        <div className="card-title" style={{ margin: 0 }}><Icon name="map" />Járatok{(routes?.length ?? 0) ? ` (${routes!.map((r) => r.code).join(', ')})` : ''}</div>
-        <span className="tiny muted row" style={{ gap: 4 }}>járatok és boxok kezelése <Icon name="chevron-right" size={14} /></span>
-      </Link>
 
       <div className="tabs" style={{ marginBottom: 0 }}>
         <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}><Icon name="clipboard" size={18} />Heti táblázat</button>
