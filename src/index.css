@@ -544,6 +544,19 @@ input[type='date'].input {
 .photo-help-banner { background: var(--danger); color: #fff; align-items: flex-start; }
 .photo-help-banner .btn { background: #fff; color: var(--danger); }
 
+/* ---------- Napszám-kártya (Napok ezen a héten / ebben a hónapban) ---------- */
+/* Az elrendezést a kártya szélessége dönti el, minden sorra egyformán */
+.crew-days { container-type: inline-size; }
+.crew-days-grid { display: grid; grid-template-columns: 1fr; gap: 0 20px; }
+.crew-days-row { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 6px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+.crew-days-name { min-width: 0; overflow-wrap: anywhere; }
+@container (min-width: 520px) {
+  .crew-days-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+}
+@container (min-width: 1040px) {
+  .crew-days-grid { grid-template-columns: 1fr 1fr; }
+}
+
 /* ---------- Haladás-sáv (autó-ellenőrzés) ---------- */
 .progress { height: 6px; border-radius: 3px; background: var(--bg-elev-2); overflow: hidden; margin-top: 8px; }
 .progress > div { height: 100%; background: var(--success); border-radius: 3px; transition: width .2s ease; }
