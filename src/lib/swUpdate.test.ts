@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { waitForNewestWorker, precacheLooksBroken } from './swUpdate'
+import { waitForNewestWorker, precacheLooksBroken, shouldAutoUpdate } from './swUpdate'
 
 // Ál service worker: állapot + statechange esemény
 function fakeWorker(state: string) {
@@ -62,5 +62,18 @@ describe('precacheLooksBroken — sérült előtöltött gyorsítótár', () => 
     expect(precacheLooksBroken([name], ['https://alza.szakify.hu/assets/index-x.js'])).toBe(true)
     expect(precacheLooksBroken(['supabase-storage'], [])).toBe(true)
     expect(precacheLooksBroken([], [])).toBe(true)
+  })
+})
+
+describe('shouldAutoUpdate — megnyitáskor magától frissít, de nem körbe-körbe', () => {
+  it('újabb kiadásnál igen, ugyanannál vagy ismeretlennél nem', () => {
+    expect(shouldAutoUpdate('B', 'A', null)).toBe(true)
+    expect(shouldAutoUpdate('A', 'A', null)).toBe(false)
+    expect(shouldAutoUpdate(null, 'A', null)).toBe(false)
+    expect(shouldAutoUpdate(undefined, 'A', null)).toBe(false)
+  })
+  it('ugyanarra a kiadásra egy munkamenetben csak egyszer próbálkozik; egy még újabbra újra', () => {
+    expect(shouldAutoUpdate('B', 'A', 'B')).toBe(false)
+    expect(shouldAutoUpdate('C', 'A', 'B')).toBe(true)
   })
 })

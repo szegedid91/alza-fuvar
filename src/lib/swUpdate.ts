@@ -56,16 +56,65 @@ export async function forceUpdate(): Promise<void> {
   try { await reg.update() } catch { /* hálózati hiba — alább sima újratöltés */ }
   const waiting = await waitForNewestWorker(reg)
   if (!waiting) { reload(); return }
-  // az új SW átveszi az oldalt; az újratöltéssel megvárjuk, míg az aktiválása (a régi fájlok
-  // kitakarítása) befejeződik — biztonsági tartalék, ha az esemény elmaradna
-  await new Promise<void>((resolve) => {
+  await activateWorker(waiting)
+  reload()
+}
+
+// Az új SW átveszi az oldalt; megvárjuk, míg az aktiválása (a régi fájlok kitakarítása) befejeződik —
+// biztonsági tartalékkal, ha az esemény elmaradna
+function activateWorker(waiting: ServiceWorker): Promise<void> {
+  return new Promise<void>((resolve) => {
     let done = false
     const finish = () => { if (!done) { done = true; resolve() } }
     waiting.addEventListener('statechange', () => { if (waiting.state === 'activated' || waiting.state === 'redundant') finish() })
     waiting.postMessage({ type: 'SKIP_WAITING' })
     setTimeout(finish, 6000)
   })
-  reload()
+}
+
+// ---- Automatikus frissítés az app MEGNYITÁSAKOR ----
+// A service worker a telefonon tárolt (régi) változatot adja vissza, ezért sima újratöltés után is a régi app indult,
+// és csak a sávra koppintva (vagy hard refresh-sel) váltott. Megnyitáskor viszont még nincs félbehagyott munka, amit egy
+// újratöltés elvinne — ilyenkor magától frissít: letölti az új változatot, és csak akkor vált, amikor MINDEN megjött
+// (térerő nélkül / lassú neten nem marad üres oldal). Ha pár másodperc alatt nem készül el, marad a régi app a sávval.
+// Munka közben (nyitva hagyott app) továbbra sincs magától újratöltés — ott a sáv szól.
+const AUTO_FLAG = 'alza-auto-update'
+// Egy munkamenetben egy célverzióra csak egyszer próbálkozunk: ha a frissítés után is a régi fut, nem töltünk újra körbe-körbe
+export function shouldAutoUpdate(latest: string | null | undefined, current: string, tried: string | null): boolean {
+  return !!latest && latest !== current && tried !== latest
+}
+
+function showUpdatingOverlay(): () => void {
+  const el = document.createElement('div')
+  el.setAttribute('role', 'status')
+  el.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg);color:var(--text);font-weight:700;font-size:15px'
+  el.innerHTML = '<div class="spinner"></div><div>Új verzió letöltése…</div>'
+  document.body.appendChild(el)
+  return () => el.remove()
+}
+
+const within = <T,>(p: Promise<T>, ms: number): Promise<T | undefined> =>
+  Promise.race([p, new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))])
+
+// Igazzal tér vissza, ha az újratöltés elindult
+export async function autoUpdateOnStart(latest: string, timeoutMs = 7000): Promise<boolean> {
+  let tried: string | null = null
+  try { tried = sessionStorage.getItem(AUTO_FLAG) } catch { /* privát mód */ }
+  if (!navigator.onLine || !shouldAutoUpdate(latest, '', tried)) return false
+  let reg: ServiceWorkerRegistration | undefined
+  try { reg = await navigator.serviceWorker?.getRegistration() } catch { /* nincs SW */ }
+  // service worker nélkül (vagy ha nem ő adta az oldalt) nincs mit átváltani
+  if (!reg || !navigator.serviceWorker.controller) return false
+  try { sessionStorage.setItem(AUTO_FLAG, latest) } catch { return false } // jelölés nélkül nem kockáztatunk újratöltési hurkot
+  const hide = showUpdatingOverlay()
+  try {
+    await within(reg.update().catch(() => undefined), timeoutMs)
+    const waiting = await waitForNewestWorker(reg, timeoutMs)
+    if (!waiting) { hide(); return false }
+    await activateWorker(waiting)
+    window.location.reload()
+    return true
+  } catch { hide(); return false }
 }
 
 // Sérült gyorsítótár felismerése: nincs előtöltött gyorsítótár, vagy hiányzik belőle a kezdőlap
@@ -102,16 +151,19 @@ let watching = false
 export function startVersionWatch(currentBuild: string): void {
   if (watching) return
   watching = true
-  const check = async () => {
+  const check = async (onStart = false) => {
     if (!navigator.onLine) return
     try {
       const r = await fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
       if (!r.ok) return
       const j = (await r.json()) as { build?: string }
-      if (j.build && j.build !== currentBuild && !pendingUpdate) setPendingUpdate(() => forceUpdate())
+      if (!j.build || j.build === currentBuild) return
+      // megnyitáskor magától frissít; ha nem sikerül időben (vagy már próbáltuk), marad a sáv
+      if (onStart && await autoUpdateOnStart(j.build)) return
+      if (!pendingUpdate) setPendingUpdate(() => forceUpdate())
     } catch { /* offline / átmeneti hiba */ }
   }
-  void check()
+  void check(true)
   setInterval(() => void check(), 5 * 60_000)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void check() })
 }
