@@ -21,7 +21,8 @@ interface WorkspaceRate { id: string; name: string; driver: number; loader: numb
 
 // Havi zárás: zárolt hónapra a DB-trigger tiltja a bér-befolyásoló írásokat
 // (előleg/levonás, beosztás, becsekkolás, tankolás). Csak admin zárolhat/oldhat.
-function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRate[] }) {
+// Nem külön kártya: a hónap összesítő kártyájának alján, munkaterületenként egy sor.
+function MonthLockRows({ ym, workspaces }: { ym: string; workspaces: WorkspaceRate[] }) {
   const { profile } = useAuth()
   const qc = useQueryClient()
   const [error, setError] = useState<string | null>(null)
@@ -50,19 +51,18 @@ function MonthLockCard({ ym, workspaces }: { ym: string; workspaces: WorkspaceRa
   })
 
   return (
-    <div className="card stack">
-      <div className="card-title"><Icon name="lock" />Havi zárás — {monthTitle(ym)}</div>
-      <p className="tiny muted" style={{ margin: 0 }}>
-        Zárolt hónapban nem módosítható előleg/levonás, beosztás, becsekkolás és tankolás — a bér nem változhat utólag.
-      </p>
+    <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
       {error && <div className="alert error">{error}</div>}
       {workspaces.map((w) => {
         const lock = (locks ?? []).find((l) => l.workspace_id === w.id)
         return (
-          <div key={w.id} className="between">
-            <div>
-              <div className="small" style={{ fontWeight: 700 }}>{w.name}</div>
-              {lock && <div className="tiny muted">Zárolva: {formatDateTime(lock.locked_at)}</div>}
+          <div key={w.id} className="between" style={{ gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="small row" style={{ gap: 6, fontWeight: 700 }}>
+                <Icon name={lock ? 'lock' : 'unlock'} size={14} style={{ color: lock ? 'var(--warning)' : 'var(--text-dim)' }} />
+                Havi zárás{workspaces.length > 1 ? ` — ${w.name}` : ''}
+              </div>
+              <div className="tiny muted">{lock ? `Zárolva: ${formatDateTime(lock.locked_at)}` : 'Zárolás után a hónap bére nem változhat (előleg, levonás, beosztás, becsekkolás, tankolás).'}</div>
             </div>
             {/* Két koppintás: a zárolás az összes vezető szerkesztését tiltja, a feloldás a bért teszi módosíthatóvá */}
             <ConfirmButton
@@ -287,6 +287,7 @@ export default function Payroll() {
           <button className="btn ghost sm" disabled={ym === currentYm()} onClick={() => setYm(currentYm())}>Ez a hónap</button>
           <button className="btn secondary sm" disabled={!data || data.rows.length === 0} onClick={() => void exportXlsx()}><Icon name="file-text" />Exportálás Excelbe</button>
         </div>
+        {data && <MonthLockRows ym={ym} workspaces={data.workspaces} />}
       </div>
 
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={4} /></>}
@@ -301,8 +302,6 @@ export default function Payroll() {
       ))}
 
       {data && <XlResultsCard ym={ym} rates={data.workspaces} />}
-
-      {data && <MonthLockCard ym={ym} workspaces={data.workspaces} />}
 
       {!isLoading && (data?.rows.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="calculator" size={40} /></span>Nincs adat a munkatársakról.</div>}
 
@@ -352,6 +351,8 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
   const qc = useQueryClient()
   const isAdmin = profile?.role === 'admin'
   const [open, setOpen] = useState(false)
+  // a kártya alapból össze van csukva: a díjak ritkán változnak, a bér-oldalon a munkatársak a lényeg
+  const [expanded, setExpanded] = useState(false)
   const [addFrom, setAddFrom] = useState(nowYm)
   const [driver, setDriver] = useState('')
   const [loader, setLoader] = useState('')
@@ -438,8 +439,14 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
 
   return (
     <div className="card stack" style={{ borderColor: 'var(--primary)' }}>
-      <div className="between">
+      <button type="button" className="between" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}
+        style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', textAlign: 'left' }}>
         <div className="card-title" style={{ margin: 0 }}><Icon name="banknote" />Napidíjak — {ws.name}</div>
+        <Icon name={expanded ? 'chevron-up' : 'chevron-down'} style={{ color: 'var(--text-dim)' }} />
+      </button>
+      {expanded && <>
+      <div className="between">
+        <div className="tiny muted">Érvényes: {monthTitle(nowYm)}</div>
         {isAdmin && (
           <button className="btn ghost sm" onClick={() => {
             if (!open) {
@@ -464,8 +471,6 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="user" size={14} />Box betanuló/nap</span><span className="num">{formatHuf(ws.boxTrainee)}</span></div>
         <div className="between"><span className="muted row" style={{ gap: 4, whiteSpace: 'nowrap' }}><Icon name="trending-up" size={14} />XL sikerdíj</span><span className="num">{ws.xlBonus > 0 ? `${ws.xlBonusOver} cím felett +${formatHuf(ws.xlBonus)}` : 'nincs'}</span></div>
       </div>
-      <div className="tiny muted" style={{ marginTop: -6 }}>Érvényes: {monthTitle(nowYm)}</div>
-
       {open && isAdmin && (
         <div className="stack" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
           <label className="row" style={{ gap: 10, cursor: 'pointer' }}>
@@ -608,6 +613,7 @@ function RateHistoryCard({ ws, currentYm: nowYm }: { ws: WorkspaceRate; currentY
         )}
         {rows.length === 0 && <div className="tiny muted">Még nincs rögzített napidíj.</div>}
       </div>
+      </>}
     </div>
   )
 }
