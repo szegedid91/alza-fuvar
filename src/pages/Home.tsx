@@ -100,6 +100,7 @@ export default function Home() {
     { group: 'Napi munka', to: '/elo-nezet', icon: 'life-buoy', title: 'Élő nézet', desc: 'Segítség, ha elakad', badge: counts?.help },
     { group: 'Emberek és autók', to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk', badge: counts?.pending },
     { group: 'Emberek és autók', to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, meghívók' },
+    { group: 'Emberek és autók', to: '/emberek', icon: 'user', title: 'Adatlapok', desc: 'Egy ember minden adata, diagramokkal' },
     { group: 'Emberek és autók', to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok, kategóriák' },
     { group: 'Emberek és autók', to: '/hibak', icon: 'wrench', title: 'Autó-hibák', desc: 'Bejelentések', badge: counts?.issues },
     { group: 'Pénz és kimutatás', to: '/riportok', icon: 'trending-up', title: 'Riportok', desc: 'Napok, órák, üzemanyag' },

@@ -544,6 +544,42 @@ input[type='date'].input {
 .photo-help-banner { background: var(--danger); color: #fff; align-items: flex-start; }
 .photo-help-banner .btn { background: #fff; color: var(--danger); }
 
+/* ---------- Diagramok ---------- */
+/* Sorozatszínek: rögzített sorrend (1 kék, 2 narancs, 3 zöld), mindkét témában a kártya felületére ellenőrizve
+   (színtévesztő-biztos szomszédok, legalább 3:1 kontraszt sötétben; világosban a zöld 2,8:1 — ezért van táblázat-nézet) */
+:root { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; }
+:root[data-theme='light'] { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; }
+.viz svg { display: block; overflow: visible; }
+.viz-grid { stroke: var(--border); stroke-width: 1; opacity: .6; }
+.viz-base { stroke: var(--border); stroke-width: 1; }
+.viz-axis { fill: var(--text-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.viz-label { fill: var(--text); font-size: 11px; font-weight: 700; }
+/* a vonalra kerülő felirat a felület színével körberajzolva olvasható marad */
+.viz-halo { paint-order: stroke; stroke: var(--bg-elev); stroke-width: 3px; stroke-linejoin: round; }
+.viz-tip {
+  position: absolute; top: 0; z-index: 5; pointer-events: none;
+  background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+  padding: 8px 10px; font-size: 12px; color: var(--text);
+}
+.viz-tip-title { font-weight: 700; margin-bottom: 4px; }
+.viz-tip-row { display: flex; align-items: center; gap: 6px; line-height: 1.5; color: var(--text-dim); }
+.viz-tip-row strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.viz-tip-total { border-top: 1px solid var(--border); margin-top: 3px; padding-top: 3px; }
+.viz-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; display: inline-block; }
+.viz-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.viz-table th { text-align: right; font-weight: 700; color: var(--text-dim); padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.viz-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.viz-table th:first-child, .viz-table td:first-child { text-align: left; }
+.viz-ranked { display: grid; gap: 7px; }
+.viz-ranked-row { display: grid; grid-template-columns: minmax(84px, 30%) 1fr auto; align-items: center; gap: 10px; }
+.viz-ranked-track { display: block; height: 14px; }
+.viz-ranked-track > span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.viz-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.viz-stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.viz-stat-value { font-size: 19px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viz-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.viz-grid-2 > .card { margin-top: 0; }
+
 /* ---------- Napszám-kártya (Napok ezen a héten / ebben a hónapban) ---------- */
 /* Az elrendezést a kártya szélessége dönti el, minden sorra egyformán */
 .crew-days { container-type: inline-size; }

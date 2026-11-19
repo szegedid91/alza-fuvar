@@ -75,7 +75,7 @@ const persister = createSyncStoragePersister({ storage: window.localStorage, key
 // és egy nagy tétel ne lépje túl a kvótát (akkor a teljes offline cache elveszne)
 // + tagok (bér, telefon), meghívók (a link maga a kulcs), előlegek, statisztika: vezetői gépen se maradjanak a böngészőben;
 // + aláírt kép-linkek és QR-képek: egy óra múlva úgyis érvénytelenek, csak a tárat hizlalják
-const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-history', 'feedback', 'members', 'ws-members', 'pending-users', 'invites', 'adjustments', 'statistics', 'signed', 'qr', 'photo-review']
+const NO_PERSIST = ['help-session', 'audit', 'client-errors', 'payroll', 'rate-history', 'feedback', 'members', 'ws-members', 'pending-users', 'invites', 'adjustments', 'statistics', 'signed', 'qr', 'photo-review', 'person', 'people-list']
 const shouldDehydrateQuery = (q: { queryKey: readonly unknown[]; state: { status: string } }) =>
   q.state.status === 'success' && !NO_PERSIST.some((k) => String(q.queryKey[0]).startsWith(k))
 

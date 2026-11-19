@@ -569,6 +569,7 @@ export default function Members() {
                           : <div className="small">{m.phone}</div>)
                         : <div className="tiny muted">Nincs megadva.</div>}
                     </div>
+                    <Link to={`/emberek/${m.id}`} className="btn ghost sm" style={{ gridColumn: '1 / -1', textDecoration: 'none' }}><Icon name="trending-up" size={16} />Adatlap: napok, bér, események diagramokkal</Link>
                     {/* Név átírása — visszamenőleg is mindenhol az új név látszik (a vezetők nevét csak admin írhatja át) */}
                     {(() => {
                       const current = m.full_name ?? ''

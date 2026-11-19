@@ -47,6 +47,7 @@ const BoxSheets = lazyRetry(() => import('./pages/BoxSheets'), 'BoxSheets')
 const RoutesPage = lazyRetry(() => import('./pages/Routes'), 'Routes')
 const LiveView = lazyRetry(() => import('./pages/LiveView'), 'LiveView')
 const Boxes = lazyRetry(() => import('./pages/Boxes'), 'Boxes')
+const People = lazyRetry(() => import('./pages/People'), 'People')
 
 function FullScreenSpinner() {
   return <div className="center-screen"><div className="spinner" /></div>
@@ -128,6 +129,8 @@ export default function App() {
           {isManagerOrAdmin && <Route path="/terkep" element={<FleetMap />} />}
           {isManagerOrAdmin && <Route path="/jovahagyas" element={<Approvals />} />}
           {isManagerOrAdmin && <Route path="/tagok" element={<Members />} />}
+          {isManagerOrAdmin && <Route path="/emberek" element={<People />} />}
+          {isManagerOrAdmin && <Route path="/emberek/:id" element={<People />} />}
           {isManagerOrAdmin && <Route path="/autok" element={<Cars />} />}
           {isManagerOrAdmin && <Route path="/beosztas-szerkeszto" element={<ShiftEditor />} />}
           {isManagerOrAdmin && <Route path="/elolegek" element={<Adjustments />} />}

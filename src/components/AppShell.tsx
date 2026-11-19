@@ -27,7 +27,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/profil': 'Profil', '/elo-nezet': 'Élő nézet', '/beolvasas': 'Becsekkolás', '/ellenorzes': 'Autó-ellenőrzés', '/tankolas': 'Tankolás',
   '/esemeny': 'Esemény / baleset', '/takaritas': 'Takarítás', '/beosztas': 'Beosztásom', '/hibak': 'Autó-hibák',
   '/attekintes': 'Áttekintés', '/riportok': 'Riportok', '/terkep': 'Térkép', '/jovahagyas': 'Jóváhagyás',
-  '/tagok': 'Tagok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
+  '/tagok': 'Tagok', '/emberek': 'Adatlapok', '/autok': 'Autók', '/beosztas-szerkeszto': 'Beosztás',
   '/elolegek': 'Előleg / levonás', '/bizonyitek': 'Bizonyíték-fotók', '/ber': 'Bér / kimutatás',
   '/statisztika': 'Statisztika', '/kepek': 'Képek', '/tortenet': 'Előzmények', '/naplo': 'Napló', '/jarat-valtozasok': 'Járat-változások',
   '/box-lap': 'Box-lap', '/box-lapok': 'Box-lapok', '/boxok': 'AlzaBox kereső', '/jaratok': 'Járatok',
@@ -244,7 +244,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const role = profile?.role
   const isCrew = isCrewRole(role)
   const isManagerOrAdmin = role === 'manager' || role === 'admin'
-  const pageTitle = ROUTE_TITLES[pathname]
+  const pageTitle = ROUTE_TITLES[pathname] ?? (pathname.startsWith('/emberek/') ? 'Adatlap' : undefined)
 
   // Ellenőrzés-zár: becsekkolás után, amíg nincs 5 fotó vagy vezetői engedély, csak néhány oldal érhető el
   const { data: today } = useToday()
