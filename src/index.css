@@ -577,6 +577,13 @@ input[type='date'].input {
 .viz-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .viz-stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; min-width: 0; }
 .viz-stat-value { font-size: 19px; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* egy oszlop: a sávok egymás alatt, közös bal széllel — így a mutatók összevethetők */
+.viz-team { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.viz-team-row { display: grid; gap: 4px; min-width: 0; }
+.viz-team-track { position: relative; height: 12px; background: var(--bg-elev-2); border-radius: 0 4px 4px 0; }
+.viz-team-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--viz-1); border-radius: 0 4px 4px 0; }
+/* a csapatátlag jele: a felület színével körberajzolt vonal, hogy a sávon és a sávon kívül is látsszon */
+.viz-team-avg { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--text); box-shadow: 0 0 0 2px var(--bg-elev); border-radius: 1px; }
 .viz-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
 .viz-grid-2 > .card { margin-top: 0; }
 

@@ -5,6 +5,7 @@ import { compactHuf, dayShort, monthShort } from '../lib/chartUtils'
 import { formatDate, formatHuf, roleLabel, statusLabel } from '../lib/labels'
 import { monthTitle } from '../lib/calendar'
 import type { Departure, MonthRow, Tempo } from '../lib/personStats'
+import type { CompareRow } from '../lib/teamStats'
 import type { AdvanceBasis } from '../lib/payroll'
 import type { Enums } from '../lib/database.types'
 
@@ -35,6 +36,8 @@ export interface PersonData {
   efficiency: { perXlAddress: number | null; perBoxStop: number | null; fuelAvg: number | null; damage: number }
   // az ugyanilyen hosszú előző időszak fő számai (null = nincs mihez mérni)
   prev: { days: number; base: number; missed: number | null; lateDepartures: number; lateStops: number } | null
+  // a csapathoz mérve (null = még töltődik; üres = nincs kihez mérni)
+  team: CompareRow[] | null
 }
 
 const MONTH_FROM = ['januártól', 'februártól', 'márciustól', 'áprilistól', 'májustól', 'júniustól', 'júliustól', 'augusztustól', 'szeptembertől', 'októbertől', 'novembertől', 'decembertől']
@@ -47,6 +50,32 @@ const vsPrev = (now: number, prev: number | null | undefined, unit = ''): string
   const d = now - prev
   if (d === 0) return prev === 0 ? undefined : 'előző időszak: ugyanennyi'
   return `előző időszak: ${prev.toLocaleString('hu-HU')}${unit} (${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('hu-HU')})`
+}
+
+// Egy mutató a csapathoz mérve: a sáv az ember értéke, a függőleges jel a csapatátlag (közös skálán), mellette a helyezés.
+// A sáv színe nem minősít — hogy jobb-e az átlagnál, azt a szöveg mondja meg.
+const num = (v: number, unit: string) => `${v.toLocaleString('hu-HU', { maximumFractionDigits: unit === 'nap' || unit === 'db' ? (Number.isInteger(v) ? 0 : 1) : 1 })}${unit === '%' ? '%' : ` ${unit}`}`
+function TeamRow({ r }: { r: CompareRow }) {
+  const max = Math.max(r.mine, r.avg, 0.0001) * 1.12
+  const diff = r.mine - r.avg
+  const same = Math.abs(diff) < Math.max(0.05, Math.abs(r.avg) * 0.03)
+  const better = same ? null : r.lowerIsBetter ? diff < 0 : diff > 0
+  return (
+    <div className="viz-team-row">
+      <div className="between small" style={{ gap: 8, alignItems: 'baseline' }}>
+        <span style={{ fontWeight: 600 }}>{r.label}</span>
+        <span className="tiny muted" style={{ whiteSpace: 'nowrap' }}>{r.rank}. a {r.of}-ból</span>
+      </div>
+      <div className="viz-team-track" role="img" aria-label={`${r.label}: ${num(r.mine, r.unit)}, csapatátlag ${num(r.avg, r.unit)}`}>
+        <span className="viz-team-bar" style={{ width: `${Math.max(1.5, (r.mine / max) * 100)}%` }} />
+        <span className="viz-team-avg" style={{ left: `${(r.avg / max) * 100}%` }} />
+      </div>
+      <div className="tiny" style={{ color: 'var(--text-dim)' }}>
+        <strong style={{ color: 'var(--text)' }}>{num(r.mine, r.unit)}</strong> · csapatátlag {num(r.avg, r.unit)}
+        {better != null && <> · {better ? 'jobb az átlagnál' : 'gyengébb az átlagnál'}</>}{same && <> · az átlag körül</>}
+      </div>
+    </div>
+  )
 }
 
 // Szakasz: cím darabszámmal; a hosszú lista az első néhány sorral indul, a többi egy koppintásra
@@ -200,6 +229,16 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
           </ChartCard>
         )}
       </div>
+
+      {data.team && data.team.length > 0 && (
+        <div className="card stack" style={{ gap: 10 }}>
+          <div>
+            <div className="card-title" style={{ margin: 0 }}><Icon name="users" />A csapathoz mérve</div>
+            <div className="tiny muted">Ugyanarra az időszakra, a munkaterület minden emberével. A sáv az ő értéke, a függőleges vonal a csapatátlag. Egy mutatóba csak az számít bele, akinél van hozzá elég adat.</div>
+          </div>
+          <div className="viz-team">{data.team.map((r) => <TeamRow key={r.key} r={r} />)}</div>
+        </div>
+      )}
 
       {showPay && (
         <Section icon="banknote" title="Fizetések havonta" count={months.filter((r) => r.base > 0 || r.advances > 0 || r.deductions > 0).length} empty="Az időszakban nincs elszámolható nap, előleg vagy levonás.">

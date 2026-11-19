@@ -11,6 +11,7 @@ import PersonProfileView, { type PersonData } from '../components/PersonProfileV
 import { DayTimeline, PersonRecords } from '../components/PersonExtras'
 import { flagOf, unexcused, type AbsenceLike, type PersonSignals } from '../lib/peopleFlags'
 import { minutesApart, plannedStartOf } from '../lib/personStats'
+import { compareToTeam, perPersonMetrics, type TeamInputs } from '../lib/teamStats'
 import { carIssueStatusLabel, memberLabel, roleLabel, statusLabel, todayISO } from '../lib/labels'
 import { errMsg } from '../lib/errors'
 import { readPayBasis, savePayBasis } from '../lib/payBasis'
@@ -83,6 +84,38 @@ export async function loadPerson(id: string, r: ReturnType<typeof rangeOf>) {
   }
 }
 
+// A csapat adatai ugyanarra az időszakra: ebből készül minden ember ugyanazon mutatója, az átlag és a helyezés
+async function loadTeam(ws: string, r: ReturnType<typeof rangeOf>, today: string) {
+  const [shifts, checkins, departed, logs, sheets, xl, abs] = await Promise.all([
+    fetchAll((f, t) => supabase.from('shifts').select('id, work_date, workspace_id, car_id, round, is_box, driver_id, loader_id, trainee_id, car:cars(plate, category:car_categories(box_sheet)), route:route_names(code, planned_start)')
+      .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('check_ins').select('id, user_id, work_date, workspace_id, first_checked_in_at, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, prev_car_id')
+      .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('status_events').select('id, user_id, work_date, kind, at').eq('workspace_id', ws).eq('kind', 'departed').gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('route_stop_logs').select('id, user_id, work_date, route_id, round, done_at, late_minutes, delay_reason').eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('box_sheets').select('id, user_id, stops:box_sheet_stops(missorted, nf, oversize, shortage, returned, damaged, left_on_car, invalid_code, do_not_place, cancelled)')
+      .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('xl_day_results').select('id, car_id, work_date, success_count').eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    supabase.from('absences').select('user_id, from_date, to_date').eq('workspace_id', ws).lt('from_date', r.endExclusive).gte('to_date', r.start),
+  ])
+  if (abs.error) throw abs.error
+  const inputs: TeamInputs = {
+    shifts: shifts.map((s) => {
+      const car = s.car as unknown as { plate: string; category: { box_sheet: boolean } | null } | null
+      const route = s.route as unknown as { code: string; planned_start: string | null } | null
+      return { work_date: s.work_date, workspace_id: s.workspace_id, car_id: s.car_id, round: s.round, is_box: s.is_box ?? !!car?.category?.box_sheet,
+        driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, plate: car?.plate ?? '?', route: route?.code ?? null, planned_start: route?.planned_start ?? null }
+    }),
+    checkins: checkins as PCheckin[], departed: departed as (PEvent & { user_id: string })[], logs: logs as (PStopLog & { user_id: string | null })[],
+    sheetStops: sheets.map((sh) => {
+      const st = (sh.stops ?? []) as unknown as Record<string, number | null>[]
+      return { user_id: sh.user_id, stops: st.length, problems: st.reduce((a, x) => a + PROBLEM.reduce((b, [k]) => b + Number(x[k] ?? 0), 0), 0) }
+    }),
+    xl: xl as XlResultLike[], absences: (abs.data ?? []) as (AbsenceLike & { user_id: string })[],
+  }
+  return perPersonMetrics(inputs, today)
+}
+
 type Raw = Awaited<ReturnType<typeof loadPerson>>
 
 // A betöltött adatokból az adatlap minden száma (tiszta számítás — az előző időszakra is ugyanez fut le)
@@ -149,7 +182,7 @@ function compute(raw: Raw, range: { start: string; endExclusive: string }, basis
       perXlAddress: xlAddr > 0 && xlPay > 0 ? xlPay / xlAddr : null, perBoxStop: tempo.stops > 0 && boxPay > 0 ? boxPay / tempo.stops : null,
       fuelAvg: cons.length ? sum(cons) / cons.length : null, damage: sum(rows.map((r) => r.deductions)),
     },
-    prev: null,
+    prev: null, team: null,
   }
 }
 
@@ -174,9 +207,19 @@ function PersonProfile({ id }: { id: string }) {
     queryFn: () => loadPerson(id, prevRange!),
   })
 
+  // a csapat ugyanarra az időszakra — embert váltva nem töltődik újra
+  const teamWs = raw?.profile.workspace_id ?? null
+  const { data: team } = useQuery({
+    queryKey: ['person', 'team', teamWs, range.start, range.endExclusive],
+    enabled: !!teamWs,
+    staleTime: 5 * 60_000,
+    queryFn: () => loadTeam(teamWs!, range, today),
+  })
+
   const data = useMemo<PersonData | null>(() => {
     if (!raw) return null
     const cur = compute(raw, range, basis, today, id, isAdmin, preset === 'all')
+    cur.team = team ? compareToTeam(team, id) : null
     if (prevRaw && prevRange) {
       const pv = compute(prevRaw, prevRange, basis, today, id, isAdmin, false)
       const lateDep = (d: PersonData) => d.punctuality.departures.filter((x) => x.lateMin > 5).length
@@ -186,7 +229,7 @@ function PersonProfile({ id }: { id: string }) {
       }
     }
     return cur
-  }, [raw, prevRaw, prevRange, range, basis, today, id, isAdmin, preset])
+  }, [raw, prevRaw, prevRange, team, range, basis, today, id, isAdmin, preset])
 
   return (
     <div className="stack">
