@@ -64,7 +64,11 @@ export function BoxIssueButton({ box, stopId = null, courierName, onReported }: 
   const sel = ISSUE_KINDS.find((k) => k.key === kind)
   return (
     <div className="stack" style={{ gap: 8, padding: 8, borderRadius: 10, border: `1px solid ${sel?.urgent ? 'var(--danger)' : 'var(--border)'}`, background: sel?.urgent ? 'var(--danger-ghost)' : undefined }}>
-      <div className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} /> Box-hiba — {boxLabel}</div>
+      {/* a bezárás fent is ott van, ugyanúgy, mint az „Eltérések” résznél — ne kelljen az aljáig görgetni érte */}
+      <div className="between" style={{ gap: 8, alignItems: 'flex-start' }}>
+        <span className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} /> Box-hiba — {boxLabel}</span>
+        <button type="button" className="link-btn tiny" style={{ padding: 0, flexShrink: 0 }} onClick={reset}>bezárás</button>
+      </div>
       <div className="chips" style={{ gap: 6 }}>
         {ISSUE_KINDS.map((k) => <button key={k.key} type="button" className={`chip ${kind === k.key ? 'active' : ''}`} aria-pressed={kind === k.key} style={k.urgent && kind !== k.key ? { borderColor: 'var(--danger)', color: 'var(--danger)' } : undefined} onClick={() => setKind(k.key)}>{k.label}</button>)}
       </div>
