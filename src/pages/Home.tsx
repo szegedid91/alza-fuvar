@@ -12,6 +12,7 @@ import { useMyRoutesToday } from '../hooks/useMyRoutesToday'
 import { dayComplete, allRoundsDone } from '../lib/rounds'
 import { CleaningCard } from './Inspection'
 import RouteCard from '../components/RouteCard'
+import RouteTakeover from '../components/RouteTakeover'
 import Icon, { type IconName } from '../components/Icon'
 import { useCrewConflicts } from '../lib/crewConflicts'
 import { usePhotoHelpRequests, useWaiveInspection } from '../lib/photoHelp'
@@ -143,6 +144,8 @@ export default function Home() {
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && departed && <RouteCard active />}
       {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && !(settled && !today.checkin.checked_out_at) && <StatusCard roundsOver={roundsOver} onRoute={departed && (myRoutes?.length ?? 0) > 0} />}
       {isCrew && !inspectionLocked && !!today?.checkin && !roundsOver && arrived && !departed && <RouteCard active={false} />}
+      {/* Járat átvétele menet közben: ha ezen az autón más járata fut, vagy egy kolléga járatát kell tovább vinni */}
+      {isCrew && !inspectionLocked && !!today?.checkin && !today.checkin.checked_out_at && <RouteTakeover />}
       {/* „Mai nap” kártya becsekkolás után csak akkor, ha van mit mutatnia: volt már „Járat kész” (Box-lapok
           megtekintése) vagy a nap lezárult. Előtte felesleges — a futár a jelzés-gombot és a járatot látja. */}
       {isCrew && !inspectionLocked && !!today?.checkin && ((!arrived && anyDone) || roundsOver || !!today.checkin.checked_out_at) && !(settled && !today.checkin.checked_out_at) && <TodayStepper />}

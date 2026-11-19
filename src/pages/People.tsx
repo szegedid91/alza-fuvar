@@ -42,6 +42,9 @@ const PROBLEM: [string, string][] = [
   ['nf', 'Nem fért be (NF)'], ['shortage', 'Hiány'], ['missorted', 'Félreválogatott'], ['oversize', 'Túlméretes'], ['returned', 'Visszahozott'],
   ['invalid_code', 'Érvénytelen kód'], ['do_not_place', 'Ne helyezd be'], ['cancelled', 'Törölt'], ['damaged', 'Sérült (régi jelölés)'], ['left_on_car', 'Autón maradt'],
 ]
+// A járat átvételekor a szerver maga rögzít egy „Kiindultam” jelzést az átvevőnek (hogy azonnal folytathassa) —
+// ez nem valódi indulás, a pontossági számításból kimarad
+const realEvent = (e: { note?: string | null }) => !(e.note ?? '').startsWith('Átvett járat')
 const plateOf = (x: unknown): string => (x as { plate?: string } | null)?.plate ?? '?'
 
 // Minden, ami a szerverről kell egy ember adatlapjához (a számítás utána, helyben történik)
@@ -65,7 +68,7 @@ export async function loadPerson(id: string, r: ReturnType<typeof rangeOf>) {
     supabase.from('swap_requests').select('id', { count: 'exact', head: true }).eq('requested_by', id).gte('created_at', r.startISO).lt('created_at', r.endISO),
     supabase.from('workspaces').select(`id, ${RATE_COLS}`),
     supabase.from('workspace_rate_history').select(`workspace_id, valid_from, ${RATE_COLS}`).order('valid_from'),
-    fetchAll((f, t) => supabase.from('status_events').select('id, work_date, kind, at').eq('user_id', id).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('status_events').select('id, work_date, kind, at, note').eq('user_id', id).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
     supabase.from('setoff_alarms').select('work_date, call_count').eq('user_id', id).gte('work_date', r.start).lt('work_date', r.endExclusive),
     supabase.from('box_issue_reports').select('id', { count: 'exact', head: true }).eq('created_by', id).gte('created_at', r.startISO).lt('created_at', r.endISO),
     // az előlegek az időszaktól függetlenül, minden hónapra visszamenőleg
@@ -80,7 +83,7 @@ export async function loadPerson(id: string, r: ReturnType<typeof rangeOf>) {
     .in('workspace_id', wsIds).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t))
   return {
     profile: prof.data, shifts, checkins, adjustments: adj.data ?? [], fuel: fuel.data ?? [], incidents: inc.data ?? [], issues: issues.data ?? [], cleanings: clean.data ?? [],
-    inspections: insp.count ?? 0, sheets: sheets.data ?? [], logs, events: events as PEvent[], alarms: alarms.data ?? [], boxIssues: boxIssues.count ?? 0, advancesAll: (advAll.data ?? []) as PAdjustment[], absences: (abs.data ?? []) as AbsenceLike[], swaps: swaps.count ?? 0, wsRates: (wsRates.data ?? []) as WsRate[], history: (hist.data ?? []) as RateRow[], xl: xl as XlResultLike[],
+    inspections: insp.count ?? 0, sheets: sheets.data ?? [], logs, events: (events as (PEvent & { note: string | null })[]).filter(realEvent), alarms: alarms.data ?? [], boxIssues: boxIssues.count ?? 0, advancesAll: (advAll.data ?? []) as PAdjustment[], absences: (abs.data ?? []) as AbsenceLike[], swaps: swaps.count ?? 0, wsRates: (wsRates.data ?? []) as WsRate[], history: (hist.data ?? []) as RateRow[], xl: xl as XlResultLike[],
   }
 }
 
@@ -91,7 +94,7 @@ async function loadTeam(ws: string, r: ReturnType<typeof rangeOf>, today: string
       .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
     fetchAll((f, t) => supabase.from('check_ins').select('id, user_id, work_date, workspace_id, first_checked_in_at, checked_in_at, checked_out_at, outside_geofence, out_outside_geofence, prev_car_id')
       .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
-    fetchAll((f, t) => supabase.from('status_events').select('id, user_id, work_date, kind, at').eq('workspace_id', ws).eq('kind', 'departed').gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
+    fetchAll((f, t) => supabase.from('status_events').select('id, user_id, work_date, kind, at, note').eq('workspace_id', ws).eq('kind', 'departed').gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
     fetchAll((f, t) => supabase.from('route_stop_logs').select('id, user_id, work_date, route_id, round, done_at, late_minutes, delay_reason').eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
     fetchAll((f, t) => supabase.from('box_sheets').select('id, user_id, stops:box_sheet_stops(missorted, nf, oversize, shortage, returned, damaged, left_on_car, invalid_code, do_not_place, cancelled)')
       .eq('workspace_id', ws).gte('work_date', r.start).lt('work_date', r.endExclusive).order('id').range(f, t)),
@@ -106,7 +109,7 @@ async function loadTeam(ws: string, r: ReturnType<typeof rangeOf>, today: string
       return { work_date: s.work_date, workspace_id: s.workspace_id, car_id: s.car_id, round: s.round, is_box: s.is_box ?? !!car?.category?.box_sheet,
         driver_id: s.driver_id, loader_id: s.loader_id, trainee_id: s.trainee_id, plate: car?.plate ?? '?', route: route?.code ?? null, planned_start: route?.planned_start ?? null }
     }),
-    checkins: checkins as PCheckin[], departed: departed as (PEvent & { user_id: string })[], logs: logs as (PStopLog & { user_id: string | null })[],
+    checkins: checkins as PCheckin[], departed: (departed as (PEvent & { user_id: string; note: string | null })[]).filter(realEvent), logs: logs as (PStopLog & { user_id: string | null })[],
     sheetStops: sheets.map((sh) => {
       const st = (sh.stops ?? []) as unknown as Record<string, number | null>[]
       return { user_id: sh.user_id, stops: st.length, problems: st.reduce((a, x) => a + PROBLEM.reduce((b, [k]) => b + Number(x[k] ?? 0), 0), 0) }
@@ -284,7 +287,7 @@ function PeopleList() {
         fetchAll((f, t) => supabase.from('shifts').select('id, driver_id, loader_id, trainee_id, work_date, round, is_box, car:cars(category:car_categories(box_sheet)), route:route_names(planned_start)')
           .eq('workspace_id', ws).gte('work_date', from).lte('work_date', today).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('check_ins').select('id, user_id, work_date, checked_out_at, inspection_waived_at').eq('workspace_id', ws).gte('work_date', from).order('id').range(f, t)),
-        fetchAll((f, t) => supabase.from('status_events').select('id, user_id, work_date, at').eq('workspace_id', ws).eq('kind', 'departed').gte('work_date', from).order('id').range(f, t)),
+        fetchAll((f, t) => supabase.from('status_events').select('id, user_id, work_date, at, note').eq('workspace_id', ws).eq('kind', 'departed').gte('work_date', from).order('id').range(f, t)),
         fetchAll((f, t) => supabase.from('route_stop_logs').select('id, user_id, late_minutes').eq('workspace_id', ws).gte('work_date', from).order('id').range(f, t)),
         supabase.from('setoff_alarms').select('user_id').eq('workspace_id', ws).gte('work_date', from),
         supabase.from('absences').select('user_id, from_date, to_date').eq('workspace_id', ws).gte('to_date', from),
@@ -309,7 +312,7 @@ function PeopleList() {
       }
       // késett indulás: a nap „Kiindultam” jelzései idő szerint a Box-körökhöz párosítva
       const depBy = new Map<string, string[]>()
-      for (const e of events) { const k = `${e.user_id}|${e.work_date}`; depBy.set(k, [...(depBy.get(k) ?? []), e.at]) }
+      for (const e of events.filter(realEvent)) { const k = `${e.user_id}|${e.work_date}`; depBy.set(k, [...(depBy.get(k) ?? []), e.at]) }
       for (const [k, ats] of depBy) {
         const [u, date] = k.split('|')
         const rounds = of(u).box.filter((b) => b.date === date).sort((x, y) => x.round - y.round)

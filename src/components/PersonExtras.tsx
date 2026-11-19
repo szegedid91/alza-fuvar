@@ -142,7 +142,7 @@ export function DayTimeline({ userId, dates }: { userId: string; dates: string[]
     queryKey: ['person', 'day', userId, date],
     enabled: !!date,
     queryFn: async () => {
-      const [ev, ci, logs, insp, clean, fuel, inc] = await Promise.all([
+      const [ev, ci, logs, insp, clean, fuel, inc, hand] = await Promise.all([
         supabase.from('status_events').select('kind, at, note').eq('user_id', userId).eq('work_date', date),
         supabase.from('check_ins').select('first_checked_in_at, checked_in_at, checked_out_at, manual_checkin, switch_reason, prev_car_id, car:cars!check_ins_car_id_fkey(plate)').eq('user_id', userId).eq('work_date', date),
         supabase.from('route_stop_logs').select('done_at, late_minutes, delay_reason, round, box:alza_boxes(code)').eq('user_id', userId).eq('work_date', date),
@@ -150,8 +150,10 @@ export function DayTimeline({ userId, dates }: { userId: string; dates: string[]
         supabase.from('cleanings').select('created_at').eq('user_id', userId).eq('work_date', date),
         supabase.from('fuel_logs').select('created_at, amount, liters').eq('user_id', userId).eq('work_date', date),
         supabase.from('incidents').select('created_at, note').eq('user_id', userId).eq('work_date', date),
+        // járat-átvételek, amelyekben érintett (átvette vagy tőle vették át)
+        supabase.from('route_handovers').select('created_at, from_user, to_user, round, stop_index, reason, route:route_names(code)').eq('work_date', date).or(`to_user.eq.${userId},from_user.eq.${userId}`),
       ])
-      for (const q of [ev, ci, logs, insp, clean, fuel, inc]) if (q.error) throw q.error
+      for (const q of [ev, ci, logs, insp, clean, fuel, inc, hand]) if (q.error) throw q.error
       const items: { at: string; icon: IconName; text: string; warn?: boolean }[] = []
       for (const e of ev.data ?? []) items.push({ at: e.at, icon: EVENT_LABEL[e.kind]?.icon ?? 'circle-dot', text: `${EVENT_LABEL[e.kind]?.label ?? e.kind}${e.note ? ` — ${e.note}` : ''}` })
       for (const c of ci.data ?? []) {
@@ -167,6 +169,14 @@ export function DayTimeline({ userId, dates }: { userId: string; dates: string[]
       for (const c of clean.data ?? []) items.push({ at: c.created_at, icon: 'sparkles', text: 'Takarítás rögzítve' })
       for (const f of fuel.data ?? []) items.push({ at: f.created_at, icon: 'fuel', text: `Tankolás${f.liters ? `: ${Number(f.liters).toLocaleString('hu-HU', { maximumFractionDigits: 1 })} l` : ''}${f.amount ? ` · ${formatHuf(Number(f.amount))}` : ''}` })
       for (const x of inc.data ?? []) items.push({ at: x.created_at, icon: 'alert-triangle', text: `Esemény / baleset${x.note ? ` — ${x.note}` : ''}`, warn: true })
+      const hNames = await resolveNames((hand.data ?? []).flatMap((h) => [h.from_user, h.to_user]))
+      for (const h of hand.data ?? []) {
+        const code = (h.route as unknown as { code: string } | null)?.code ?? '?'
+        const at = `${(h.stop_index ?? 0) + 1}. boxtól`
+        items.push({ at: h.created_at, icon: 'repeat', warn: true, text: h.to_user === userId
+          ? `Átvette a(z) ${code} járatot (${h.round}. kör)${h.from_user ? ` — ${hNames[h.from_user] ?? 'kollégától'}` : ''}, a(z) ${at}${h.reason ? ` · ${h.reason}` : ''}`
+          : `A(z) ${code} járatát (${h.round}. kör) átvette ${hNames[h.to_user] ?? 'egy kolléga'}, a(z) ${at}${h.reason ? ` · ${h.reason}` : ''}` })
+      }
       return items.sort((a, b) => a.at.localeCompare(b.at))
     },
   })

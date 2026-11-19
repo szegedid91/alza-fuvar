@@ -29,13 +29,19 @@ export default function QualityReportCard() {
     enabled: !!currentWorkspaceId && /^\d{4}-\d{2}-\d{2}$/.test(day),
     queryFn: async () => {
       const ws = currentWorkspaceId!
-      const [routesRes, shiftsRes] = await Promise.all([
+      const [routesRes, shiftsRes, handRes] = await Promise.all([
         supabase.from('route_names').select('id, code, active, is_relief').eq('workspace_id', ws),
         supabase.from('shifts').select('work_date, round, route_id, driver_id, loader_id').eq('workspace_id', ws).gte('work_date', eve).lte('work_date', day),
+        // menet közben átvett járatok: aki elkezdte, az is a járat embere (az ő indulása és az ő megállói is a járathoz tartoznak)
+        supabase.from('route_handovers').select('work_date, round, route_id, from_user').eq('workspace_id', ws).gte('work_date', eve).lte('work_date', day),
       ])
       if (routesRes.error) throw routesRes.error
       if (shiftsRes.error) throw shiftsRes.error
-      const shifts = (shiftsRes.data ?? []) as QShift[]
+      if (handRes.error) throw handRes.error
+      const shifts = [
+        ...((shiftsRes.data ?? []) as QShift[]),
+        ...(handRes.data ?? []).filter((h) => !!h.from_user).map((h): QShift => ({ work_date: h.work_date, round: h.round, route_id: h.route_id, driver_id: h.from_user, loader_id: null })),
+      ]
       const users = [...new Set(shifts.flatMap((s) => [s.driver_id, s.loader_id]).filter((x): x is string => !!x))]
       let events: QEvent[] = []; let sheets: QSheet[] = []; let stops: QStop[] = []
       if (users.length) {
@@ -50,7 +56,8 @@ export default function QualityReportCard() {
         ])
         if (evRes.error) throw evRes.error
         if (shRes.error) throw shRes.error
-        events = (evRes.data ?? []) as QEvent[]
+        // az átvételkor a szerver által rögzített „Kiindultam” nem valódi indulás — a jelentésből kimarad
+        events = ((evRes.data ?? []) as QEvent[]).filter((e) => !(e.kind === 'departed' && (e.note ?? '').startsWith('Átvett járat')))
         const rows = (shRes.data ?? []) as unknown as (QSheet & { stops: QStop[] | null })[]
         sheets = rows.map(({ stops: _s, ...rest }) => rest as QSheet)
         stops = rows.flatMap((r) => r.stops ?? [])

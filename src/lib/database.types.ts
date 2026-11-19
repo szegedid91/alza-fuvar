@@ -3005,6 +3005,59 @@ export type Database = {
           },
         ]
       }
+      route_handovers: {
+        Row: {
+          created_at: string
+          from_car: string | null
+          from_user: string | null
+          id: string
+          reason: string | null
+          round: number
+          route_id: string
+          stop_index: number | null
+          to_car: string | null
+          to_user: string
+          work_date: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_car?: string | null
+          from_user?: string | null
+          id?: string
+          reason?: string | null
+          round: number
+          route_id: string
+          stop_index?: number | null
+          to_car?: string | null
+          to_user: string
+          work_date: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          from_car?: string | null
+          from_user?: string | null
+          id?: string
+          reason?: string | null
+          round?: number
+          route_id?: string
+          stop_index?: number | null
+          to_car?: string | null
+          to_user?: string
+          work_date?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_handovers_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_names"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -3147,6 +3200,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      take_over_route: {
+        Args: { p_reason?: string; p_round: number; p_route_id: string }
+        Returns: Json
+      }
+      takeover_candidates: { Args: never; Returns: Json }
       storage_workspace_ok: { Args: { objname: string }; Returns: boolean }
       tick_inspection_reminders: { Args: never; Returns: undefined }
       tick_photo_missing_alerts: { Args: never; Returns: undefined }
