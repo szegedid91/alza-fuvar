@@ -18,6 +18,9 @@ function devIcon(acc: DevAccount): IconName {
 }
 
 type Mode = 'login' | 'register' | 'forgot'
+// Szabad regisztráció kikapcsolva: fiókot csak meghívóval lehet kapni (Tagok oldal) — a meghívott a linken jelszót állít be,
+// és azonnal aktív. A regisztrációs ág a kódban marad, ezzel a kapcsolóval visszahozható.
+const SELF_SIGNUP: boolean = false
 
 export default function Login() {
   const [mode, setMode] = useState<Mode>('login')
@@ -107,15 +110,17 @@ export default function Login() {
       </div>
 
       <div className="card auth-card primary">
-        <div className="tabs">
-          {/* Fülváltásnál a jelszó ürül és elrejtődik — a belépéshez gépelt jelszó ne menjen át olvashatóan a regisztrációba */}
-          <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
-            Belépés
-          </button>
-          <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
-            Regisztráció
-          </button>
-        </div>
+        {SELF_SIGNUP && (
+          <div className="tabs">
+            {/* Fülváltásnál a jelszó ürül és elrejtődik — a belépéshez gépelt jelszó ne menjen át olvashatóan a regisztrációba */}
+            <button className={mode === 'login' || mode === 'forgot' ? 'active' : ''} onClick={() => { setMode('login'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
+              Belépés
+            </button>
+            <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setError(null); setInfo(null); setPassword(''); setShowPw(false) }} type="button">
+              Regisztráció
+            </button>
+          </div>
+        )}
 
         <form className="stack" onSubmit={handleSubmit}>
           {mode === 'register' && (
@@ -221,7 +226,9 @@ export default function Login() {
       )}
 
       <p className="tiny muted" style={{ maxWidth: 340, textAlign: 'center' }}>
-        Új fiók regisztráció után jóváhagyásra vár. Amíg egy menedzser jóvá nem hagy és munkaterülethez nem rendel, nem látsz adatot.
+        {SELF_SIGNUP
+          ? 'Új fiók regisztráció után jóváhagyásra vár. Amíg egy menedzser jóvá nem hagy és munkaterülethez nem rendel, nem látsz adatot.'
+          : 'Fiókot a vezetődtől kapott meghívó linkkel hozhatsz létre.'}
       </p>
     </div>
   )

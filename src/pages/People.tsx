@@ -146,6 +146,13 @@ function PersonProfile({ id }: { id: string }) {
       </div>
       {isLoading && <><Skeleton rows={2} /><Skeleton rows={4} /></>}
       {isError && <div className="alert error">Az adatlap betöltése nem sikerült: {errMsg(error, 'ismeretlen hiba')}</div>}
+      {/* Aki nem csekkol be (pl. még nem regisztrált), annál a becsekkolás szerinti nézet üres — szóljunk, hol látszanak a napjai */}
+      {data && basis === 'checkin' && data.attendance.worked === 0 && data.attendance.assigned > 0 && (
+        <div className="alert info row" style={{ gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span>Az időszakban nincs becsekkolása, de {data.attendance.assigned} napra be volt osztva.</span>
+          <button type="button" className="btn sm auto" onClick={() => { setBasis('schedule'); savePayBasis('schedule') }}>Mutasd a beosztás szerint</button>
+        </div>
+      )}
       {data && <div style={{ opacity: isFetching && !isLoading ? 0.6 : 1, transition: 'opacity .15s' }}><PersonProfileView data={data} /></div>}
     </div>
   )

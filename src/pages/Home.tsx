@@ -98,7 +98,9 @@ export default function Home() {
     { group: 'Napi munka', to: '/jaratok', icon: 'map', title: 'Járatok', desc: 'Boxok sorrendje, terv' },
     { group: 'Napi munka', to: '/terkep', icon: 'map-pin', title: 'Térkép', desc: 'Autók élőben' },
     { group: 'Napi munka', to: '/elo-nezet', icon: 'life-buoy', title: 'Élő nézet', desc: 'Segítség, ha elakad', badge: counts?.help },
-    { group: 'Emberek és autók', to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk', badge: counts?.pending },
+    // Jóváhagyás: a szabad regisztráció ki van kapcsolva (csak meghívóval lehet belépni), ezért a csempe csak akkor jelenik meg,
+    // ha mégis van jóváhagyásra váró fiók
+    ...((counts?.pending ?? 0) > 0 ? [{ group: 'Emberek és autók', to: '/jovahagyas', icon: 'user-check', title: 'Jóváhagyás', desc: 'Új regisztrációk', badge: counts?.pending } as HubItem] : []),
     { group: 'Emberek és autók', to: '/tagok', icon: 'users', title: 'Tagok', desc: 'Szerepek, meghívók' },
     { group: 'Emberek és autók', to: '/emberek', icon: 'user', title: 'Adatlapok', desc: 'Egy ember minden adata, diagramokkal' },
     { group: 'Emberek és autók', to: '/autok', icon: 'truck', title: 'Autók', desc: 'QR-kódok, kategóriák' },

@@ -273,7 +273,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
     nav.push({ to: '/beosztas', icon: 'calendar', label: 'Beosztás' })
   }
   if (isManagerOrAdmin) {
-    nav.push({ to: '/jovahagyas', icon: 'user-check', label: 'Jóváhagyás' })
+    // A szabad regisztráció ki van kapcsolva (csak meghívóval lehet belépni), a Jóváhagyás helyén a legtöbbet használt oldal áll;
+    // ha mégis van jóváhagyásra váró fiók, a kezdőlapon megjelenik a csempéje, a Tagok oldalon pedig figyelmeztet
+    nav.push({ to: '/beosztas-szerkeszto', icon: 'calendar', label: 'Beosztás' })
     nav.push({ to: '/tagok', icon: 'users', label: 'Tagok' })
     nav.push({ to: '/profil', icon: 'user', label: 'Profil' })
   }
