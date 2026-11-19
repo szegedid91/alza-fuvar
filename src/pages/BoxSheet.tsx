@@ -581,7 +581,10 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
   const markSent = () => { setSent(true); try { localStorage.setItem(sentKey, '1') } catch { /* nem kritikus */ } }
   const [sharing, setSharing] = useState(false)
   const extraFields = STOP_FIELDS.filter((f) => f.key !== 'placed')
-  const extrasUsed = extraFields.some((f) => stop[f.key] > 0) || (items?.length ?? 0) > 0 || !!stop.note?.trim()
+  // A Box-hiba bejelentés a megjegyzésbe ír („Box-hiba: …”), de az nem eltérés: attól még ne nyíljon ki az Eltérések rész.
+  // Csak a futár saját megjegyzése számít.
+  const ownNote = (stop.note ?? '').split(' · ').some((p) => p.trim() !== '' && !p.trim().startsWith('Box-hiba:'))
+  const extrasUsed = extraFields.some((f) => stop[f.key] > 0) || (items?.length ?? 0) > 0 || ownNote
   const [more, setMore] = useState(extrasUsed)
   useEffect(() => { if (extrasUsed) setMore(true) }, [extrasUsed])
   const filled = isStopFilled(stop)
@@ -601,6 +604,8 @@ function FillStop({ stop, box, courierName, onPatch, resetKey = 0, seqLabel = nu
   function issueReported(kindLabel: string, note: string) {
     const tag = `Box-hiba: ${kindLabel}${note ? ` — ${note}` : ''}`
     if (!(stop.note ?? '').includes(tag)) onPatch({ note: [stop.note?.trim(), tag].filter(Boolean).join(' · ') })
+    // a bejelentés után az Eltérések rész ne maradjon nyitva (hacsak nincs benne tényleges eltérés)
+    if (!extrasUsed) setMore(false)
     markSent()
   }
 
