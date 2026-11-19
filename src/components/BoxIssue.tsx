@@ -65,9 +65,11 @@ export function BoxIssueButton({ box, stopId = null, courierName, onReported }: 
   return (
     <div className="stack" style={{ gap: 8, padding: 8, borderRadius: 10, border: `1px solid ${sel?.urgent ? 'var(--danger)' : 'var(--border)'}`, background: sel?.urgent ? 'var(--danger-ghost)' : undefined }}>
       {/* a bezárás fent is ott van, ugyanúgy, mint az „Eltérések” résznél — ne kelljen az aljáig görgetni érte */}
-      <div className="between" style={{ gap: 8, alignItems: 'flex-start' }}>
-        <span className="small" style={{ fontWeight: 800 }}><Icon name="alert-triangle" size={14} /> Box-hiba — {boxLabel}</span>
-        <button type="button" className="link-btn tiny" style={{ padding: 0, flexShrink: 0 }} onClick={reset}>bezárás</button>
+      {/* A cím kapja a helyet (hosszú boxnévnél több sorba tör), a „bezárás” csak akkora, amekkora a szövege —
+          a link-btn alapból teljes szélességű, ezért itt külön vissza kell venni */}
+      <div className="between" style={{ gap: 10, alignItems: 'flex-start' }}>
+        <span className="small" style={{ fontWeight: 800, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}><Icon name="alert-triangle" size={14} /> Box-hiba — {boxLabel}</span>
+        <button type="button" className="link-btn tiny" style={{ padding: '2px 0 2px 8px', width: 'auto', minHeight: 0, flexShrink: 0, whiteSpace: 'nowrap' }} onClick={reset}>bezárás</button>
       </div>
       <div className="chips" style={{ gap: 6 }}>
         {ISSUE_KINDS.map((k) => <button key={k.key} type="button" className={`chip ${kind === k.key ? 'active' : ''}`} aria-pressed={kind === k.key} style={k.urgent && kind !== k.key ? { borderColor: 'var(--danger)', color: 'var(--danger)' } : undefined} onClick={() => setKind(k.key)}>{k.label}</button>)}
