@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { resolveNames } from '../lib/names'
 import {
   formatDateTime, formatDate, formatHuf,
-  roleLabel, statusLabel, adjustmentTypeLabel, carIssueStatusLabel, evidenceCategoryLabel, swapStatusLabel,
+  roleLabel, statusLabel, adjustmentTypeLabel, carIssueStatusLabel, evidenceCategoryLabel, swapStatusLabel, memberLabel,
 } from '../lib/labels'
 import type { Enums } from '../lib/database.types'
 import Icon, { type IconName } from '../components/Icon'
@@ -12,7 +12,7 @@ import Skeleton from '../components/Skeleton'
 import FeedbackList from '../components/FeedbackList'
 import { useAlzaBoxes } from '../hooks/useAlzaBoxes'
 import { useWorkspace } from '../context/WorkspaceContext'
-import { localDateOf } from '../lib/calendar'
+import { localDateOf, addDays } from '../lib/calendar'
 
 const ENTITY_LABEL: Record<string, string> = {
   adjustments: 'Előleg / levonás', shifts: 'Beosztás', profiles: 'Felhasználó',
@@ -21,7 +21,7 @@ const ENTITY_LABEL: Record<string, string> = {
   check_ins: 'Becsekkolás', workspaces: 'Beállítás', car_categories: 'Kategória', box_sheets: 'Box-lap',
   route_names: 'Járat', status_templates: 'Hiba-sablon', invites: 'Meghívó', route_stops: 'Járat-megálló', box_sheet_stops: 'Box-lap megálló',
 }
-const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés' }
+const ACTION_LABEL: Record<string, string> = { INSERT: 'Létrehozás', UPDATE: 'Módosítás', DELETE: 'Törlés', COPY_WEEK: 'Hét másolása' }
 const ENTITY_ICON: Record<string, IconName> = {
   adjustments: 'wallet', shifts: 'calendar', profiles: 'user', evidence_photos: 'camera', cars: 'truck',
   fuel_logs: 'fuel', car_issues: 'wrench', payroll_locks: 'lock', swap_requests: 'repeat',
@@ -148,6 +148,10 @@ function describe(
     }
 
     case 'shifts': {
+      if (action === 'COPY_WEEK') {
+        const wk = (iso: string | null) => (iso ? `${formatDate(iso)} – ${formatDate(addDays(iso, 6))}` : '?')
+        return `Hét másolása: ${wk(s(d, 'from_week'))} beosztása átmásolva a ${wk(s(d, 'to_week'))} hétre (${s(d, 'count') ?? '?'} beosztás)`
+      }
       const date = s(d, 'work_date') ? formatDate(s(d, 'work_date')) : ''
       const trainee = nm(s(d, 'trainee_id'))
       const who = [nm(s(d, 'driver_id')), nm(s(d, 'loader_id'))].filter(Boolean).join(' + ') + (trainee ? ` + betanuló: ${trainee}` : '')
@@ -320,11 +324,27 @@ export default function AuditLog() {
     },
   })
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['audit', ws],
+  // „Ki csinálta” szűrő: '' = mindenki, 'system' = a rendszer (időzített / szerveroldali művelet), különben a felhasználó.
+  // A szűrés a szerveren történik, így az illető LEGUTÓBBI 300 művelete jön — nem csak ami az utolsó 300 közös sorba belefért.
+  const [actor, setActor] = useState('')
+  const { data: people } = useQuery({
+    queryKey: ['audit-people', ws],
     enabled: !!ws,
     queryFn: async () => {
-      const { data, error } = await supabase.from('audit_log').select('*').or(`workspace_id.eq.${ws},workspace_id.is.null`).order('created_at', { ascending: false }).limit(300)
+      const { data, error } = await supabase.from('profiles').select('id, full_name, email, role').or(`workspace_id.eq.${ws},role.eq.admin`).neq('status', 'pending').order('full_name')
+      if (error) throw error
+      return data ?? []
+    },
+  })
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['audit', ws, actor],
+    enabled: !!ws,
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      let q = supabase.from('audit_log').select('*').or(`workspace_id.eq.${ws},workspace_id.is.null`)
+      if (actor === 'system') q = q.is('actor_id', null)
+      else if (actor) q = q.eq('actor_id', actor)
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(300)
       if (error) throw error
       const rows = data ?? []
       const ids = new Set<string>()
@@ -368,7 +388,7 @@ export default function AuditLog() {
     const actorName = r.actor_id ? names[r.actor_id] ?? 'Munkatárs' : 'Rendszer'
     const text = describe(r.entity, r.action, r.detail as Detail, nm, plateOf, { route: routeOf, box: boxOf })
       ?? `${ENTITY_LABEL[r.entity] ?? r.entity} — ${ACTION_LABEL[r.action] ?? r.action}`
-    const diff = fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf, box: boxOf })
+    const diff = r.action === 'COPY_WEEK' ? [] : fieldDiff(r.entity, r.action, r.detail as Detail, { nm, plate: plateOf, route: routeOf, cat: catOf, box: boxOf })
     // A rekord teljes tartalma is kereshető (pl. a sofőr neve akkor is, ha csak a kör változott)
     const det = r.detail as Detail
     const rec = det?.new ?? det?.old ?? {}
@@ -390,6 +410,28 @@ export default function AuditLog() {
     byDay.get(d)!.push(e)
   }
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })
+  // Tömeges művelet: amit egyetlen lépésben írtak (ugyanaz az ember, ugyanaz a pillanat, ugyanaz a típus — pl. egy hét
+  // másolása 60+ beosztás-sort hoz létre), az egy összecsukott tétel, hogy ne árassza el a naplót; egy koppintásra kinyílik.
+  type Entry = (typeof shown)[number]
+  const groupOf = (rows: Entry[]): Entry[][] => {
+    const out: Entry[][] = []
+    for (const e of rows) {
+      const last = out[out.length - 1]
+      if (last && last[0].r.created_at === e.r.created_at && last[0].r.actor_id === e.r.actor_id && last[0].r.entity === e.r.entity && e.r.action !== 'COPY_WEEK') last.push(e)
+      else out.push([e])
+    }
+    return out
+  }
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const bulkText = (g: Entry[]): string => {
+    const ent = g[0].r.entity
+    const label = (ENTITY_LABEL[ent] ?? ent).toLowerCase()
+    if (ent !== 'shifts') return `${g.length} ${label} egy lépésben`
+    const dates = g.map((e) => { const d = e.r.detail as Detail; return s(d?.new ?? d?.old, 'work_date') }).filter((x): x is string => !!x).sort()
+    const span = dates.length ? ` (${formatDate(dates[0])} – ${formatDate(dates[dates.length - 1])})` : ''
+    const inserts = g.filter((e) => e.r.action === 'INSERT').length
+    return `${g.length} beosztás egy lépésben${span} — ${inserts >= g.length / 2 ? 'hét másolása' : 'tömeges módosítás (pl. autócsere a héten)'}`
+  }
 
   return (
     <div className="stack">
@@ -398,8 +440,17 @@ export default function AuditLog() {
       <FeedbackList />
       <ClientErrors />
       {isLoading && <><Skeleton rows={3} /><Skeleton rows={3} /></>}
-      {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>Nincs naplóbejegyzés.</div>}
+      {!isLoading && (data?.length ?? 0) === 0 && <div className="empty"><span className="ico"><Icon name="scroll" size={40} /></span>{actor ? 'Ennek a felhasználónak nincs naplóbejegyzése.' : 'Nincs naplóbejegyzés.'}</div>}
 
+      <div className="field">
+        <label htmlFor="audit-actor">Ki csinálta</label>
+        <select id="audit-actor" className="select" value={actor} onChange={(e) => { setActor(e.target.value); setEntityFilter('') }}>
+          <option value="">Mindenki</option>
+          {(people ?? []).map((p) => <option key={p.id} value={p.id}>{memberLabel(p)}</option>)}
+          <option value="system">Rendszer (automatikus műveletek)</option>
+        </select>
+        {actor && <div className="tiny muted">A kiválasztott {actor === 'system' ? 'forrás' : 'ember'} legutóbbi 300 bejegyzése{isFetching ? ' — betöltés…' : ''}.</div>}
+      </div>
       {(data?.length ?? 0) > 0 && (
         <div className="input-icon">
           <Icon name="search" size={18} />
@@ -429,12 +480,13 @@ export default function AuditLog() {
           <div className="tiny muted" style={{ padding: '8px 12px', background: 'var(--bg-elev-2)', fontWeight: 700 }}>
             {formatDate(day)} · {new Date(`${day}T12:00:00`).toLocaleDateString('hu-HU', { weekday: 'long' })}
           </div>
-          {rows.map(({ r, actorName, text, diff }) => {
+          {groupOf(rows).map((g) => {
+            const renderRow = ({ r, actorName, text, diff }: Entry, nested = false) => {
             const tone = r.action === 'DELETE' ? 'var(--danger)' : r.action === 'INSERT' ? 'var(--success)' : 'var(--text-dim)'
             const open = openIds.has(r.id)
             const shownDiff = open ? diff : diff.slice(0, 4)
             return (
-              <div key={r.id} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: '10px 12px', borderTop: '1px solid var(--border)' }}>
+              <div key={r.id} className="row" style={{ gap: 10, alignItems: 'flex-start', padding: nested ? '8px 12px 8px 30px' : '10px 12px', borderTop: '1px solid var(--border)', background: nested ? 'var(--bg)' : undefined }}>
                 <Icon name={ENTITY_ICON[r.entity] ?? 'file-text'} size={18} style={{ color: tone, marginTop: 2 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="small">{text}</div>
@@ -461,6 +513,26 @@ export default function AuditLog() {
                   )}
                 </div>
                 <span className="tiny muted" style={{ flexShrink: 0 }}>{hhmm(r.created_at)}</span>
+              </div>
+            )
+            }
+            if (g.length < 3) return g.map((e) => renderRow(e))
+            const gk = `${g[0].r.created_at}|${g[0].r.actor_id}|${g[0].r.entity}`
+            const gOpen = openGroups.has(gk)
+            return (
+              <div key={gk} style={{ borderTop: '1px solid var(--border)' }}>
+                <button type="button" className="row" aria-expanded={gOpen}
+                  onClick={() => setOpenGroups((p) => { const n = new Set(p); if (gOpen) n.delete(gk); else n.add(gk); return n })}
+                  style={{ gap: 10, alignItems: 'flex-start', padding: '10px 12px', width: '100%', background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+                  <Icon name={ENTITY_ICON[g[0].r.entity] ?? 'file-text'} size={18} style={{ color: 'var(--primary)', marginTop: 2 }} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="small" style={{ display: 'block', fontWeight: 700 }}>{bulkText(g)}</span>
+                    <span className="tiny muted">{g[0].actorName} · {gOpen ? 'koppints az összecsukáshoz' : 'koppints a részletekért'}</span>
+                  </span>
+                  <Icon name={gOpen ? 'chevron-up' : 'chevron-down'} size={16} className="muted" />
+                  <span className="tiny muted" style={{ flexShrink: 0 }}>{hhmm(g[0].r.created_at)}</span>
+                </button>
+                {gOpen && g.map((e) => renderRow(e, true))}
               </div>
             )
           })}

@@ -385,6 +385,8 @@ export default function WeekTable() {
     // LOG-29: a trigger üzenete (ROUTE_TAKEN) itt is olvashatóan
     if (error) { const m = errMsg(error, 'Mentési hiba'); setError(/ROUTE_TAKEN/.test(m) ? m.replace(/^.*ROUTE_TAKEN:\s*/, 'Nem másolható: ') : m); return }
     setCopyMsg(`${rows.length} beosztás átmásolva az előző hétről (a héten már meglévő többi sor megmaradt).`)
+    // a naplóban külön bejegyzés jelzi, hogy ez másolás volt (a hiba itt nem állítja meg a munkát)
+    void supabase.rpc('log_week_copy', { p_workspace_id: currentWorkspaceId, p_from_week: prevStart, p_to_week: weekStart, p_count: rows.length }).then(({ error }) => { if (error) console.error('napló: hét másolása', error.message) })
     await qc.invalidateQueries({ queryKey: ['shift-week'] })
     await qc.invalidateQueries({ queryKey: ['shift-cal'] })
   }

@@ -3060,6 +3060,10 @@ export type Database = {
         Returns: undefined
       }
       push_inspection_reminder: { Args: { p_id: string }; Returns: undefined }
+      log_week_copy: {
+        Args: { p_count: number; p_from_week: string; p_to_week: string; p_workspace_id: string }
+        Returns: undefined
+      }
       rename_member: {
         Args: { p_full_name: string; target_id: string }
         Returns: undefined
