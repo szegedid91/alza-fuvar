@@ -131,3 +131,83 @@ export function attendance(shifts: PShift[], checkins: PCheckin[], today: string
   const worked = new Set(checkins.map((c) => c.work_date))
   return { assigned: assigned.size, worked: worked.size, missed: [...assigned].filter((d) => !worked.has(d) && d < today).sort() }
 }
+
+// ---- Pontosság: a „Kiindultam” jelzés a járat tervezett indulásához képest ----
+export interface PEvent { work_date: string; kind: string; at: string }
+export interface Departure { date: string; round: number; route: string | null; planned: string; actual: string; lateMin: number }
+const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+// Két óra:perc különbsége percben a ±12 órás sávban (az éjszakai indulás átlóg az éjfélen)
+export function minutesApart(planned: string, actual: string): number {
+  let d = (((toMin(actual) - toMin(planned)) % 1440) + 1440) % 1440
+  if (d > 720) d -= 1440
+  return d
+}
+// A Box-járatok tervezett indulása körönként (a megbízó rendje): 1. kör 23:59 (előző este), 2. kör 05:30.
+// A járat betöltött tervének indulása csak arra a körre érvényes, amelyikre a terv szól.
+export function plannedStartOf(round: number, routePlannedStart: string | null): string {
+  const def = round === 2 ? '05:30' : '23:59'
+  if (!routePlannedStart) return def
+  const h = Number(routePlannedStart.slice(0, 2))
+  const planRound = h >= 3 && h < 15 ? 2 : 1
+  return planRound === round ? routePlannedStart.slice(0, 5) : def
+}
+// Naponként a Box-körök (kör szerint) és a „Kiindultam” jelzések (idő szerint) párba állítva
+export function departures(shifts: (PShift & { planned_start?: string | null })[], events: PEvent[], userId: string): Departure[] {
+  const out: Departure[] = []
+  const byDate = new Map<string, PEvent[]>()
+  for (const e of events) if (e.kind === 'departed') byDate.set(e.work_date, [...(byDate.get(e.work_date) ?? []), e])
+  for (const [date, evs] of byDate) {
+    const rounds = shifts.filter((s) => s.work_date === date && s.is_box && (s.driver_id === userId || s.loader_id === userId))
+      .sort((a, b) => (a.round ?? 1) - (b.round ?? 1))
+    evs.sort((a, b) => a.at.localeCompare(b.at)).forEach((e, i) => {
+      const s = rounds[i]
+      if (!s) return
+      const planned = plannedStartOf(s.round ?? 1, s.planned_start ?? null)
+      const actual = hm(new Date(e.at))
+      out.push({ date, round: s.round ?? 1, route: s.route, planned, actual, lateMin: minutesApart(planned, actual) })
+    })
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.round - b.round)
+}
+
+// ---- Járat-tempó: a box-megállók naplójából ----
+export interface PStopLog { work_date: string; route_id: string | null; round: number | null; done_at: string | null; late_minutes: number | null; delay_reason: string | null }
+export interface Tempo {
+  runs: { date: string; round: number; stops: number; minutes: number }[]
+  stops: number; lateStops: number; avgPerStop: number | null; avgLate: number | null
+  reasons: { label: string; value: number }[]
+}
+export function routeTempo(logs: PStopLog[]): Tempo {
+  const groups = new Map<string, PStopLog[]>()
+  for (const l of logs) { const k = `${l.work_date}|${l.route_id ?? ''}|${l.round ?? 1}`; groups.set(k, [...(groups.get(k) ?? []), l]) }
+  const runs: Tempo['runs'] = []
+  let gapMin = 0, gaps = 0
+  for (const g of groups.values()) {
+    const t = g.map((x) => (x.done_at ? new Date(x.done_at).getTime() : NaN)).filter(Number.isFinite).sort((a, b) => a - b)
+    if (t.length < 2) { runs.push({ date: g[0].work_date, round: g[0].round ?? 1, stops: g.length, minutes: 0 }); continue }
+    // a megállók közti idő; a két óránál hosszabb szünet (pl. raktárra várás két kör között) nem a tempó része
+    for (let i = 1; i < t.length; i++) { const m = (t[i] - t[i - 1]) / 60000; if (m <= 120) { gapMin += m; gaps++ } }
+    runs.push({ date: g[0].work_date, round: g[0].round ?? 1, stops: g.length, minutes: Math.round((t[t.length - 1] - t[0]) / 60000) })
+  }
+  const late = logs.filter((l) => Number(l.late_minutes ?? 0) > 0)
+  const reasons = new Map<string, number>()
+  for (const l of late) { const k = l.delay_reason?.trim() || 'Nincs megadva'; reasons.set(k, (reasons.get(k) ?? 0) + 1) }
+  return {
+    runs: runs.sort((a, b) => a.date.localeCompare(b.date) || a.round - b.round),
+    stops: logs.length, lateStops: late.length, avgPerStop: gaps ? gapMin / gaps : null,
+    avgLate: late.length ? late.reduce((s, l) => s + Number(l.late_minutes), 0) / late.length : null,
+    reasons: [...reasons].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+  }
+}
+
+// Előlegek havonta (minden idők): az első előleg hónapjától a mai hónapig, hézag nélkül
+export function advancesByMonth(adjustments: PAdjustment[], todayYm: string): { ym: string; amount: number; count: number }[] {
+  const adv = adjustments.filter((a) => a.type === 'advance')
+  if (adv.length === 0) return []
+  const ymOf = (a: PAdjustment) => (a.paid_on ?? a.work_date).slice(0, 7)
+  const first = adv.map(ymOf).sort()[0]
+  const [y, m] = todayYm.split('-').map(Number)
+  const months = monthsOf(`${first}-01`, `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`)
+  return months.map((ym) => { const v = adv.filter((a) => ymOf(a) === ym); return { ym, amount: v.reduce((s, a) => s + Number(a.amount), 0), count: v.length } })
+}

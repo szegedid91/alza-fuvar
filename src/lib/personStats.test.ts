@@ -73,3 +73,47 @@ describe('munkaidő, autók, XL, jelenlét', () => {
     expect(a).toEqual({ assigned: 3, worked: 1, missed: ['2026-11-03'] })
   })
 })
+
+import { minutesApart, plannedStartOf, departures, routeTempo, advancesByMonth } from './personStats'
+
+describe('pontosság', () => {
+  it('a különbség a ±12 órás sávban, éjfélen át is', () => {
+    expect(minutesApart('23:59', '00:14')).toBe(15)
+    expect(minutesApart('23:59', '23:40')).toBe(-19)
+    expect(minutesApart('05:30', '05:30')).toBe(0)
+  })
+  it('tervezett indulás: a betöltött terv csak a saját körére érvényes', () => {
+    expect(plannedStartOf(1, null)).toBe('23:59')
+    expect(plannedStartOf(2, null)).toBe('05:30')
+    expect(plannedStartOf(2, '05:10:00')).toBe('05:10')
+    expect(plannedStartOf(1, '05:10:00')).toBe('23:59')
+    expect(plannedStartOf(1, '23:30:00')).toBe('23:30')
+  })
+  it('a kiindulások kör szerint párosulnak a Box-beosztással', () => {
+    const at = (h: number, m: number) => new Date(2026, 10, 3, h, m).toISOString()
+    const shifts = [sh('2026-11-03', { is_box: true, round: 1, route: 'R' }), sh('2026-11-03', { is_box: true, round: 2, route: 'G' }), sh('2026-11-04')]
+    const d = departures(shifts, [
+      { work_date: '2026-11-03', kind: 'departed', at: at(5, 42) }, { work_date: '2026-11-03', kind: 'departed', at: at(0, 5) },
+      { work_date: '2026-11-03', kind: 'arrived', at: at(0, 1) }, { work_date: '2026-11-04', kind: 'departed', at: at(8, 0) },
+    ], U)
+    expect(d.map((x) => [x.round, x.route, x.planned, x.actual, x.lateMin])).toEqual([[1, 'R', '23:59', '00:05', 6], [2, 'G', '05:30', '05:42', 12]])
+  })
+})
+
+describe('járat-tempó és előlegek', () => {
+  it('megállók közti átlag, késések aránya és okai', () => {
+    const t0 = new Date(2026, 10, 3, 1, 0).getTime()
+    const log = (min: number, late = 0, reason: string | null = null, round = 1) => ({ work_date: '2026-11-03', route_id: 'r', round, done_at: new Date(t0 + min * 60000).toISOString(), late_minutes: late, delay_reason: reason })
+    const t = routeTempo([log(0), log(10), log(30, 12, 'Dugó'), log(400, 5, null, 2), log(410, 0, null, 2), log(600, 0, null, 2)])
+    expect(t.runs).toEqual([{ date: '2026-11-03', round: 1, stops: 3, minutes: 30 }, { date: '2026-11-03', round: 2, stops: 3, minutes: 200 }])
+    expect(t.avgPerStop).toBeCloseTo((10 + 20 + 10) / 3) // a 190 perces szünet nem számít a tempóba
+    expect(t).toMatchObject({ stops: 6, lateStops: 2, avgLate: 8.5 })
+    expect(t.reasons).toEqual([{ label: 'Dugó', value: 1 }, { label: 'Nincs megadva', value: 1 }])
+  })
+  it('előlegek havonta az elsőtől máig, hézag nélkül', () => {
+    const a = (date: string, amount: number, type = 'advance', paid: string | null = null) => ({ type, amount, work_date: date, paid_on: paid, reason: null })
+    expect(advancesByMonth([a('2026-09-10', 50000), a('2026-09-25', 20000), a('2026-11-02', 30000, 'advance', '2026-11-05'), a('2026-10-01', 9999, 'deduction')], '2026-11'))
+      .toEqual([{ ym: '2026-09', amount: 70000, count: 2 }, { ym: '2026-10', amount: 0, count: 0 }, { ym: '2026-11', amount: 30000, count: 1 }])
+    expect(advancesByMonth([], '2026-11')).toEqual([])
+  })
+})

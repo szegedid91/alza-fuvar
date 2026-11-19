@@ -4,7 +4,7 @@ import { ChartCard, ColumnChart, LineChart, RankedBars, StatTile } from './chart
 import { compactHuf, dayShort, monthShort } from '../lib/chartUtils'
 import { formatDate, formatHuf, roleLabel, statusLabel } from '../lib/labels'
 import { monthTitle } from '../lib/calendar'
-import type { MonthRow } from '../lib/personStats'
+import type { Departure, MonthRow, Tempo } from '../lib/personStats'
 import type { AdvanceBasis } from '../lib/payroll'
 import type { Enums } from '../lib/database.types'
 
@@ -17,7 +17,7 @@ export interface PersonData {
   cars: { plate: string; days: number }[]
   xl: { date: string; count: number; plate: string }[]
   xlBonus: { over: number; amount: number } | null
-  attendance: { assigned: number; worked: number; missed: string[] }
+  attendance: { assigned: number; worked: number; missed: string[]; excused?: number }
   counts: { outside: number; switches: number; swaps: number; inspections: number; lateStops: number; avgLate: number | null }
   adjustments: { date: string; type: string; amount: number; reason: string | null }[]
   rateChanges: { from: string; driver: number; loader: number; box: number; box2: number; bonusOver: number; bonus: number }[]
@@ -26,11 +26,28 @@ export interface PersonData {
   issues: { date: string; plate: string; note: string | null; status: string }[]
   cleanings: { date: string; plate: string }[]
   box: { sheets: number; stops: number; placed: number; problems: { label: string; value: number }[] }
+  // az előlegek az időszaktól függetlenül, minden hónapra visszamenőleg
+  advancesAll: { months: { ym: string; amount: number; count: number }[]; items: { date: string; amount: number; reason: string | null }[]; total: number }
+  punctuality: { departures: Departure[]; alarms: number; calls: number }
+  tempo: Tempo
+  quality: { stops: number; problemTotal: number; per100: number | null; noPhotoStops: number; boxIssues: number }
+  discipline: { manual: number; waived: number; notParked: number; cleanings: number; workedDays: number }
+  efficiency: { perXlAddress: number | null; perBoxStop: number | null; fuelAvg: number | null; damage: number }
+  // az ugyanilyen hosszú előző időszak fő számai (null = nincs mihez mérni)
+  prev: { days: number; base: number; missed: number | null; lateDepartures: number; lateStops: number } | null
 }
 
 const MONTH_FROM = ['januártól', 'februártól', 'márciustól', 'áprilistól', 'májustól', 'júniustól', 'júliustól', 'augusztustól', 'szeptembertől', 'októbertől', 'novembertől', 'decembertől']
 const hoursText = (h: number) => `${h.toLocaleString('hu-HU', { maximumFractionDigits: 1 })} ó`
 const sum = (a: number[]) => a.reduce((s, x) => s + x, 0)
+const LATE_MIN = 5 // ennyi percnél nagyobb csúszás számít késett indulásnak
+// Változás az előző, ugyanilyen hosszú időszakhoz képest — szövegként, szín nélkül (a szám előjele beszél)
+const vsPrev = (now: number, prev: number | null | undefined, unit = ''): string | undefined => {
+  if (prev == null) return undefined
+  const d = now - prev
+  if (d === 0) return prev === 0 ? undefined : 'előző időszak: ugyanennyi'
+  return `előző időszak: ${prev.toLocaleString('hu-HU')}${unit} (${d > 0 ? '+' : '−'}${Math.abs(d).toLocaleString('hu-HU')})`
+}
 
 // Szakasz: cím darabszámmal; a hosszú lista az első néhány sorral indul, a többi egy koppintásra
 function Section({ icon, title, count, empty, children }: { icon: IconName; title: string; count?: number; empty?: string; children?: ReactNode }) {
@@ -73,6 +90,13 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
   const anyDays = months.some((r) => r.days > 0)
   const dayWord = data.basis === 'schedule' ? 'Beosztott nap' : 'Ledolgozott nap'
   const p = data.person
+  const deps = data.punctuality.departures
+  const lateDeps = deps.filter((d) => d.lateMin > LATE_MIN)
+  const depMonths = months.map((r) => { const v = deps.filter((d) => d.date.startsWith(r.ym)); const late = v.filter((d) => d.lateMin > LATE_MIN).length; return { ym: r.ym, late, onTime: v.length - late } })
+  const runs = data.tempo.runs.filter((r) => r.minutes > 0)
+  const avgRun = runs.length ? sum(runs.map((r) => r.minutes)) / runs.length : null
+  const adv = data.advancesAll
+  const advChart = adv.months.slice(-18)
   // aki még nem regisztrált (vagy az időszakban egyszer sem csekkolt be), annál a „kimaradt nap” nem mond semmit
   const noCheckins = data.attendance.worked === 0
 
@@ -96,11 +120,13 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
       </div>
 
       <div className="viz-stats">
-        <StatTile label={dayWord} value={String(days)} sub={`${months.length} hónap alatt`} />
-        {showPay && <StatTile label="Bér összesen" value={formatHuf(base)} sub={deductions > 0 ? `levonás: ${formatHuf(deductions)}` : 'levonás nélkül'} />}
+        <StatTile label={dayWord} value={String(days)} sub={vsPrev(days, data.prev?.days) ?? `${months.length} hónap alatt`} />
+        {showPay && <StatTile label="Bér összesen" value={formatHuf(base)} sub={data.prev ? `előző időszak: ${formatHuf(data.prev.base)}` : deductions > 0 ? `levonás: ${formatHuf(deductions)}` : 'levonás nélkül'} />}
         {showPay && <StatTile label="Felvett előleg" value={formatHuf(advances)} />}
         <StatTile label="Átlagos munkaidő" value={avgHours != null ? hoursText(avgHours) : '–'} sub={avgHours != null ? `${hourDays} lezárt nap alapján` : 'nincs lezárt nap'} />
-        <StatTile label="Kimaradt nap" value={noCheckins ? '–' : String(data.attendance.missed.length)} sub={noCheckins ? 'nincs becsekkolás az időszakban' : `${data.attendance.assigned} beosztottból`} />
+        <StatTile label="Kimaradt nap" value={noCheckins ? '–' : String(data.attendance.missed.length)} sub={noCheckins ? 'nincs becsekkolás az időszakban' : vsPrev(data.attendance.missed.length, data.prev?.missed) ?? `${data.attendance.assigned} beosztottból`} />
+        {deps.length > 0 && <StatTile label="Késve indult" value={`${lateDeps.length} / ${deps.length}`} sub={vsPrev(lateDeps.length, data.prev?.lateDepartures) ?? `${LATE_MIN} percnél nagyobb csúszás`} />}
+        {data.tempo.stops > 0 && <StatTile label="Késett megálló" value={`${Math.round((data.tempo.lateStops / data.tempo.stops) * 100)}%`} sub={vsPrev(data.tempo.lateStops, data.prev?.lateStops, ' db') ?? `${data.tempo.lateStops} a ${data.tempo.stops}-ból`} />}
         {data.xl.length > 0 && <StatTile label="XL átlag cím / nap" value={xlAvg!.toLocaleString('hu-HU', { maximumFractionDigits: 1 })} sub={`${data.xl.length} nap adata`} />}
         {data.box.stops > 0 && <StatTile label="Box megálló" value={String(data.box.stops)} sub={`${data.box.placed.toLocaleString('hu-HU')} behelyezett csomag`} />}
       </div>
@@ -143,6 +169,30 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
               titles={data.xl.map((x) => `${formatDate(x.date)} · ${x.plate}`)} refLine={data.xlBonus && data.xlBonus.amount > 0 ? { value: data.xlBonus.over, label: `sikerdíj ${data.xlBonus.over} felett` } : undefined} />
           </ChartCard>
         )}
+        {deps.length > 0 && (
+          <ChartCard title="Indulások pontossága havonta" subtitle={`A „Kiindultam” jelzés a járat tervezett indulásához képest (${LATE_MIN} perc türelemmel)`}
+            legend={[{ label: 'Pontos', color: 'var(--viz-1)' }, { label: 'Késett', color: 'var(--viz-2)' }]}
+            table={{ head: ['Nap', 'Járat', 'Kör', 'Terv', 'Tény', 'Eltérés'], rows: [...deps].reverse().map((d) => [formatDate(d.date), d.route ?? '–', `${d.round}.`, d.planned, d.actual, `${d.lateMin > 0 ? '+' : ''}${d.lateMin} perc`]) }}>
+            <ColumnChart categories={cats} titles={titles} format={(n) => `${n} indulás`} axisFormat={(n) => String(n)}
+              series={[
+                { key: 'ok', label: 'Pontos', color: 'var(--viz-1)', values: depMonths.map((m) => m.onTime) },
+                { key: 'late', label: 'Késett', color: 'var(--viz-2)', values: depMonths.map((m) => m.late) },
+              ]} />
+          </ChartCard>
+        )}
+        {data.tempo.reasons.length > 0 && (
+          <ChartCard title="Késések okai" subtitle="A késett box-megállóknál megadott ok"
+            table={{ head: ['Ok', 'Megálló'], rows: data.tempo.reasons.map((r) => [r.label, r.value]) }}>
+            <RankedBars color="var(--viz-1)" format={(n) => `${n} db`} rows={data.tempo.reasons.slice(0, 8)} />
+          </ChartCard>
+        )}
+        {showPay && advChart.some((m) => m.amount > 0) && (
+          <ChartCard title="Felvett előleg havonta" subtitle={`Minden hónapra visszamenőleg${adv.months.length > advChart.length ? ' (a diagramon az utolsó 18 hónap)' : ''} · összesen ${formatHuf(adv.total)}`}
+            table={{ head: ['Hónap', 'Előleg', 'Alkalom'], rows: [...adv.months].reverse().map((m) => [monthTitle(m.ym), formatHuf(m.amount), m.count]) }}>
+            <ColumnChart categories={advChart.map((m) => monthShort(m.ym))} titles={advChart.map((m) => monthTitle(m.ym))} format={formatHuf} axisFormat={compactHuf}
+              series={[{ key: 'adv', label: 'Előleg', color: 'var(--viz-1)', values: advChart.map((m) => m.amount) }]} />
+          </ChartCard>
+        )}
         {data.cars.length > 0 && (
           <ChartCard title="Melyik autón hány napot" subtitle="A beosztás szerint, a mai napig"
             table={{ head: ['Autó', 'Nap'], rows: data.cars.map((c) => [c.plate, c.days]) }}>
@@ -166,7 +216,16 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
         </Section>
       )}
       {showPay && (
-        <Section icon="wallet" title="Előlegek és levonások" count={data.adjustments.length} empty="Az időszakban nem volt előleg vagy levonás.">
+        <Section icon="banknote" title="Előlegek — mikor mennyit vett fel" count={adv.items.length} empty="Még nem vett fel előleget.">
+          <div className="tiny muted">Minden hónapra visszamenőleg, a választott időszaktól függetlenül · összesen {formatHuf(adv.total)}</div>
+          <Rows items={adv.items} first={8} render={(a) => (<>
+            <span><strong>{formatDate(a.date)}</strong>{a.reason ? <span className="muted"> · {a.reason}</span> : null}</span>
+            <span className="num" style={{ whiteSpace: 'nowrap' }}>{formatHuf(a.amount)}</span>
+          </>)} />
+        </Section>
+      )}
+      {showPay && (
+        <Section icon="wallet" title="Előlegek és levonások az időszakban" count={data.adjustments.length} empty="Az időszakban nem volt előleg vagy levonás.">
           <Rows items={data.adjustments} render={(a) => (<>
             <span><strong>{a.type === 'advance' ? 'Előleg' : 'Levonás'}</strong> <span className="muted">· {formatDate(a.date)}{a.reason ? ` · ${a.reason}` : ''}</span></span>
             <span className="num" style={{ whiteSpace: 'nowrap' }}>−{formatHuf(a.amount)}</span>
@@ -186,16 +245,70 @@ export default function PersonProfileView({ data }: { data: PersonData }) {
         </Section>
       )}
 
+      <Section icon="clock" title="Pontosság" count={deps.length} empty="Az időszakban nincs „Kiindultam” jelzés Box-járaton, nincs mihez mérni.">
+        <div className="grid-2 pay-grid small">
+          <div className="between"><span className="muted">Indulás a tervhez képest</span><span>{deps.length} alkalom</span></div>
+          <div className="between"><span className="muted">Késve indult ({LATE_MIN} perc felett)</span><span style={{ color: lateDeps.length ? 'var(--danger)' : undefined }}>{lateDeps.length}</span></div>
+          <div className="between"><span className="muted">Átlagos eltérés</span><span>{deps.length ? `${Math.round(sum(deps.map((d) => d.lateMin)) / deps.length)} perc` : '–'}</span></div>
+          <div className="between"><span className="muted">Legnagyobb késés</span><span>{lateDeps.length ? `${Math.max(...lateDeps.map((d) => d.lateMin))} perc` : '–'}</span></div>
+          <div className="between"><span className="muted">„Nem indult el” riasztás</span><span style={{ color: data.punctuality.alarms ? 'var(--danger)' : undefined }}>{data.punctuality.alarms}</span></div>
+          <div className="between"><span className="muted">Ebből telefonhívás is ment</span><span>{data.punctuality.calls}</span></div>
+        </div>
+        {lateDeps.length > 0 && <Rows items={[...lateDeps].reverse()} first={5} render={(d) => (<>
+          <span><strong>{formatDate(d.date)}</strong> <span className="muted">· {d.route ? `${d.route} járat · ` : ''}{d.round}. kör · terv {d.planned}, indult {d.actual}</span></span>
+          <span className="num" style={{ whiteSpace: 'nowrap' }}>+{d.lateMin} perc</span>
+        </>)} />}
+      </Section>
+      {data.punctuality.alarms > 0 && deps.length === 0 && <div className="tiny muted">„Nem indult el” riasztás az időszakban: {data.punctuality.alarms}</div>}
+
+      <Section icon="map" title="Járat-tempó" count={data.tempo.runs.length} empty="Az időszakban nincs box-megálló napló.">
+        <div className="grid-2 pay-grid small">
+          <div className="between"><span className="muted">Lezárt box-megálló</span><span>{data.tempo.stops}</span></div>
+          <div className="between"><span className="muted">Átlag két megálló között</span><span>{data.tempo.avgPerStop != null ? `${Math.round(data.tempo.avgPerStop)} perc` : '–'}</span></div>
+          <div className="between"><span className="muted">Átlagos járatidő (első boxtól az utolsóig)</span><span>{avgRun != null ? hoursText(avgRun / 60) : '–'}</span></div>
+          <div className="between"><span className="muted">Késett megálló</span><span>{data.tempo.lateStops}{data.tempo.avgLate != null ? ` · átlag ${Math.round(data.tempo.avgLate)} perc` : ''}</span></div>
+        </div>
+        <Rows items={[...data.tempo.runs].reverse()} first={5} render={(r) => (<>
+          <span><strong>{formatDate(r.date)}</strong> <span className="muted">· {r.round}. kör · {r.stops} megálló</span></span>
+          <span className="num" style={{ whiteSpace: 'nowrap' }}>{r.minutes > 0 ? hoursText(r.minutes / 60) : '–'}</span>
+        </>)} />
+      </Section>
+
+      <Section icon="shield-check" title="Minőség" count={data.quality.stops} empty="Az időszakban nincs kitöltött Box-lap megálló.">
+        <div className="grid-2 pay-grid small">
+          <div className="between"><span className="muted">Nem behelyezett csomag 100 megállóra</span><span>{data.quality.per100 != null ? data.quality.per100.toLocaleString('hu-HU', { maximumFractionDigits: 1 }) : '–'}</span></div>
+          <div className="between"><span className="muted">Nem behelyezett csomag összesen</span><span>{data.quality.problemTotal}</span></div>
+          <div className="between"><span className="muted">Fotó nélküli megálló</span><span style={{ color: data.quality.noPhotoStops ? 'var(--danger)' : undefined }}>{data.quality.noPhotoStops}</span></div>
+          <div className="between"><span className="muted">Box-hibabejelentés</span><span>{data.quality.boxIssues}</span></div>
+        </div>
+      </Section>
+
+      {showPay && (
+        <Section icon="calculator" title="Költség és hatékonyság">
+          <div className="grid-2 pay-grid small">
+            <div className="between"><span className="muted">XL bér egy sikeres címre</span><span>{data.efficiency.perXlAddress != null ? formatHuf(data.efficiency.perXlAddress) : '–'}</span></div>
+            <div className="between"><span className="muted">Box bér egy megállóra</span><span>{data.efficiency.perBoxStop != null ? formatHuf(data.efficiency.perBoxStop) : '–'}</span></div>
+            <div className="between"><span className="muted">Átlagfogyasztás</span><span>{data.efficiency.fuelAvg != null ? `${data.efficiency.fuelAvg.toLocaleString('hu-HU', { maximumFractionDigits: 1 })} l/100 km` : '–'}</span></div>
+            <div className="between"><span className="muted">Levonás (kár, egyéb)</span><span style={{ color: data.efficiency.damage ? 'var(--danger)' : undefined }}>{formatHuf(data.efficiency.damage)}</span></div>
+          </div>
+          <div className="tiny muted">Az egy címre és megállóra jutó bér közelítés: az időszak XL, illetve Box bére osztva a rögzített címek, illetve megállók számával.</div>
+        </Section>
+      )}
+
       <Section icon="clock" title="Jelenlét és megbízhatóság">
         <div className="grid-2 pay-grid small">
           <div className="between"><span className="muted">Beosztott nap (a mai napig)</span><span>{data.attendance.assigned}</span></div>
           <div className="between"><span className="muted">Becsekkolt nap</span><span>{data.attendance.worked}</span></div>
           <div className="between"><span className="muted">Beosztva, de nem csekkolt be</span><span style={{ color: !noCheckins && data.attendance.missed.length ? 'var(--danger)' : undefined }}>{noCheckins ? '–' : data.attendance.missed.length}</span></div>
+          <div className="between"><span className="muted">Igazolt távollét (szabadság, betegség)</span><span>{data.attendance.excused ?? 0} nap</span></div>
           <div className="between"><span className="muted">Telephelyen kívüli be- / kijelentkezés</span><span>{data.counts.outside}</span></div>
           <div className="between"><span className="muted">Napközbeni autócsere</span><span>{data.counts.switches}</span></div>
           <div className="between"><span className="muted">Cserekérés</span><span>{data.counts.swaps}</span></div>
           <div className="between"><span className="muted">Autó-ellenőrzés</span><span>{data.counts.inspections}</span></div>
-          <div className="between"><span className="muted">Késett box-megálló</span><span>{data.counts.lateStops}{data.counts.avgLate != null ? ` · átlag ${Math.round(data.counts.avgLate)} perc` : ''}</span></div>
+          <div className="between"><span className="muted">Kézi becsekkolás (QR nélkül)</span><span>{data.discipline.manual}</span></div>
+          <div className="between"><span className="muted">Ellenőrző fotó nélkül továbbengedve</span><span style={{ color: data.discipline.waived ? 'var(--danger)' : undefined }}>{data.discipline.waived}</span></div>
+          <div className="between"><span className="muted">Este nem rakta le az autót</span><span style={{ color: data.discipline.notParked ? 'var(--danger)' : undefined }}>{data.discipline.notParked}</span></div>
+          <div className="between"><span className="muted">Takarítás</span><span>{data.discipline.cleanings}{data.discipline.workedDays > 0 ? ` · ${data.discipline.workedDays} ledolgozott napra` : ''}</span></div>
         </div>
         {noCheckins && <div className="tiny muted">{p.status === 'invited' ? 'Még nem regisztrált az alkalmazásba, ezért nincs becsekkolása — a napjai a beosztásból látszanak.' : 'Az időszakban nem volt becsekkolása.'}</div>}
         {!noCheckins && data.attendance.missed.length > 0 && <div className="tiny muted">Kimaradt napok: {data.attendance.missed.slice(-12).map((d) => dayShort(d)).join(', ')}{data.attendance.missed.length > 12 ? ' …' : ''}</div>}
